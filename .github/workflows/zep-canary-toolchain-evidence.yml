@@ -1,0 +1,131 @@
+name: ZEP canary toolchain evidence
+
+"on":
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zep-canary-toolchain-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: canary/zep-core-canary
+    env:
+      CI: "true"
+      NO_COLOR: "1"
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Checkout exact trigger commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+
+      - name: Initialize evidence directory
+        run: |
+          set -euo pipefail
+          rm -rf evidence-ci dist dist-worker node_modules package-lock.json .wrangler worker-configuration.d.ts
+          mkdir -p evidence-ci/wrangler-output
+          printf 'GITHUB_SHA=%s\nGITHUB_REF=%s\nRUNNER_OS=%s\n' "$GITHUB_SHA" "$GITHUB_REF" "$RUNNER_OS" > evidence-ci/run-context.txt
+          node --version > evidence-ci/toolchain.txt
+          npm --version >> evidence-ci/toolchain.txt
+
+      - name: Verify no generated Wrangler redirect before install
+        run: |
+          set -euo pipefail
+          if find "$GITHUB_WORKSPACE" -path '*/.wrangler/deploy/config.json' -print -quit | grep -q .; then
+            echo 'Generated Wrangler deploy redirect present before install' >&2
+            exit 1
+          fi
+
+      - name: Generate deterministic dependency lock
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          cp package-lock.json evidence-ci/package-lock.json
+          sha256sum package.json package-lock.json > evidence-ci/dependency-inputs.sha256
+
+      - name: Install exact dependency tree
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm ls --all --json > evidence-ci/npm-ls.json
+          npx --no-install wrangler --version | tee -a evidence-ci/toolchain.txt
+          test "$(node -p "require('./node_modules/wrangler/package.json').version")" = '4.114.0'
+          test "$(node -p "require('./node_modules/typescript/package.json').version")" = '5.8.3'
+
+      - name: Run local verification suite
+        run: |
+          set -euo pipefail
+          npm run verify:available 2>&1 | tee evidence-ci/verify-available.log
+
+      - name: Generate Worker binding types
+        run: |
+          set -euo pipefail
+          npm run wrangler:types 2>&1 | tee evidence-ci/wrangler-types.log
+          test -s worker-configuration.d.ts
+          cp worker-configuration.d.ts evidence-ci/worker-configuration.d.ts
+
+      - name: Run official Wrangler dry run
+        env:
+          WRANGLER_OUTPUT_FILE_DIRECTORY: ${{ github.workspace }}/canary/zep-core-canary/evidence-ci/wrangler-output
+        run: |
+          set -euo pipefail
+          npm run dry-run 2>&1 | tee evidence-ci/wrangler-dry-run.log
+          test -d dist-worker
+          test -f dist-worker/bundle-meta.json
+
+      - name: Verify dry-run boundaries
+        run: |
+          set -euo pipefail
+          if find "$GITHUB_WORKSPACE" -path '*/.wrangler/deploy/config.json' -print -quit | grep -q .; then
+            echo 'Generated Wrangler deploy redirect appeared' >&2
+            exit 1
+          fi
+          if grep -Eiq '(Successfully published|Successfully deployed|Uploaded .* Worker|workers\.dev)' evidence-ci/wrangler-dry-run.log; then
+            echo 'Dry-run output contains a remote-publication indicator' >&2
+            exit 1
+          fi
+          if grep -RIEq '(CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_KEY|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY)' evidence-ci dist-worker worker-configuration.d.ts; then
+            echo 'Secret marker detected in evidence' >&2
+            exit 1
+          fi
+
+      - name: Hash complete evidence
+        run: |
+          set -euo pipefail
+          find evidence-ci dist-worker -type l -print > evidence-ci/symlinks.txt
+          test ! -s evidence-ci/symlinks.txt
+          find evidence-ci dist-worker -type f \
+            ! -path 'evidence-ci/file-inventory.txt' \
+            ! -path 'evidence-ci/SHA256SUMS.txt' \
+            -printf '%p\n' | LC_ALL=C sort > evidence-ci/file-inventory.txt
+          while IFS= read -r file; do sha256sum "$file"; done < evidence-ci/file-inventory.txt > evidence-ci/SHA256SUMS.txt
+          tar --format=ustar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            -cf evidence-ci.tar evidence-ci dist-worker worker-configuration.d.ts package-lock.json
+          gzip -n -6 -f evidence-ci.tar
+          sha256sum evidence-ci.tar.gz > evidence-ci.tar.gz.sha256
+
+      - name: Upload bounded evidence artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: zungun-zep-canary-toolchain-evidence-${{ github.run_id }}
+          path: canary/zep-core-canary/evidence-ci.tar.gz*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          include-hidden-files: false

@@ -1,0 +1,19 @@
+{
+  "name": "@zungun/zep-core",
+  "version": "0.1.5-local",
+  "private": true,
+  "type": "module",
+  "description": "Evidence-delta-integrity-only repackaging of the audited ZEP v0.1.4 runtime payload.",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run clean && npm run build && node --test dist/test/*.test.js",
+    "verify": "npm run typecheck && npm test",
+    "fuzz": "npm run clean && npm run build && node tools/fuzz-public-boundaries.mjs",
+    "verify:deep": "npm run verify && npm run fuzz"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

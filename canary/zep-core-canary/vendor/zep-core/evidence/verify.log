@@ -1,0 +1,318 @@
+
+> @zungun/zep-core@0.1.5-local verify
+> npm run typecheck && npm test
+
+
+> @zungun/zep-core@0.1.5-local typecheck
+> tsc -p tsconfig.json --noEmit
+
+
+> @zungun/zep-core@0.1.5-local test
+> npm run clean && npm run build && node --test dist/test/*.test.js
+
+
+> @zungun/zep-core@0.1.5-local clean
+> rm -rf dist
+
+
+> @zungun/zep-core@0.1.5-local build
+> tsc -p tsconfig.json
+
+TAP version 13
+# Subtest: ZEP-ADV-001 caller, returned payload and store observer cannot mutate committed content
+ok 1 - ZEP-ADV-001 caller, returned payload and store observer cannot mutate committed content
+  ---
+  duration_ms: 3.050588
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-002 global ACK requires every intended recipient
+ok 2 - ZEP-ADV-002 global ACK requires every intended recipient
+  ---
+  duration_ms: 1.253929
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-003 complete TransportAdapter contract is implementable and all result boundaries validate
+ok 3 - ZEP-ADV-003 complete TransportAdapter contract is implementable and all result boundaries validate
+  ---
+  duration_ms: 0.867884
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-004 malformed fragments fail at runtime
+ok 4 - ZEP-ADV-004 malformed fragments fail at runtime
+  ---
+  duration_ms: 0.506726
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-005 malformed receipts, capabilities and adapter outcomes fail at runtime
+ok 5 - ZEP-ADV-005 malformed receipts, capabilities and adapter outcomes fail at runtime
+  ---
+  duration_ms: 0.934112
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-006 routes unable to complete strictly before expiry are excluded
+ok 6 - ZEP-ADV-006 routes unable to complete strictly before expiry are excluded
+  ---
+  duration_ms: 0.668517
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-007 duplicate recipient receipt is idempotent and cannot inflate completion
+ok 7 - ZEP-ADV-007 duplicate recipient receipt is idempotent and cannot inflate completion
+  ---
+  duration_ms: 0.426045
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-008 adapter invocation boundary rejects future and invalid operation outputs
+ok 8 - ZEP-ADV-008 adapter invocation boundary rejects future and invalid operation outputs
+  ---
+  duration_ms: 0.391744
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-009 raw acknowledgement mutation method is absent from the public state machine
+ok 9 - ZEP-ADV-009 raw acknowledgement mutation method is absent from the public state machine
+  ---
+  duration_ms: 0.286657
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-010 forged verified-receipt token cannot mutate acknowledgement state
+ok 10 - ZEP-ADV-010 forged verified-receipt token cannot mutate acknowledgement state
+  ---
+  duration_ms: 0.459395
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-011 acknowledged adapter result without verifier is rejected
+ok 11 - ZEP-ADV-011 acknowledged adapter result without verifier is rejected
+  ---
+  duration_ms: 0.456981
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-012 receipt verifier rejection prevents final acknowledgement
+ok 12 - ZEP-ADV-012 receipt verifier rejection prevents final acknowledgement
+  ---
+  duration_ms: 0.273388
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-013 pre-creation receipt is causally invalid
+ok 13 - ZEP-ADV-013 pre-creation receipt is causally invalid
+  ---
+  duration_ms: 0.153498
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-014 receipt at or after expiry is rejected
+ok 14 - ZEP-ADV-014 receipt at or after expiry is rejected
+  ---
+  duration_ms: 0.336722
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-015 receipt from the future relative to outcome observation is rejected
+ok 15 - ZEP-ADV-015 receipt from the future relative to outcome observation is rejected
+  ---
+  duration_ms: 0.278435
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-016 route without binary support is excluded before scoring
+ok 16 - ZEP-ADV-016 route without binary support is excluded before scoring
+  ---
+  duration_ms: 0.249251
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-017 fragmented delivery excludes transport without fragmentation support
+ok 17 - ZEP-ADV-017 fragmented delivery excludes transport without fragmentation support
+  ---
+  duration_ms: 0.670199
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-018 END_RECIPIENT_ACK policy excludes transport without final receipt support
+ok 18 - ZEP-ADV-018 END_RECIPIENT_ACK policy excludes transport without final receipt support
+  ---
+  duration_ms: 0.322741
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-019 explicit transport-receipt requirement excludes incapable transport
+ok 19 - ZEP-ADV-019 explicit transport-receipt requirement excludes incapable transport
+  ---
+  duration_ms: 0.291475
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-020 adapter-id tie-break is locale independent
+ok 20 - ZEP-ADV-020 adapter-id tie-break is locale independent
+  ---
+  duration_ms: 0.307398
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-021 receive batch cannot exceed requested limit
+ok 21 - ZEP-ADV-021 receive batch cannot exceed requested limit
+  ---
+  duration_ms: 0.292706
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-022 hasMore receive batch requires a continuation cursor
+ok 22 - ZEP-ADV-022 hasMore receive batch requires a continuation cursor
+  ---
+  duration_ms: 0.176072
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-023 state machine is bound to the complete validated message instance
+ok 23 - ZEP-ADV-023 state machine is bound to the complete validated message instance
+  ---
+  duration_ms: 0.300919
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-024 legacy constructor arguments cannot create a partial-recipient machine
+ok 24 - ZEP-ADV-024 legacy constructor arguments cannot create a partial-recipient machine
+  ---
+  duration_ms: 0.083804
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-025 provider-private fields are rejected by exact allowlists
+ok 25 - ZEP-ADV-025 provider-private fields are rejected by exact allowlists
+  ---
+  duration_ms: 0.692432
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-026 public runtime boundaries reject malformed values without raw native errors
+ok 26 - ZEP-ADV-026 public runtime boundaries reject malformed values without raw native errors
+  ---
+  duration_ms: 3.354611
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-027 OutcomeContext validates boolean strictly and atomically
+ok 27 - ZEP-ADV-027 OutcomeContext validates boolean strictly and atomically
+  ---
+  duration_ms: 0.233228
+  type: 'test'
+  ...
+# Subtest: ZEP-ADV-028 OutcomeContext rejects null and provider-private fields before mutation
+ok 28 - ZEP-ADV-028 OutcomeContext rejects null and provider-private fields before mutation
+  ---
+  duration_ms: 0.188982
+  type: 'test'
+  ...
+# Subtest: property: every declared transition is accepted and every undeclared transition is rejected
+ok 29 - property: every declared transition is accepted and every undeclared transition is rejected
+  ---
+  duration_ms: 7.609013
+  type: 'test'
+  ...
+# Subtest: property: arbitrary contiguous fragment partitions reassemble exactly
+ok 30 - property: arbitrary contiguous fragment partitions reassemble exactly
+  ---
+  duration_ms: 42.928515
+  type: 'test'
+  ...
+# Subtest: property: deduplication never overwrites commitment or payload
+ok 31 - property: deduplication never overwrites commitment or payload
+  ---
+  duration_ms: 16.123486
+  type: 'test'
+  ...
+# Subtest: property: route tie-breaking is deterministic by adapterId
+ok 32 - property: route tie-breaking is deterministic by adapterId
+  ---
+  duration_ms: 4.161834
+  type: 'test'
+  ...
+# Subtest: property: all recipients are required regardless of acknowledgement order
+ok 33 - property: all recipients are required regardless of acknowledgement order
+  ---
+  duration_ms: 0.591542
+  type: 'test'
+  ...
+# Subtest: property: no strict-boolean bypass can alter permanent rejection semantics
+ok 34 - property: no strict-boolean bypass can alter permanent rejection semantics
+  ---
+  duration_ms: 0.506916
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-001 valid minimal message
+ok 35 - ZEP-SEM-001 valid minimal message
+  ---
+  duration_ms: 1.362171
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-002 expiration is terminal
+ok 36 - ZEP-SEM-002 expiration is terminal
+  ---
+  duration_ms: 0.525994
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-003 exact duplicate is idempotent
+ok 37 - ZEP-SEM-003 exact duplicate is idempotent
+  ---
+  duration_ms: 0.253467
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-004 conflicting duplicate is rejected
+ok 38 - ZEP-SEM-004 conflicting duplicate is rejected
+  ---
+  duration_ms: 0.223183
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-005 safe three-fragment reassembly
+ok 39 - ZEP-SEM-005 safe three-fragment reassembly
+  ---
+  duration_ms: 0.419134
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-006 overlapping or mixed fragment set is rejected
+ok 40 - ZEP-SEM-006 overlapping or mixed fragment set is rejected
+  ---
+  duration_ms: 0.187089
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-007 transport acceptance is not delivery
+ok 41 - ZEP-SEM-007 transport acceptance is not delivery
+  ---
+  duration_ms: 0.600735
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-008 invalid receipt binding
+ok 42 - ZEP-SEM-008 invalid receipt binding
+  ---
+  duration_ms: 0.310373
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-009 unknown outcome requires duplicate-safe policy
+ok 43 - ZEP-SEM-009 unknown outcome requires duplicate-safe policy
+  ---
+  duration_ms: 0.582748
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-010 SMS optional route remains policy-gated
+ok 44 - ZEP-SEM-010 SMS optional route remains policy-gated
+  ---
+  duration_ms: 0.816497
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-011 one route rejection does not kill the logical message
+ok 45 - ZEP-SEM-011 one route rejection does not kill the logical message
+  ---
+  duration_ms: 0.312656
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-012 receipt policy NONE is rejected before persistence
+ok 46 - ZEP-SEM-012 receipt policy NONE is rejected before persistence
+  ---
+  duration_ms: 0.474667
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-013 accepted timeout cannot blind retry
+ok 47 - ZEP-SEM-013 accepted timeout cannot blind retry
+  ---
+  duration_ms: 0.319597
+  type: 'test'
+  ...
+# Subtest: ZEP-SEM-014 expiry equality and backward-clock safety
+ok 48 - ZEP-SEM-014 expiry equality and backward-clock safety
+  ---
+  duration_ms: 0.169432
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 138.488257

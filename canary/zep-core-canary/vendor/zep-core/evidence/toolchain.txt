@@ -1,0 +1,5 @@
+NODE=v22.16.0
+NPM=10.9.2
+TSC=Version 5.8.3
+TAR=tar (GNU tar) 1.35
+GZIP=gzip 1.13

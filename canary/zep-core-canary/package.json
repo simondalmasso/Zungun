@@ -1,0 +1,27 @@
+{
+  "name": "@zungun/zep-cf-canary",
+  "version": "0.1.0-local",
+  "private": true,
+  "type": "module",
+  "description": "Stateless Cloudflare edge canary for the audited Zungun ZEP core delivery 006.",
+  "scripts": {
+    "clean": "rm -rf dist dist-worker worker-configuration.d.ts .wrangler",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run clean && npm run build && node --test dist/test/*.test.js",
+    "fuzz": "npm run clean && npm run build && node tools/fuzz-canary.mjs",
+    "verify:config": "node tools/verify-config.mjs",
+    "verify:source": "node tools/verify-source-identity.mjs",
+    "verify:available": "npm run typecheck && npm test && npm run fuzz && npm run verify:config",
+    "wrangler:types": "wrangler types worker-configuration.d.ts",
+    "dry-run": "rm -rf dist-worker .wrangler && wrangler deploy --dry-run --outdir dist-worker --metafile dist-worker/bundle-meta.json",
+    "verify": "npm run verify:available && npm run wrangler:types && npm run dry-run"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "wrangler": "4.114.0"
+  }
+}

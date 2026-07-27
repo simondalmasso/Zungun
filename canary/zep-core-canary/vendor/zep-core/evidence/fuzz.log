@@ -1,0 +1,20 @@
+
+> @zungun/zep-core@0.1.5-local fuzz
+> npm run clean && npm run build && node tools/fuzz-public-boundaries.mjs
+
+
+> @zungun/zep-core@0.1.5-local clean
+> rm -rf dist
+
+
+> @zungun/zep-core@0.1.5-local build
+> tsc -p tsconfig.json
+
+FUZZ_SEED=0x5a17c0de
+PUBLIC_RUNTIME_EXPORTS=49
+FUZZ_CASES=4138
+NORMALIZED_ZEP_ERRORS=4066
+SAFE_RETURNS=72
+RAW_NATIVE_ERRORS=0
+UNEXPECTED_ACCEPTS=0
+UNCLASSIFIED_EXPORTS=0
