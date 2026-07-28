@@ -1,0 +1,35 @@
+schema_version: 1
+checkpoint_id: ZUNGUN-OS-MIGRATION-BOOTSTRAP-20260728-001-CP1
+mission_id: ZUNGUN-OS-MIGRATION-BOOTSTRAP-20260728-001
+repository: simonkey888/Zungun
+branch: feat/agentic-os-v1-bootstrap
+base_sha: 13d6745217672da16985d815c427aa4c953de227
+remote_sha: 2861555ba3381bbe75844b2e3ae5960a8f74fc09
+remote_sha_scope: scaffold_content_before_checkpoint_record
+changed_paths:
+  - audit/README.md
+  - ops/DECISIONS.md
+  - ops/HANDOFF.md
+  - ops/PROJECT_STATE.yaml
+  - ops/SYSTEM.md
+  - ops/TEMPLATES.md
+commits:
+  - 8d481b35737a7faf53fa9a40cb6489d128d6002f
+  - a9212e982486e38d1d3a9bafb0c730e239565a89
+  - bd52872f98d89cf939407c208bdf24ac2386823b
+  - 9ef94545f734ec3b006c99cff69128b847d9774f
+  - f9f37ac3a87478e74862c17773ff2eaacc624569
+  - 2861555ba3381bbe75844b2e3ae5960a8f74fc09
+tests:
+  status: PASS
+  evidence:
+    - GitHub compare against base reports ahead_by=6, behind_by=0.
+    - Exactly six added paths, all under ops/** or audit/**.
+    - No application, workflow or production configuration path changed.
+ci_runs: []
+artifacts: []
+known_risks:
+  - Drive remains authoritative for legacy governance until an independent migration audit certifies coexistence.
+  - The control branch has not been merged and has no release authority.
+production_changed: false
+next_role: AUD
