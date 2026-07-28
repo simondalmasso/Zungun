@@ -6,14 +6,14 @@ project: ZUNGUN
 repository: simonkey888/Zungun
 default_branch: recovery/remote-toolchain-v1
 active_mission: ZUNGUN-OS-MIGRATION-BOOTSTRAP-20260728-001
-active_role: ARQ
+active_role: AUD
 active_branch: feat/agentic-os-v1-bootstrap
 verified_remote_sha: 13d6745217672da16985d815c427aa4c953de227
 last_audited_sha: 13d6745217672da16985d815c427aa4c953de227
-phase: MIGRATION_BOOTSTRAP
-status: ACTIVE
+phase: MIGRATION_AUDIT
+status: AUDIT_READY
 production_sha: UNKNOWN
-next_checkpoint: Publish initial /ops scaffold and submit it to an independent migration audit.
+next_checkpoint: Independently audit the bootstrap branch before any merge or canonical-mode promotion.
 drive_legacy_authority:
   enabled: true
   root_folder_id: 1xlfG_fb8veSCXR_zlrrq0SoVabRwgZGj
@@ -22,6 +22,10 @@ drive_legacy_authority:
     - preserved reports
     - heavy external sources
     - evidence not yet migrated
+published_checkpoint:
+  checkpoint_id: ZUNGUN-OS-MIGRATION-BOOTSTRAP-20260728-001-CP1
+  scaffold_content_sha: 2861555ba3381bbe75844b2e3ae5960a8f74fc09
+  checkpoint_record_commit: a93010a807481f9f5bdb74b5d75bf35563eb69f6
 active_claim:
   mission_id: ZUNGUN-OS-MIGRATION-BOOTSTRAP-20260728-001
   role: ARQ
@@ -33,7 +37,8 @@ active_claim:
   claimed_by: chatgpt-arq-bootstrap
   claimed_at: 2026-07-28T10:21:48Z
   expires_at: 2026-07-29T10:21:48Z
-  status: ACTIVE
+  released_at: 2026-07-28T10:26:27Z
+  status: RELEASED
 safety:
   release_permission: false
   production_write: false
