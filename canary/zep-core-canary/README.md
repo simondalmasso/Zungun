@@ -28,11 +28,18 @@ BINDINGS=NONE
 CUSTOM_ROUTES=NONE
 CORS=DISABLED
 PERSISTENCE=NONE
+OBSERVABILITY_EXPLICITLY_CONFIGURED=YES
+OBSERVABILITY_ENABLED=FALSE
+INVOCATION_LOGS_INTENDED=NO
+HEAD_SAMPLING_RATE=0
+PERSISTENCE_DECLARATION=NONE
 MAX_REQUEST_BODY_BYTES=65536
 MAX_DECODED_PAYLOAD_BYTES=48000
 ```
 
 Requests use strict methods and paths, exact top-level allowlists, fatal UTF-8 decoding, canonical Base64, streaming body limits, content-length consistency, normalized errors, no cache, no CORS, and no reflection of unknown fields.
+
+Cloudflare Workers Logs are explicitly disabled in `wrangler.jsonc` with `observability.enabled=false` and `head_sampling_rate=0`. Invocation-log ingestion and persistence are not intended. `tools/verify-config.mjs` rejects a missing, enabled, nonzero, or structurally unexpected observability declaration.
 
 ## Local evidence
 

@@ -8,8 +8,13 @@ const expectedKeys = [
   'compatibility_date',
   'main',
   'name',
+  'observability',
   'preview_urls',
   'workers_dev',
+].sort();
+const expectedObservabilityKeys = [
+  'enabled',
+  'head_sampling_rate',
 ].sort();
 
 function fail(message) {
@@ -25,10 +30,23 @@ try {
 }
 
 if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) fail('CONFIG_NOT_OBJECT');
+
+const forbidden = [
+  'account_id', 'routes', 'route', 'vars', 'secrets', 'kv_namespaces', 'r2_buckets',
+  'd1_databases', 'durable_objects', 'services', 'queues', 'hyperdrive', 'vectorize',
+  'ai', 'analytics_engine_datasets', 'unsafe_bindings', 'tail_consumers', 'logpush',
+  'triggers', 'env', 'assets', 'dispatch_namespaces', 'mtls_certificates', 'browser',
+  'images',
+];
+for (const key of forbidden) {
+  if (Object.prototype.hasOwnProperty.call(parsed, key)) fail(`FORBIDDEN_CONFIG_KEY:${key}`);
+}
+
 const actualKeys = Object.keys(parsed).sort();
 if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
   fail(`CONFIG_KEYS_MISMATCH:${actualKeys.join(',')}`);
 }
+
 const expected = {
   '$schema': './node_modules/wrangler/config-schema.json',
   name: 'zungun-zep-core-canary',
@@ -41,14 +59,16 @@ for (const [key, value] of Object.entries(expected)) {
   if (parsed[key] !== value) fail(`CONFIG_VALUE_MISMATCH:${key}`);
 }
 
-const forbidden = [
-  'account_id', 'routes', 'route', 'vars', 'kv_namespaces', 'r2_buckets', 'd1_databases',
-  'durable_objects', 'services', 'queues', 'hyperdrive', 'vectorize', 'ai', 'analytics_engine_datasets',
-  'triggers', 'env', 'assets', 'dispatch_namespaces', 'mtls_certificates', 'browser', 'images',
-];
-for (const key of forbidden) {
-  if (Object.prototype.hasOwnProperty.call(parsed, key)) fail(`FORBIDDEN_CONFIG_KEY:${key}`);
+const observability = parsed.observability;
+if (typeof observability !== 'object' || observability === null || Array.isArray(observability)) {
+  fail('OBSERVABILITY_NOT_OBJECT');
 }
+const actualObservabilityKeys = Object.keys(observability).sort();
+if (JSON.stringify(actualObservabilityKeys) !== JSON.stringify(expectedObservabilityKeys)) {
+  fail(`OBSERVABILITY_KEYS_MISMATCH:${actualObservabilityKeys.join(',')}`);
+}
+if (observability.enabled !== false) fail('OBSERVABILITY_ENABLED_NOT_FALSE');
+if (observability.head_sampling_rate !== 0) fail('OBSERVABILITY_HEAD_SAMPLING_RATE_NOT_ZERO');
 
 const redirectHits = [];
 let current = cwd;
@@ -69,6 +89,11 @@ console.log(JSON.stringify({
   compatibilityDate: parsed.compatibility_date,
   workersDev: parsed.workers_dev,
   previewUrls: parsed.preview_urls,
+  observabilityExplicitlyConfigured: true,
+  observabilityEnabled: observability.enabled,
+  invocationLogsIntended: false,
+  headSamplingRate: observability.head_sampling_rate,
+  persistenceDeclaration: 'none',
   bindings: 0,
   customRoutes: 0,
   environments: 0,
