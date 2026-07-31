@@ -57,8 +57,8 @@ fs.rmSync(persist,{recursive:true,force:true});
 fs.writeFileSync(varsPath,`ZUNGUN_PILOT_TOKEN=${token}\n`,{mode:0o600});
 let runtime;
 try{
-  run(['d1','migrations','apply','DB','--local','--persist-to',persist,'--config','wrangler.jsonc','--yes']);
-  run(['d1','migrations','apply','DB','--local','--persist-to',persist,'--config','wrangler.jsonc','--yes']);
+  run(['d1','migrations','apply','DB','--local','--persist-to',persist,'--config','wrangler.jsonc']);
+  run(['d1','migrations','apply','DB','--local','--persist-to',persist,'--config','wrangler.jsonc']);
   runtime=await start();
   const payload=Uint8Array.of(0,1,2,253,254,255);
   const requestNow=Date.now();
