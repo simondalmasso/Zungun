@@ -2,8 +2,8 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 5,
-  "updated_at": "2026-07-31T07:41:00Z",
+  "revision": 6,
+  "updated_at": "2026-07-31T08:45:00Z",
   "authority": {
     "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
@@ -13,8 +13,8 @@
       "read_last": 20
     },
     "latest_checkpoint": {
-      "id": "GAOS-LEAN-BASELINE-CP001",
-      "path": "/ops/evidence/GAOS-LEAN-BASELINE-CP001.json"
+      "id": "ZUNGUN-060-CP001",
+      "path": "/ops/evidence/ZUNGUN-060-CP001.json"
     },
     "remote_truth": [
       "GIT_HEAD",
@@ -30,105 +30,96 @@
     "fail_closed": true
   },
   "workset": {
-    "id": "ZUNGUN-GAOS-LEAN-BASELINE-001",
-    "order_id": "ZUNGUN-ARQ-CANONICAL-PRODUCT-BASELINE-059",
-    "status": "CLOSED",
-    "phase": "CLOSED",
-    "objective": "Materialize the minimal GAOS LEAN control plane and establish a documented, reusable-CI product baseline without runtime behavior change.",
+    "id": "ZUNGUN-ZEP-TEST-LOOPBACK-060",
+    "order_id": "ZUNGUN-ARQ-ZEP-TEST-LOOPBACK-TRANSPORT-060",
+    "status": "ACTIVE",
+    "phase": "IMPLEMENTATION",
+    "objective": "Build the smallest real test-only end-to-end ZEP vertical with validation, deterministic serialization, independent in-memory loopback bytes, receive, strict deserialization, revalidation, processing, and deterministic processing receipt.",
     "risk": "MEDIUM",
-    "mission_base_sha": "5c49374d5fa54858108cffe437520b793d0cfeb4",
-    "implementation_branch": "feat/gaos-lean-product-baseline-v1",
+    "mission_base_sha": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a",
+    "implementation_branch": "feat/zep-test-loopback-transport-v1",
+    "runtime_behavior_change": true,
     "allowed_paths": [
-      "/ops/**",
-      "README.md",
-      "docs/**",
-      "tools/**",
-      ".github/workflows/**",
-      "evidence/order057/**"
+      "ops/CURRENT.json",
+      "ops/EVENTS.ndjson",
+      "ops/evidence/ZUNGUN-060-CP001.json",
+      "tools/verify-gaos-lean.mjs",
+      ".github/workflows/gaos-lean-baseline.yml",
+      "canary/zep-core-canary/src/**",
+      "canary/zep-core-canary/test/**",
+      "canary/zep-core-canary/tools/**",
+      "canary/zep-core-canary/package.json",
+      "canary/zep-core-canary/package-lock.json"
     ],
     "forbidden": [
-      "RUNTIME_SOURCE_CHANGES",
-      "DEPENDENCY_VERSION_CHANGES",
       "DEFAULT_BRANCH_CHANGE",
-      "CLOUDFLARE_WRITE",
       "MERGE",
       "DEPLOY",
       "RELEASE",
-      "PRODUCTION_CHANGE"
+      "PRODUCTION_CHANGE",
+      "CLOUDFLARE_WRITE",
+      "SECRET_READ",
+      "SECRET_OUTPUT",
+      "DATABASE",
+      "DURABLE_STORAGE",
+      "EXTERNAL_QUEUE",
+      "EXTERNAL_NETWORK",
+      "PRODUCTION_WEBSOCKET",
+      "AUTH_SYSTEM",
+      "GENERAL_MESSAGING_PLATFORM",
+      "FORCE_PUSH",
+      "HISTORY_REWRITE",
+      "SECOND_WORKSET",
+      "INTERMEDIATE_AUD"
     ]
   },
   "claim": {
-    "id": "ZUNGUN-GAOS-LEAN-ARQ-CLAIM-001",
+    "id": "ZUNGUN-060-ARQ-CLAIM-001",
     "role": "ARQ",
     "executor": "ARQ",
-    "status": "INACTIVE",
-    "assigned_at": "2026-07-31T05:08:26Z",
-    "autonomy": "NONE_WORKSET_CLOSED"
+    "status": "ACTIVE",
+    "assigned_at": "2026-07-31T08:45:00Z",
+    "autonomy": "LONG_DEEP_AUTONOMOUS_WITHIN_WORKSET_SCOPE"
   },
   "baseline": {
     "source_commit": "5c49374d5fa54858108cffe437520b793d0cfeb4",
     "branch": "feat/gaos-lean-product-baseline-v1",
     "runtime_behavior_change": false,
-    "product_capability": "ZEP semantic protocol core plus stateless validation canary; no end-user messaging transport, persistence, routing, queueing, acknowledgement, or delivery."
+    "product_capability": "ZEP semantic protocol core plus stateless validation canary; no end-user messaging transport, persistence, routing, queueing, acknowledgement, or delivery.",
+    "order_059_status": "CLOSED_DO_NOT_REOPEN",
+    "ratified_control_head": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a"
+  },
+  "increment": {
+    "name": "ZEP_TEST_LOOPBACK_TRANSPORT_AND_PROCESSING",
+    "environment": "TEST_ONLY",
+    "external_network": false,
+    "durable_persistence": false,
+    "end_user_delivery_claim": false,
+    "duplicate_semantics": "PROCESS_EACH_ENQUEUED_DELIVERY"
   },
   "checkpoint": {
-    "latest_id": "GAOS-LEAN-BASELINE-CP001",
-    "path": "/ops/evidence/GAOS-LEAN-BASELINE-CP001.json",
-    "status": "PASS",
-    "verified_commit_sha": "19e0e39916d9dfb1bbc786b57d2efe3ab5905f92",
-    "verified_tree_sha": "ccf733b9973bf4255b3a1eb6b459431a099f80c5",
-    "push_run_id": 30606393695,
-    "checks": {
-      "control-plane-validate": "SUCCESS",
-      "runtime-regression": "SUCCESS",
-      "baseline-gate": "SUCCESS"
-    },
-    "audit_status": "PASS_WITH_FINDINGS",
-    "audit_id": "ZUNGUN-AUD-20260731-059-CP001-002",
-    "audit_comment_id": 5139817220,
-    "checkpoint_accepted": true,
-    "blocking_findings": 0,
-    "release_blockers": 0,
-    "non_blocking_findings": 1,
-    "non_blocking_finding": "TRANSIENT_STAGING_COMMITS_AND_TMP_TEST_BRANCH_CREATED_DURING_CORRECTION",
-    "technical_evidence_unchanged": true,
-    "re_audit_count": 1,
-    "re_audit_count_max": 1
+    "latest_id": "ZUNGUN-060-CP001",
+    "path": "/ops/evidence/ZUNGUN-060-CP001.json",
+    "status": "IN_PROGRESS",
+    "checkpoint_accepted": false,
+    "blocking_findings": null,
+    "release_blockers": null
   },
-  "head_ratification": {
+  "prior_head_ratification": {
     "status": "RATIFIED_CONTROL_MATERIALIZED",
-    "resolved_state": "FAIL_CLOSED_HEAD_DRIFT",
-    "ratified_by": "HUMAN_OWNER",
-    "ratified_at": "2026-07-31T07:41:00Z",
     "ratified_commit_sha": "cd203f47405a0aced344abc33c859d07de5a82af",
-    "ratified_tree_sha": "7522562504227ce3d66757fcbc18c3b49753f24d",
-    "ratified_ci_run_id": 30612055882,
-    "ratified_ci_conclusion": "SUCCESS",
-    "ratified_jobs": {
-      "control-plane-validate": "SUCCESS",
-      "runtime-regression": "SUCCESS",
-      "baseline-gate": "SUCCESS"
-    },
-    "materialization": {
-      "mode": "DIRECT_CHILD_CONTROL_ONLY",
-      "required_parent_sha": "cd203f47405a0aced344abc33c859d07de5a82af",
-      "allowed_paths": [
-        "ops/CURRENT.json",
-        "ops/EVENTS.ndjson",
-        "tools/verify-gaos-lean.mjs"
-      ],
-      "event_seq": 7,
-      "event_id": "GAOS-LEAN-EVT-0007"
-    }
+    "materialized_commit_sha": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a",
+    "ci_run_id": 30614261620,
+    "conclusion": "SUCCESS"
   },
   "platform": {
     "write_authorized": false,
     "deploy_authorized": false,
     "release_authorized": false,
     "production_change_authorized": false,
-    "remote_state_requirement": "READ_REAL_RELEVANT_PLATFORM_STATE_BEFORE_ANY_FUTURE_PLATFORM_ACTION",
-    "last_verified_at": null,
-    "state": "UNCHANGED_BY_ORDER_059"
+    "external_network_authorized": false,
+    "durable_storage_authorized": false,
+    "state": "UNCHANGED_TEST_ONLY_WORKSET"
   },
-  "next_action": "IDLE_AWAIT_HUMAN_WORKSET"
+  "next_action": "IMPLEMENT_VERIFY_AND_REQUEST_SINGLE_AUDIT"
 }

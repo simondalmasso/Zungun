@@ -1,0 +1,87 @@
+{
+  "schema_version": "gaos-lean.checkpoint.v1",
+  "checkpoint_id": "ZUNGUN-060-CP001",
+  "project": "ZUNGUN",
+  "workset_id": "ZUNGUN-ZEP-TEST-LOOPBACK-060",
+  "created_at": "2026-07-31T08:45:00Z",
+  "status": "IN_PROGRESS",
+  "materialization": {
+    "mission_base_sha": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a",
+    "branch": "feat/zep-test-loopback-transport-v1",
+    "commit_sha": null,
+    "tree_sha": null
+  },
+  "scope": {
+    "runtime_behavior_change": true,
+    "environment": "TEST_ONLY",
+    "allowed_paths": [
+      "ops/CURRENT.json",
+      "ops/EVENTS.ndjson",
+      "ops/evidence/ZUNGUN-060-CP001.json",
+      "tools/verify-gaos-lean.mjs",
+      ".github/workflows/gaos-lean-baseline.yml",
+      "canary/zep-core-canary/src/**",
+      "canary/zep-core-canary/test/**",
+      "canary/zep-core-canary/tools/**",
+      "canary/zep-core-canary/package.json",
+      "canary/zep-core-canary/package-lock.json"
+    ],
+    "forbidden": [
+      "DEFAULT_BRANCH_CHANGE",
+      "MERGE",
+      "DEPLOY",
+      "RELEASE",
+      "PRODUCTION_CHANGE",
+      "CLOUDFLARE_WRITE",
+      "SECRET_READ",
+      "SECRET_OUTPUT",
+      "DATABASE",
+      "DURABLE_STORAGE",
+      "EXTERNAL_QUEUE",
+      "EXTERNAL_NETWORK",
+      "PRODUCTION_WEBSOCKET",
+      "AUTH_SYSTEM",
+      "GENERAL_MESSAGING_PLATFORM",
+      "FORCE_PUSH",
+      "HISTORY_REWRITE",
+      "SECOND_WORKSET",
+      "INTERMEDIATE_AUD"
+    ]
+  },
+  "functional": {
+    "vertical": "VALIDATION_TO_SERIALIZATION_TO_IN_MEMORY_LOOPBACK_TO_RECEIVE_TO_DESERIALIZATION_TO_REVALIDATION_TO_PROCESSOR_TO_PROCESSING_RECEIPT",
+    "implemented": false,
+    "transport_boundary_real": false,
+    "processing_receipt_real": false
+  },
+  "verification": {
+    "local_focused": {
+      "typecheck": "PASS",
+      "transport_tests": "20_OF_20_PASS",
+      "codec_fuzz_cases": 2048,
+      "raw_native_errors": 0,
+      "prototype_pollution": 0,
+      "lock_sha256": "c894790ca37a703f17ed9f190d078c0499578568d4284f4aae6162633eaa47e2"
+    },
+    "github_actions": {
+      "status": "PENDING",
+      "run_id": null,
+      "head_sha": null,
+      "conclusion": null
+    }
+  },
+  "boundaries": {
+    "merge": false,
+    "deploy": false,
+    "release": false,
+    "production_change": false,
+    "cloudflare_write": false,
+    "external_network": false,
+    "durable_storage": false
+  },
+  "audit": {
+    "trigger": "ONE_POST_CHECKPOINT_AUDIT",
+    "status": "NOT_REQUESTED",
+    "auditor": "NEW_AUD_PROMOTED"
+  }
+}

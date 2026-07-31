@@ -2,7 +2,9 @@ name: GAOS LEAN baseline
 
 "on":
   push:
-    branches: [feat/gaos-lean-product-baseline-v1]
+    branches:
+      - feat/gaos-lean-product-baseline-v1
+      - feat/zep-test-loopback-transport-v1
   pull_request:
   workflow_call:
 
@@ -17,7 +19,6 @@ env:
   CI: "true"
   NO_COLOR: "1"
   WRANGLER_SEND_METRICS: "false"
-  MISSION_BASE_SHA: 5c49374d5fa54858108cffe437520b793d0cfeb4
   EXPECTED_LOCK_SHA256: c894790ca37a703f17ed9f190d078c0499578568d4284f4aae6162633eaa47e2
 
 jobs:
@@ -40,18 +41,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git cat-file -e "$MISSION_BASE_SHA^{commit}"
-          test "$(git merge-base "$MISSION_BASE_SHA" HEAD)" = "$MISSION_BASE_SHA"
-          git diff --check "$MISSION_BASE_SHA..HEAD"
-          mapfile -t changed < <(git diff --name-only "$MISSION_BASE_SHA..HEAD")
+          branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          case "$branch" in
+            feat/gaos-lean-product-baseline-v1)
+              base=5c49374d5fa54858108cffe437520b793d0cfeb4
+              scope=baseline
+              ;;
+            feat/zep-test-loopback-transport-v1)
+              base=940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a
+              scope=loopback060
+              ;;
+            *) echo "UNSUPPORTED_BRANCH=$branch" >&2; exit 1 ;;
+          esac
+          git cat-file -e "$base^{commit}"
+          test "$(git merge-base "$base" HEAD)" = "$base"
+          git diff --check "$base..HEAD"
+          mapfile -t changed < <(git diff --name-only "$base..HEAD")
           test "${#changed[@]}" -gt 0
           for p in "${changed[@]}"; do
-            case "$p" in
-              ops/*|README.md|docs/*|tools/*|.github/workflows/*|evidence/order057/*) ;;
-              *) echo "OUT_OF_SCOPE=$p" >&2; exit 1 ;;
-            esac
+            if [ "$scope" = baseline ]; then
+              case "$p" in
+                ops/*|README.md|docs/*|tools/*|.github/workflows/*|evidence/order057/*) ;;
+                *) echo "OUT_OF_SCOPE=$p" >&2; exit 1 ;;
+              esac
+            else
+              case "$p" in
+                ops/CURRENT.json|ops/EVENTS.ndjson|ops/evidence/ZUNGUN-060-CP001.json|tools/verify-gaos-lean.mjs|.github/workflows/gaos-lean-baseline.yml|canary/zep-core-canary/src/*|canary/zep-core-canary/test/*|canary/zep-core-canary/tools/*|canary/zep-core-canary/package.json|canary/zep-core-canary/package-lock.json) ;;
+                *) echo "OUT_OF_SCOPE=$p" >&2; exit 1 ;;
+              esac
+            fi
           done
-          if git diff --name-only "$MISSION_BASE_SHA..HEAD" | grep -Eq '^canary/zep-core-canary/(src/|vendor/zep-core/src/)'; then exit 1; fi
       - name: Validate GAOS LEAN
         run: node tools/verify-gaos-lean.mjs .
 
@@ -80,7 +99,7 @@ jobs:
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           test "$(sha256sum package-lock.json | cut -d' ' -f1)" = "$EXPECTED_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund
-      - name: Canary and core regression
+      - name: Canary, loopback vertical and core regression
         run: |
           set -euo pipefail
           npm run typecheck
@@ -106,8 +125,8 @@ jobs:
     needs: [control-plane, runtime-regression]
     runs-on: ubuntu-24.04
     steps:
-      - name: Confirm bounded baseline
+      - name: Confirm bounded workset
         shell: bash
         run: |
           set -euo pipefail
-          printf 'HEAD=%s\nCONTROL_PLANE=PASS\nRUNTIME_REGRESSION=PASS\nRUNTIME_BEHAVIOR_CHANGE=0\nCLOUDFLARE_WRITE=0\nDEPLOY=0\nRELEASE=0\nPRODUCTION_CHANGE=0\n' "$GITHUB_SHA"
+          printf 'HEAD=%s\nCONTROL_PLANE=PASS\nTYPECHECK=PASS\nUNIT_AND_E2E_TESTS=PASS\nREGRESSION=PASS\nFUZZ=PASS\nWRANGLER_DRY_RUN=PASS\nCLOUDFLARE_WRITE=0\nDEPLOY=0\nRELEASE=0\nPRODUCTION_CHANGE=0\n' "$GITHUB_SHA"
