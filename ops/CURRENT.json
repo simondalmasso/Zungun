@@ -2,133 +2,106 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 7,
-  "updated_at": "2026-07-31T09:18:00Z",
+  "revision": 8,
+  "updated_at": "2026-07-31T12:20:00Z",
   "authority": {
     "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
     "policy": "/ops/POLICY.md",
-    "event_tail": {
-      "path": "/ops/EVENTS.ndjson",
-      "read_last": 20
-    },
+    "event_tail": { "path": "/ops/EVENTS.ndjson", "read_last": 20 },
     "latest_checkpoint": {
-      "id": "ZUNGUN-060-CP001",
-      "path": "/ops/evidence/ZUNGUN-060-CP001.json"
+      "id": "ZUNGUN-CLOUDFLARE-PILOT-V0-CP001",
+      "path": "/ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json"
     },
-    "remote_truth": [
-      "GIT_HEAD",
-      "GITHUB_ACTIONS",
-      "RELEVANT_REMOTE_PLATFORM_STATE"
-    ],
-    "historical_only": [
-      "GITHUB_ISSUES",
-      "CHATS",
-      "OLD_DRIVE_LEDGERS",
-      "SUPERSEDED_BRANCH_CONTROL_FILES"
-    ],
+    "remote_truth": ["GIT_HEAD", "GITHUB_ACTIONS", "RELEVANT_REMOTE_PLATFORM_STATE"],
+    "historical_only": ["GITHUB_ISSUES", "CHATS", "OLD_DRIVE_LEDGERS", "SUPERSEDED_BRANCH_CONTROL_FILES"],
     "fail_closed": true
   },
   "workset": {
-    "id": "ZUNGUN-ZEP-TEST-LOOPBACK-060",
-    "order_id": "ZUNGUN-ARQ-ZEP-TEST-LOOPBACK-TRANSPORT-060",
+    "id": "ZUNGUN-CLOUDFLARE-PILOT-V0",
+    "order_id": "ZUNGUN-CLOUDFLARE-PILOT-V0",
     "status": "ACTIVE",
-    "phase": "CHECKPOINT_READY",
-    "objective": "Build the smallest real test-only end-to-end ZEP vertical with validation, deterministic serialization, independent in-memory loopback bytes, receive, strict deserialization, revalidation, processing, and deterministic processing receipt.",
-    "risk": "MEDIUM",
-    "mission_base_sha": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a",
-    "implementation_branch": "feat/zep-test-loopback-transport-v1",
+    "phase": "IMPLEMENTATION",
+    "objective": "Build and verify the first real Cloudflare Worker pilot for authenticated ZEP message validation, authoritative D1 persistence, safe lookup, atomic acknowledgement, and verifiable persisted processing receipts without deployment.",
+    "risk": "HIGH",
+    "mission_base_sha": "d2404cf232976a8f39abb1171ead2ed1f63533fa",
+    "implementation_branch": "feat/zep-cloudflare-pilot-v0",
     "runtime_behavior_change": true,
     "allowed_paths": [
-      "ops/CURRENT.json",
-      "ops/EVENTS.ndjson",
-      "ops/evidence/ZUNGUN-060-CP001.json",
-      "tools/verify-gaos-lean.mjs",
-      ".github/workflows/gaos-lean-baseline.yml",
       "canary/zep-core-canary/src/**",
       "canary/zep-core-canary/test/**",
       "canary/zep-core-canary/tools/**",
       "canary/zep-core-canary/package.json",
-      "canary/zep-core-canary/package-lock.json"
+      "canary/zep-core-canary/package-lock.json",
+      "pilot/worker/**",
+      "pilot/migrations/**",
+      "pilot/test/**",
+      "pilot/tools/**",
+      "pilot/package.json",
+      "pilot/package-lock.json",
+      "pilot/tsconfig.json",
+      "pilot/wrangler.jsonc",
+      ".github/workflows/zep-cloudflare-pilot-v0.yml",
+      "ops/CURRENT.json",
+      "ops/EVENTS.ndjson",
+      "ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json",
+      "tools/verify-gaos-lean.mjs",
+      "README.md",
+      "docs/product/**"
     ],
     "forbidden": [
-      "DEFAULT_BRANCH_CHANGE",
-      "MERGE",
-      "DEPLOY",
-      "RELEASE",
-      "PRODUCTION_CHANGE",
-      "CLOUDFLARE_WRITE",
-      "SECRET_READ",
-      "SECRET_OUTPUT",
-      "DATABASE",
-      "DURABLE_STORAGE",
-      "EXTERNAL_QUEUE",
-      "EXTERNAL_NETWORK",
-      "PRODUCTION_WEBSOCKET",
-      "AUTH_SYSTEM",
-      "GENERAL_MESSAGING_PLATFORM",
-      "FORCE_PUSH",
-      "HISTORY_REWRITE",
-      "SECOND_WORKSET",
-      "INTERMEDIATE_AUD"
+      "DEFAULT_BRANCH_CHANGE", "MERGE", "DEPLOY", "RELEASE", "PRODUCTION_ROUTE",
+      "CUSTOM_DOMAIN", "CLOUDFLARE_WRITE", "SECRET_READ", "SECRET_OUTPUT",
+      "SECRET_VALUE_IN_REPOSITORY", "EXTERNAL_NETWORK", "GENERAL_MESSAGING_PLATFORM",
+      "END_USER_DELIVERY_CLAIM", "SECOND_WORKSET", "INTERMEDIATE_AUDIT",
+      "GAOS_MIGRATION", "BASELINE_REBUILD", "FORCE_PUSH", "HISTORY_REWRITE"
     ]
   },
   "claim": {
-    "id": "ZUNGUN-060-ARQ-CLAIM-001",
+    "id": "ZUNGUN-CLOUDFLARE-PILOT-V0-ARQ-CLAIM-001",
     "role": "ARQ",
     "executor": "ARQ",
     "status": "ACTIVE",
-    "assigned_at": "2026-07-31T08:45:00Z",
+    "assigned_at": "2026-07-31T12:20:00Z",
     "autonomy": "LONG_DEEP_AUTONOMOUS_WITHIN_WORKSET_SCOPE"
   },
   "baseline": {
-    "source_commit": "5c49374d5fa54858108cffe437520b793d0cfeb4",
-    "branch": "feat/gaos-lean-product-baseline-v1",
-    "runtime_behavior_change": false,
-    "product_capability": "ZEP semantic protocol core plus stateless validation canary; no end-user messaging transport, persistence, routing, queueing, acknowledgement, or delivery.",
     "order_059_status": "CLOSED_DO_NOT_REOPEN",
-    "ratified_control_head": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a"
+    "order_060_status": "CLOSED_BY_HUMAN_TRANSITION_NO_SEPARATE_AUDIT",
+    "order_060_corrected_head": "d2404cf232976a8f39abb1171ead2ed1f63533fa",
+    "order_060_corrected_ci_run_id": 30629569115,
+    "order_060_corrected_ci_conclusion": "SUCCESS"
   },
   "increment": {
-    "name": "ZEP_TEST_LOOPBACK_TRANSPORT_AND_PROCESSING",
-    "environment": "TEST_ONLY",
+    "name": "ZEP_CLOUDFLARE_D1_PILOT_V0",
+    "environment": "CANARY_IMPLEMENTATION_LOCAL_ONLY",
+    "worker": "zungun-zep-cloudflare-pilot-v0",
+    "persistence": "D1_ONLY",
+    "authentication_binding_name": "ZUNGUN_PILOT_TOKEN",
     "external_network": false,
-    "durable_persistence": false,
     "end_user_delivery_claim": false,
-    "duplicate_semantics": "PROCESS_EACH_ENQUEUED_DELIVERY"
+    "remote_database_configured": false
   },
   "checkpoint": {
-    "latest_id": "ZUNGUN-060-CP001",
-    "path": "/ops/evidence/ZUNGUN-060-CP001.json",
-    "status": "PASS",
-    "material_commit_sha": "c4c1f4e8ff97596ad983034c9358ad27c4a7c4ce",
-    "material_tree_sha": "b3a6744696039c663cd718f74365298405a8a6a0",
-    "push_run_id": 30619283127,
-    "checks": {
-      "control-plane-validate": "SUCCESS",
-      "runtime-regression": "SUCCESS",
-      "baseline-gate": "SUCCESS"
-    },
-    "audit_status": "READY_TO_REQUEST",
+    "latest_id": "ZUNGUN-CLOUDFLARE-PILOT-V0-CP001",
+    "path": "/ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json",
+    "status": "IN_PROGRESS",
+    "audit_status": "NOT_REQUESTED",
     "checkpoint_accepted": false,
-    "blocking_findings": 0,
-    "release_blockers": 0
-  },
-  "prior_head_ratification": {
-    "status": "RATIFIED_CONTROL_MATERIALIZED",
-    "ratified_commit_sha": "cd203f47405a0aced344abc33c859d07de5a82af",
-    "materialized_commit_sha": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a",
-    "ci_run_id": 30614261620,
-    "conclusion": "SUCCESS"
+    "blocking_findings": null,
+    "release_blockers": null
   },
   "platform": {
     "write_authorized": false,
+    "cloudflare_write_authorized": false,
     "deploy_authorized": false,
     "release_authorized": false,
     "production_change_authorized": false,
+    "secret_read_authorized": false,
+    "remote_d1_write_authorized": false,
+    "local_d1_test_authorized": true,
     "external_network_authorized": false,
-    "durable_storage_authorized": false,
-    "state": "UNCHANGED_TEST_ONLY_WORKSET"
+    "state": "IMPLEMENTATION_LOCAL_ONLY_NO_REMOTE_RESOURCES"
   },
-  "next_action": "REQUEST_SINGLE_NEW_AUD_CHECKPOINT_AUDIT"
+  "next_action": "IMPLEMENT_VERIFY_AND_REQUEST_SINGLE_FINAL_AUDIT"
 }
