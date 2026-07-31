@@ -58,7 +58,7 @@ if(checkpoint.status==='IN_PROGRESS'){
  if(current.workset.phase!=='CHECKPOINT_READY'||current.checkpoint.status!=='PASS'||current.checkpoint.audit_status!=='READY_TO_REQUEST')fail('checkpoint-ready state');
  if(current.next_action!=='REQUEST_SINGLE_FINAL_AUDIT')fail('checkpoint next action');
  if(typeof checkpoint.materialization?.commit_sha!=='string'||typeof checkpoint.materialization?.tree_sha!=='string'||!Array.isArray(checkpoint.materialization?.changed_paths)||checkpoint.materialization.changed_paths.length<1)fail('checkpoint SHA materialization');
- for(const key of ['worker_implemed','zep_validation','d1_persistence','safe_lookup','atomic_acknowledgement','authoritative_processing_receipt','authentication'])if(checkpoint.functional?.[key]!==true)fail(`functional ${key}`);
+ for(const key of ['worker_implemented','zep_validation','d1_persistence','safe_lookup','atomic_acknowledgement','authoritative_processing_receipt','authentication'])if(checkpoint.functional?.[key]!==true)fail(`functional ${key}`);
  const actions=checkpoint.verification?.github_actions;if(actions?.conclusion!=='SUCCESS'||actions?.head_sha!==checkpoint.materialization.commit_sha||!Number.isInteger(actions?.run_id))fail('checkpoint CI');
  for(const name of ['control-plane-validate','typecheck-and-unit','d1-integration','security-and-fuzz','core-regression','wrangler-dry-run','pilot-gate'])if(actions?.jobs?.[name]?.conclusion!=='SUCCESS')fail(`checkpoint job ${name}`);
  if(checkpoint.audit?.status!=='READY_TO_REQUEST'||checkpoint.audit?.requested!==true||checkpoint.audit?.intermediate_audits!==0)fail('checkpoint audit state');
