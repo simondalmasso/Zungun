@@ -79,7 +79,31 @@
   },
   "audit": {
     "trigger": "ONE_POST_AUDIT_AT_MATERIAL_CHECKPOINT",
-    "status": "REQUEST_REQUIRED",
-    "instruction": "Do not declare Order 059 complete before independent AUD returns."
+    "status": "BLOCKED_PENDING_SINGLE_CORRECTION",
+    "audit_id": "ZUNGUN-AUD-20260731-059-CP001-001",
+    "verdict": "BLOCK",
+    "blocking_findings": 1,
+    "release_blockers": 1,
+    "finding": "GAOS_LEAN_EVENT_PROTOCOL_NOT_IMPLEMENTED_AS_AUTHORIZED",
+    "correction_authorized": true,
+    "re_audit_count_max": 1,
+    "technical_evidence_unchanged": true,
+    "instruction": "Run exact-head push CI once, then request exactly one independent re-audit. Do not declare Order 059 complete before AUD returns."
+  },
+  "correction": {
+    "status": "PENDING_EXACT_HEAD_PUSH_CI",
+    "authorized_by_audit_id": "ZUNGUN-AUD-20260731-059-CP001-001",
+    "changed_paths": [
+      "ops/POLICY.md",
+      "ops/EVENTS.ndjson",
+      "ops/CURRENT.json",
+      "ops/evidence/GAOS-LEAN-BASELINE-CP001.json",
+      "tools/verify-gaos-lean.mjs"
+    ],
+    "merge": false,
+    "deploy": false,
+    "release": false,
+    "production_change": false,
+    "cloudflare_write": false
   }
 }

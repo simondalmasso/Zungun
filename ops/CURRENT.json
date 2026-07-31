@@ -2,8 +2,8 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 2,
-  "updated_at": "2026-07-31T05:30:00Z",
+  "revision": 3,
+  "updated_at": "2026-07-31T05:42:53Z",
   "authority": {
     "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
@@ -33,7 +33,7 @@
     "id": "ZUNGUN-GAOS-LEAN-BASELINE-001",
     "order_id": "ZUNGUN-ARQ-CANONICAL-PRODUCT-BASELINE-059",
     "status": "ACTIVE",
-    "phase": "MATERIAL_CHECKPOINT_CLOSED_PENDING_INDEPENDENT_AUD",
+    "phase": "BLOCKED_PENDING_SINGLE_CORRECTION",
     "objective": "Materialize the minimal GAOS LEAN control plane and establish a documented, reusable-CI product baseline without runtime behavior change.",
     "risk": "MEDIUM",
     "mission_base_sha": "5c49374d5fa54858108cffe437520b793d0cfeb4",
@@ -61,7 +61,7 @@
     "id": "ZUNGUN-GAOS-LEAN-ARQ-CLAIM-001",
     "role": "ARQ",
     "executor": "ARQ",
-    "status": "CHECKPOINT_CLOSED_AWAITING_INDEPENDENT_AUD",
+    "status": "ACTIVE_SINGLE_CORRECTION_AUTHORIZED",
     "assigned_at": "2026-07-31T05:08:26Z",
     "autonomy": "AUTHORIZED_WITHIN_WORKSET_SCOPE"
   },
@@ -82,7 +82,12 @@
       "control-plane-validate": "SUCCESS",
       "runtime-regression": "SUCCESS",
       "baseline-gate": "SUCCESS"
-    }
+    },
+    "audit_status": "BLOCKED_PENDING_SINGLE_CORRECTION",
+    "audit_id": "ZUNGUN-AUD-20260731-059-CP001-001",
+    "blocking_finding": "GAOS_LEAN_EVENT_PROTOCOL_NOT_IMPLEMENTED_AS_AUTHORIZED",
+    "technical_evidence_unchanged": true,
+    "re_audit_count_max": 1
   },
   "platform": {
     "write_authorized": false,
@@ -93,5 +98,5 @@
     "last_verified_at": null,
     "state": "UNCHANGED_BY_ORDER_059"
   },
-  "next_action": "REQUEST_EXACTLY_ONE_INDEPENDENT_AUD_REVIEW;DO_NOT_DECLARE_ORDER_059_COMPLETE_BEFORE_AUD"
+  "next_action": "RUN_EXACT_HEAD_PUSH_CI_ONCE_THEN_REQUEST_ONE_REAUDIT;DO_NOT_DECLARE_ORDER_059_COMPLETE"
 }

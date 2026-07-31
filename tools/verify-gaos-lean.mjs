@@ -10,6 +10,22 @@ const required = [
   'ops/releases/GAOS-LEAN-BASELINE-001.json',
   'docs/product-baseline.md'
 ];
+const allowedEventTypes = Object.freeze([
+  'WORKSET_OPENED',
+  'CLAIM_ASSIGNED',
+  'STOP',
+  'TAKEOVER',
+  'RISK_ESCALATED',
+  'CHECKPOINT_REQUESTED',
+  'CHECKPOINT_ACCEPTED',
+  'AUDIT_DECIDED',
+  'RELEASE_AUTHORIZED',
+  'DEPLOYMENT_RECORDED',
+  'INCIDENT_RECORDED',
+  'WORKSET_CLOSED'
+]);
+const allowedEventTypeSet = new Set(allowedEventTypes);
+const allowedEventTypesText = allowedEventTypes.join('|');
 const fail = (message) => { console.error(`GAOS_LEAN_INVALID: ${message}`); process.exit(1); };
 for (const file of required) if (!fs.existsSync(path.join(root, file))) fail(`missing ${file}`);
 const readJson = (file) => {
@@ -37,15 +53,17 @@ for (const key of ['merge','deploy','release','production_change','cloudflare_wr
 if (release.status === 'AUTHORIZED') fail('release unexpectedly authorized');
 for (const value of Object.values(release.actions ?? {})) if (value !== false) fail('release action enabled');
 const lines = fs.readFileSync(path.join(root, 'ops/EVENTS.ndjson'), 'utf8').trim().split('\n').filter(Boolean);
-if (lines.length < 3) fail('insufficient events');
-let previous = 0; const ids = new Set();
+if (lines.length < 4) fail('insufficient events');
+const ids = new Set();
 for (const [index, line] of lines.entries()) {
   let event; try { event = JSON.parse(line); } catch (error) { fail(`event ${index + 1}: ${error.message}`); }
   if (event.schema_version !== 'gaos-lean.event.v1') fail(`event ${index + 1} schema`);
-  if (!Number.isInteger(event.seq) || event.seq <= previous) fail(`event ${index + 1} sequence`);
+  const expectedSeq = index + 1;
+  if (!Number.isInteger(event.seq) || event.seq !== expectedSeq) fail(`event ${index + 1} sequence must equal ${expectedSeq}`);
   if (!event.event_id || ids.has(event.event_id)) fail(`event ${index + 1} id`);
-  previous = event.seq; ids.add(event.event_id);
+  if (typeof event.type !== 'string' || !allowedEventTypeSet.has(event.type)) fail(`event ${index + 1} type ${JSON.stringify(event.type)}`);
+  ids.add(event.event_id);
 }
 const policy = fs.readFileSync(path.join(root, 'ops/POLICY.md'), 'utf8');
-for (const phrase of ['/ops/CURRENT.json','last 20','FAIL_CLOSED','Real remote HEAD']) if (!policy.includes(phrase)) fail(`POLICY missing ${phrase}`);
-console.log(JSON.stringify({ok:true,project:current.project,workset:current.workset.id,events:lines.length,checkpoint:checkpoint.checkpoint_id,checkpointStatus:checkpoint.status,releaseStatus:release.status}));
+for (const phrase of ['/ops/CURRENT.json','last 20','FAIL_CLOSED','Real remote HEAD',allowedEventTypesText]) if (!policy.includes(phrase)) fail(`POLICY missing ${phrase}`);
+console.log(JSON.stringify({ok:true,project:current.project,workset:current.workset.id,events:lines.length,allowedEventTypes:allowedEventTypes.length,checkpoint:checkpoint.checkpoint_id,checkpointStatus:checkpoint.status,auditStatus:checkpoint.audit?.status,releaseStatus:release.status}));
