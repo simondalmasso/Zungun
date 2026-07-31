@@ -32,7 +32,8 @@ export type ZepTestTransportErrorCode =
   | 'INVALID_BASE64'
   | 'PAYLOAD_TOO_LARGE'
   | 'IDENTITY_MISMATCH'
-  | 'PROCESSOR_FAILED';
+  | 'PROCESSOR_FAILED'
+  | 'INVALID_PROCESSING_RECEIPT';
 
 export class ZepTestTransportError extends Error {
   readonly name = 'ZepTestTransportError';
@@ -175,8 +176,16 @@ export class InMemoryLoopbackTransport {
     return sequence;
   }
 
-  receive(): LoopbackFrame | null {
-    const frame = this.queue.shift();
+  receive(sequence?: number): LoopbackFrame | null {
+    let frame: LoopbackFrame | undefined;
+    if (sequence === undefined) {
+      frame = this.queue.shift();
+    } else {
+      if (!Number.isSafeInteger(sequence) || sequence < 1) fail('IDENTITY_MISMATCH');
+      const index = this.queue.findIndex((candidate) => candidate.sequence === sequence);
+      if (index < 0) return null;
+      [frame] = this.queue.splice(index, 1);
+    }
     if (frame === undefined) return null;
     return Object.freeze({
       sequence: frame.sequence,
@@ -209,7 +218,11 @@ export class TestMessageProcessor {
   }
 }
 
+const PROCESSING_RECEIPT_BRAND: unique symbol = Symbol('ZungunProcessingReceipt');
+
+/** Opaque runtime-branded proof emitted only after successful test processing. */
 export interface ProcessingReceipt {
+  readonly [PROCESSING_RECEIPT_BRAND]: true;
   readonly receiptId: string;
   readonly messageId: string;
   readonly messageCommitment: string;
@@ -218,6 +231,105 @@ export interface ProcessingReceipt {
   readonly outcome: 'PROCESSED';
   readonly processedAtMs: number;
   readonly deliverySequence: number;
+}
+
+export interface ProcessingReceiptExpectation {
+  readonly messageId: string;
+  readonly messageCommitment: string;
+  readonly transportId: string;
+  readonly processorId: string;
+  readonly deliverySequence: number;
+}
+
+const issuedProcessingReceipts = new WeakSet<object>();
+
+function encodeReceiptIdentityPart(value: string): string {
+  const bytes = new Uint8Array(value.length * 2);
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    bytes[index * 2] = codeUnit >>> 8;
+    bytes[index * 2 + 1] = codeUnit & 0xff;
+  }
+  return bytesToBase64(bytes);
+}
+
+function createReceiptId(
+  transportId: string,
+  processorId: string,
+  deliverySequence: number,
+  messageId: string,
+  messageCommitment: string,
+  processedAtMs: number,
+): string {
+  return [
+    'processing-v2',
+    encodeReceiptIdentityPart(transportId),
+    encodeReceiptIdentityPart(processorId),
+    String(deliverySequence),
+    encodeReceiptIdentityPart(messageId),
+    encodeReceiptIdentityPart(messageCommitment),
+    String(processedAtMs),
+  ].join('.');
+}
+
+function issueProcessingReceipt(
+  frame: LoopbackFrame,
+  message: LogicalMessage,
+  transportId: string,
+  processorId: string,
+  processedAtMs: number,
+): ProcessingReceipt {
+  const receipt = {
+    receiptId: createReceiptId(
+      transportId,
+      processorId,
+      frame.sequence,
+      message.messageId,
+      message.messageCommitment,
+      processedAtMs,
+    ),
+    messageId: message.messageId,
+    messageCommitment: message.messageCommitment,
+    transportId,
+    processorId,
+    outcome: 'PROCESSED' as const,
+    processedAtMs,
+    deliverySequence: frame.sequence,
+  } as ProcessingReceipt;
+  Object.defineProperty(receipt, PROCESSING_RECEIPT_BRAND, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  Object.freeze(receipt);
+  issuedProcessingReceipts.add(receipt);
+  return receipt;
+}
+
+export function assertAuthenticProcessingReceipt(
+  value: unknown,
+  expected?: ProcessingReceiptExpectation,
+): ProcessingReceipt {
+  if (
+    typeof value !== 'object'
+    || value === null
+    || !issuedProcessingReceipts.has(value)
+    || (value as ProcessingReceipt)[PROCESSING_RECEIPT_BRAND] !== true
+  ) {
+    fail('INVALID_PROCESSING_RECEIPT');
+  }
+  const receipt = value as ProcessingReceipt;
+  if (expected !== undefined && (
+    receipt.messageId !== expected.messageId
+    || receipt.messageCommitment !== expected.messageCommitment
+    || receipt.transportId !== expected.transportId
+    || receipt.processorId !== expected.processorId
+    || receipt.deliverySequence !== expected.deliverySequence
+  )) {
+    fail('IDENTITY_MISMATCH');
+  }
+  return receipt;
 }
 
 export interface EndToEndTransportServiceOptions {
@@ -248,9 +360,7 @@ export class EndToEndTransportService {
     return this.transport.send(validated.messageId, validated.messageCommitment, bytes);
   }
 
-  async processNext(): Promise<ProcessingReceipt | null> {
-    const frame = this.transport.receive();
-    if (frame === null) return null;
+  private async processFrame(frame: LoopbackFrame): Promise<ProcessingReceipt> {
     const processedAtMs = this.now();
     const message = this.codec.deserialize(frame.bytes, processedAtMs);
     if (message.messageId !== frame.messageId || message.messageCommitment !== frame.messageCommitment) {
@@ -261,30 +371,25 @@ export class EndToEndTransportService {
     } catch {
       fail('PROCESSOR_FAILED');
     }
-    return Object.freeze({
-      receiptId: [
-        'processing',
-        this.transport.transportId,
-        this.processor.processorId,
-        String(frame.sequence),
-        message.messageId,
-        message.messageCommitment,
-        String(processedAtMs),
-      ].join(':'),
-      messageId: message.messageId,
-      messageCommitment: message.messageCommitment,
-      transportId: this.transport.transportId,
-      processorId: this.processor.processorId,
-      outcome: 'PROCESSED',
+    return issueProcessingReceipt(
+      frame,
+      message,
+      this.transport.transportId,
+      this.processor.processorId,
       processedAtMs,
-      deliverySequence: frame.sequence,
-    });
+    );
+  }
+
+  async processNext(): Promise<ProcessingReceipt | null> {
+    const frame = this.transport.receive();
+    if (frame === null) return null;
+    return this.processFrame(frame);
   }
 
   async deliver(input: LogicalMessageInput | LogicalMessage): Promise<ProcessingReceipt> {
     const sequence = this.enqueue(input);
-    const receipt = await this.processNext();
-    if (receipt === null || receipt.deliverySequence !== sequence) fail('IDENTITY_MISMATCH');
-    return receipt;
+    const frame = this.transport.receive(sequence);
+    if (frame === null) fail('IDENTITY_MISMATCH');
+    return this.processFrame(frame);
   }
 }

@@ -10,6 +10,7 @@ import {
   ZEP_TEST_MAX_PAYLOAD_BYTES,
   ZepTestCodec,
   ZepTestTransportError,
+  assertAuthenticProcessingReceipt,
   type ProcessingReceipt,
 } from '../src/test-transport.js';
 
@@ -143,8 +144,13 @@ test('ZEP-060-010 receipt binds messageId and commitment', async () => {
   const { receipt } = await deliver();
   assert.equal(receipt.messageId, 'msg-loopback-001');
   assert.equal(receipt.messageCommitment, 'commitment-loopback-001');
-  assert.match(receipt.receiptId, /msg-loopback-001/);
-  assert.match(receipt.receiptId, /commitment-loopback-001/);
+  assert.equal(assertAuthenticProcessingReceipt(receipt, {
+    messageId: 'msg-loopback-001',
+    messageCommitment: 'commitment-loopback-001',
+    transportId: 'loopback-test-v1',
+    processorId: 'test-message-processor-v1',
+    deliverySequence: 1,
+  }), receipt);
 });
 
 test('ZEP-060-011 receipt is deterministic with fixed clock and fresh service', async () => {
@@ -264,4 +270,52 @@ test('ZEP-060-020 receive-time expiration revalidation blocks queued messages', 
   now = NOW + 1;
   assertZepCode(await captureError(() => service.processNext()), 'EXPIRED');
   assert.equal(processor.processedMessageIds.length, 0);
+});
+
+test('ZEP-060-021 cloned or fabricated processing receipts are rejected', async () => {
+  const { receipt } = await deliver();
+  assert.equal(assertAuthenticProcessingReceipt(receipt), receipt);
+  const forged = Object.freeze({ ...receipt });
+  assertTransportCode(
+    await captureError(() => assertAuthenticProcessingReceipt(forged)),
+    'INVALID_PROCESSING_RECEIPT',
+  );
+});
+
+test('ZEP-060-022 receipt identity encoding prevents delimiter collisions', async () => {
+  const firstService = new EndToEndTransportService({
+    transport: new InMemoryLoopbackTransport('a'),
+    processor: new TestMessageProcessor('b:c'),
+    now: () => NOW,
+  });
+  const secondService = new EndToEndTransportService({
+    transport: new InMemoryLoopbackTransport('a:b'),
+    processor: new TestMessageProcessor('c'),
+    now: () => NOW,
+  });
+  const first = await firstService.deliver(message());
+  const second = await secondService.deliver(message());
+  assert.equal(first.receiptId === second.receiptId, false);
+  assert.equal(assertAuthenticProcessingReceipt(first), first);
+  assert.equal(assertAuthenticProcessingReceipt(second), second);
+});
+
+test('ZEP-060-023 deliver selects its own frame without processing older queued work', async () => {
+  const processor = new TestMessageProcessor();
+  const service = new EndToEndTransportService({ processor, now: () => NOW });
+  service.enqueue(message({
+    messageId: 'msg-stale-queued',
+    messageCommitment: 'commitment-stale-queued',
+  }));
+  const delivered = await service.deliver(message({
+    messageId: 'msg-deliver-current',
+    messageCommitment: 'commitment-deliver-current',
+  }));
+  assert.equal(delivered.messageId, 'msg-deliver-current');
+  assert.deepEqual(processor.processedMessageIds, ['msg-deliver-current']);
+  assert.equal(service.transport.pending(), 1);
+  const stale = await service.processNext();
+  assert.ok(stale !== null);
+  assert.equal(stale.messageId, 'msg-stale-queued');
+  assert.deepEqual(processor.processedMessageIds, ['msg-deliver-current', 'msg-stale-queued']);
 });
