@@ -3,6 +3,8 @@ name: GAOS LEAN baseline
 "on":
   push:
     branches: [feat/gaos-lean-product-baseline-v1]
+  pull_request:
+    branches: [feat/zep-remote-release-candidate-v1]
   workflow_call:
 
 permissions:
