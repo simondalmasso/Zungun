@@ -2,8 +2,8 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 4,
-  "updated_at": "2026-07-31T06:44:00Z",
+  "revision": 5,
+  "updated_at": "2026-07-31T07:41:00Z",
   "authority": {
     "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
@@ -94,6 +94,32 @@
     "technical_evidence_unchanged": true,
     "re_audit_count": 1,
     "re_audit_count_max": 1
+  },
+  "head_ratification": {
+    "status": "RATIFIED_CONTROL_MATERIALIZED",
+    "resolved_state": "FAIL_CLOSED_HEAD_DRIFT",
+    "ratified_by": "HUMAN_OWNER",
+    "ratified_at": "2026-07-31T07:41:00Z",
+    "ratified_commit_sha": "cd203f47405a0aced344abc33c859d07de5a82af",
+    "ratified_tree_sha": "7522562504227ce3d66757fcbc18c3b49753f24d",
+    "ratified_ci_run_id": 30612055882,
+    "ratified_ci_conclusion": "SUCCESS",
+    "ratified_jobs": {
+      "control-plane-validate": "SUCCESS",
+      "runtime-regression": "SUCCESS",
+      "baseline-gate": "SUCCESS"
+    },
+    "materialization": {
+      "mode": "DIRECT_CHILD_CONTROL_ONLY",
+      "required_parent_sha": "cd203f47405a0aced344abc33c859d07de5a82af",
+      "allowed_paths": [
+        "ops/CURRENT.json",
+        "ops/EVENTS.ndjson",
+        "tools/verify-gaos-lean.mjs"
+      ],
+      "event_seq": 7,
+      "event_id": "GAOS-LEAN-EVT-0007"
+    }
   },
   "platform": {
     "write_authorized": false,

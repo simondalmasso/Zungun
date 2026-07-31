@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const root = path.resolve(process.argv[2] ?? '.');
 const required = [
@@ -28,6 +29,10 @@ const terminalAuditStatuses = new Set(['PASS', 'PASS_WITH_FINDINGS']);
 const allowedEventTypeSet = new Set(allowedEventTypes);
 const allowedEventTypesText = allowedEventTypes.join('|');
 const fail = (message) => { console.error(`GAOS_LEAN_INVALID: ${message}`); process.exit(1); };
+const git = (...args) => {
+  try { return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim(); }
+  catch (error) { fail(`git ${args.join(' ')}: ${error.message}`); }
+};
 for (const file of required) if (!fs.existsSync(path.join(root, file))) fail(`missing ${file}`);
 const readJson = (file) => {
   try { return JSON.parse(fs.readFileSync(path.join(root, file), 'utf8')); }
@@ -84,11 +89,49 @@ if (worksetStatus === 'CLOSED') {
   if (events.length < 2) fail('closed event tail');
   const penultimate = events.at(-2);
   const last = events.at(-1);
-  if (penultimate?.type !== 'AUDIT_DECIDED') fail('penultimate event must be AUDIT_DECIDED');
-  if (last?.type !== 'WORKSET_CLOSED') fail('last event must be WORKSET_CLOSED');
-  if (last.data?.workset_status !== 'CLOSED' || last.data?.claim_status !== 'INACTIVE') fail('closed event terminal statuses');
+  const hasHumanHeadRatification = last?.type === 'CHECKPOINT_ACCEPTED' && last.data?.acceptance_scope === 'HUMAN_FINAL_HEAD_RATIFICATION';
+  let closureEvent;
+  if (hasHumanHeadRatification) {
+    if (penultimate?.type !== 'WORKSET_CLOSED') fail('ratification must follow WORKSET_CLOSED');
+    closureEvent = penultimate;
+    const ratification = current.head_ratification;
+    if (ratification?.status !== 'RATIFIED_CONTROL_MATERIALIZED') fail('head ratification status');
+    if (ratification?.resolved_state !== 'FAIL_CLOSED_HEAD_DRIFT') fail('head ratification resolved state');
+    if (ratification?.ratified_by !== 'HUMAN_OWNER' || last.actor !== 'HUMAN_OWNER') fail('head ratification actor');
+    if (ratification?.ratified_commit_sha !== last.data?.ratified_commit_sha) fail('ratified commit mismatch');
+    if (ratification?.ratified_tree_sha !== last.data?.ratified_tree_sha) fail('ratified tree mismatch');
+    if (ratification?.ratified_ci_run_id !== last.data?.ratified_ci_run_id) fail('ratified CI run mismatch');
+    if (ratification?.ratified_ci_conclusion !== 'SUCCESS' || last.data?.ratified_ci_conclusion !== 'SUCCESS') fail('ratified CI conclusion');
+    for (const name of ['control-plane-validate','runtime-regression','baseline-gate']) {
+      if (ratification?.ratified_jobs?.[name] !== 'SUCCESS' || last.data?.jobs?.[name] !== 'SUCCESS') fail(`ratified job ${name}`);
+    }
+    if (ratification?.materialization?.mode !== 'DIRECT_CHILD_CONTROL_ONLY' || last.data?.materialization_mode !== 'DIRECT_CHILD_CONTROL_ONLY') fail('ratification materialization mode');
+    if (ratification?.materialization?.event_seq !== last.seq || ratification?.materialization?.event_id !== last.event_id) fail('ratification event reference');
+    const ratifiedSha = ratification.ratified_commit_sha;
+    if (ratification?.materialization?.required_parent_sha !== ratifiedSha || last.data?.required_parent_sha !== ratifiedSha) fail('ratification parent declaration');
+    const head = git('rev-parse', 'HEAD');
+    const parent = git('rev-parse', 'HEAD^');
+    if (parent !== ratifiedSha) fail('ratification materialization must be direct child of ratified head');
+    const ratifiedTree = git('rev-parse', `${ratifiedSha}^{tree}`);
+    if (ratifiedTree !== ratification.ratified_tree_sha) fail('ratified tree verification');
+    const expectedPaths = [...ratification.materialization.allowed_paths].sort();
+    const eventPaths = [...(last.data?.allowed_materialization_paths ?? [])].sort();
+    if (JSON.stringify(eventPaths) !== JSON.stringify(expectedPaths)) fail('ratification allowed paths mismatch');
+    const changedPaths = git('diff', '--name-only', `${ratifiedSha}..${head}`).split('\n').filter(Boolean).sort();
+    if (JSON.stringify(changedPaths) !== JSON.stringify(expectedPaths)) fail(`ratification materialization paths ${JSON.stringify(changedPaths)}`);
+    for (const key of ['merge','deploy','release','cloudflare_write','production_change']) {
+      if (last.data?.[key] !== false) fail(`ratification ${key} boundary`);
+    }
+    if (last.data?.workset_status !== 'CLOSED' || last.data?.claim_status !== 'INACTIVE') fail('ratification terminal statuses');
+    if (last.data?.next_action !== 'IDLE_AWAIT_HUMAN_WORKSET') fail('ratification next action');
+  } else {
+    if (penultimate?.type !== 'AUDIT_DECIDED') fail('penultimate event must be AUDIT_DECIDED');
+    if (last?.type !== 'WORKSET_CLOSED') fail('last event must be WORKSET_CLOSED');
+    closureEvent = last;
+  }
+  if (closureEvent.data?.workset_status !== 'CLOSED' || closureEvent.data?.claim_status !== 'INACTIVE') fail('closed event terminal statuses');
   for (const key of ['merge','deploy','release','cloudflare_write','production_change']) {
-    if (last.data?.[key] !== false) fail(`closed event ${key} boundary`);
+    if (closureEvent.data?.[key] !== false) fail(`closed event ${key} boundary`);
   }
   for (const key of ['write_authorized','deploy_authorized','release_authorized','production_change_authorized']) {
     if (current.platform?.[key] !== false) fail(`closed platform ${key}`);
@@ -98,4 +141,4 @@ if (worksetStatus === 'CLOSED') {
 }
 const policy = fs.readFileSync(path.join(root, 'ops/POLICY.md'), 'utf8');
 for (const phrase of ['/ops/CURRENT.json','last 20','FAIL_CLOSED','Real remote HEAD',allowedEventTypesText]) if (!policy.includes(phrase)) fail(`POLICY missing ${phrase}`);
-console.log(JSON.stringify({ok:true,project:current.project,workset:current.workset.id,worksetStatus,events:lines.length,allowedEventTypes:allowedEventTypes.length,checkpoint:checkpoint.checkpoint_id,checkpointStatus:checkpoint.status,auditStatus:checkpoint.audit?.status,releaseStatus:release.status}));
+console.log(JSON.stringify({ok:true,project:current.project,workset:current.workset.id,worksetStatus,headRatificationStatus:current.head_ratification?.status ?? null,events:lines.length,allowedEventTypes:allowedEventTypes.length,checkpoint:checkpoint.checkpoint_id,checkpointStatus:checkpoint.status,auditStatus:checkpoint.audit?.status,releaseStatus:release.status}));
