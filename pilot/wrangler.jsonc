@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "zungun-zep-cloudflare-pilot-v0",
   "main": "worker/index.ts",
-  "compatibility_date": "2026-07-31",
+  "compatibility_date": "2026-07-29",
   "workers_dev": false,
   "preview_urls": false,
   "observability": {
