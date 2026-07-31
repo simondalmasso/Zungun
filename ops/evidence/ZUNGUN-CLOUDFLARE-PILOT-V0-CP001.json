@@ -4,13 +4,36 @@
   "project": "ZUNGUN",
   "workset_id": "ZUNGUN-CLOUDFLARE-PILOT-V0",
   "created_at": "2026-07-31T12:20:00Z",
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-07-31T13:20:00Z",
+  "status": "PASS",
   "materialization": {
     "mission_base_sha": "d2404cf232976a8f39abb1171ead2ed1f63533fa",
     "branch": "feat/zep-cloudflare-pilot-v0",
-    "commit_sha": null,
-    "tree_sha": null,
-    "changed_paths": []
+    "commit_sha": "c0e6f3ae341d2be164d398257c6aedd581391ebd",
+    "tree_sha": "01216048b24a73b4b293570ca81174fdc12bf359",
+    "changed_paths": [
+      ".github/workflows/zep-cloudflare-pilot-v0.yml",
+      "ops/CURRENT.json",
+      "ops/EVENTS.ndjson",
+      "ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json",
+      "pilot/migrations/0001_messages.sql",
+      "pilot/package.json",
+      "pilot/test/pilot.test.mjs",
+      "pilot/tools/fuzz-pilot.mjs",
+      "pilot/tools/run-d1-integration.mjs",
+      "pilot/tools/security-scan.mjs",
+      "pilot/tools/tsconfig.json",
+      "pilot/tools/verify-config.mjs",
+      "pilot/tools/verify-migrations.mjs",
+      "pilot/worker/d1-types.ts",
+      "pilot/worker/index.ts",
+      "pilot/worker/model.ts",
+      "pilot/worker/receipt.ts",
+      "pilot/worker/repository.ts",
+      "pilot/worker/service.ts",
+      "pilot/wrangler.jsonc",
+      "tools/verify-gaos-lean.mjs"
+    ]
   },
   "scope": {
     "risk": "HIGH",
@@ -18,24 +41,123 @@
     "environment": "CANARY_IMPLEMENTATION_LOCAL_ONLY",
     "d1_only": true,
     "external_network": false,
-    "end_user_delivery_claim": false
+    "end_user_delivery_claim": false,
+    "scope_paths_complete": true,
+    "out_of_scope_paths": 0
   },
   "functional": {
-    "worker_implemented": false,
-    "zep_validation": false,
-    "d1_persistence": false,
-    "safe_lookup": false,
-    "atomic_acknowledgement": false,
-    "authoritative_processing_receipt": false,
-    "authentication": false
+    "worker_implemented": true,
+    "zep_validation": true,
+    "d1_persistence": true,
+    "safe_lookup": true,
+    "atomic_acknowledgement": true,
+    "authoritative_processing_receipt": true,
+    "authentication": true,
+    "create_idempotency": true,
+    "conflicting_duplicate_rejected": true,
+    "ack_idempotency": true,
+    "concurrent_ack_convergence": true,
+    "receipt_hmac_sha256": true,
+    "receipt_bound_to_message_and_commitment": true,
+    "payload_never_reflected": true,
+    "remote_database_configured": false
   },
   "verification": {
     "github_actions": {
-      "status": "PENDING",
-      "run_id": null,
-      "head_sha": null,
-      "conclusion": null,
-      "jobs": {}
+      "workflow": "ZEP Cloudflare Pilot V0",
+      "event": "push",
+      "status": "COMPLETED",
+      "run_id": 30633744923,
+      "head_sha": "c0e6f3ae341d2be164d398257c6aedd581391ebd",
+      "conclusion": "SUCCESS",
+      "jobs": {
+        "control-plane-validate": {
+          "job_id": 91166062950,
+          "conclusion": "SUCCESS"
+        },
+        "typecheck-and-unit": {
+          "job_id": 91166062985,
+          "conclusion": "SUCCESS"
+        },
+        "d1-integration": {
+          "job_id": 91166062966,
+          "conclusion": "SUCCESS"
+        },
+        "security-and-fuzz": {
+          "job_id": 91166062921,
+          "conclusion": "SUCCESS"
+        },
+        "core-regression": {
+          "job_id": 91166062977,
+          "conclusion": "SUCCESS"
+        },
+        "wrangler-dry-run": {
+          "job_id": 91166062897,
+          "conclusion": "SUCCESS"
+        },
+        "pilot-gate": {
+          "job_id": 91166173031,
+          "conclusion": "SUCCESS"
+        }
+      }
+    },
+    "pilot": {
+      "typecheck": "PASS",
+      "unit_tests": "21_OF_21_PASS",
+      "migration_set": [
+        "0001_messages.sql"
+      ],
+      "migration_schema_hash": "a92303532823dba8c3752551317ad407acc7a53d865e229dc002d68aba8c8051",
+      "migrations_reproducible": true,
+      "migrations_applied_twice": true,
+      "d1_create": true,
+      "d1_query": true,
+      "d1_ack": true,
+      "d1_concurrent_ack": true,
+      "d1_payload_hex": "000102FDFEFF",
+      "d1_restart_recovery": true,
+      "d1_receipt_stable": true,
+      "pilot_fuzz_cases": 2048,
+      "pilot_fuzz_raw_native_errors": 0,
+      "pilot_fuzz_reflections": 0,
+      "pilot_fuzz_prototype_pollution": 0,
+      "security_files_scanned": 14,
+      "secret_values_found": 0,
+      "external_network_calls": 0,
+      "logging_calls": 0
+    },
+    "regression": {
+      "canary_and_order_060_tests": "60_OF_60_PASS",
+      "order_060_transport_tests": "23_OF_23_PASS",
+      "preexisting_canary_tests": "37_OF_37_PASS",
+      "canary_fuzz_cases": 3392,
+      "canary_positive_controls": "128_OF_128_PASS",
+      "canary_unexpected_accepts": 0,
+      "canary_native_failures": 0,
+      "canary_reflections": 0,
+      "codec_fuzz_cases": 2048,
+      "codec_raw_native_errors": 0,
+      "codec_prototype_pollution": 0,
+      "core_tests": "48_OF_48_PASS",
+      "core_fuzz_cases": 4138,
+      "core_raw_native_errors": 0,
+      "core_unexpected_accepts": 0,
+      "core_unclassified_exports": 0
+    },
+    "wrangler": {
+      "version": "4.114.0",
+      "mode": "DEPLOY_DRY_RUN_ONLY",
+      "result": "SUCCESS",
+      "upload_kib": 36.51,
+      "gzip_kib": 8.85,
+      "bindings": [
+        "D1:DB",
+        "SECRET_NAME:ZUNGUN_PILOT_TOKEN"
+      ],
+      "remote_database_configured": false,
+      "routes": 0,
+      "workers_dev": false,
+      "cloudflare_write": 0
     }
   },
   "boundaries": {
@@ -45,13 +167,16 @@
     "production_change": false,
     "cloudflare_write": false,
     "secret_read": false,
-    "remote_d1_write": false
+    "secret_output": false,
+    "remote_d1_write": false,
+    "external_network": false
   },
   "audit": {
     "trigger": "ONE_FINAL_POST_CHECKPOINT_AUDIT",
-    "status": "NOT_REQUESTED",
+    "status": "READY_TO_REQUEST",
     "auditor": "NEW_AUD_PROMOTED",
-    "requested": false,
+    "range": "d2404cf232976a8f39abb1171ead2ed1f63533fa..c0e6f3ae341d2be164d398257c6aedd581391ebd",
+    "requested": true,
     "intermediate_audits": 0
   }
 }

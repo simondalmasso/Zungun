@@ -2,26 +2,38 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 8,
-  "updated_at": "2026-07-31T12:20:00Z",
+  "revision": 9,
+  "updated_at": "2026-07-31T13:20:00Z",
   "authority": {
     "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
     "policy": "/ops/POLICY.md",
-    "event_tail": { "path": "/ops/EVENTS.ndjson", "read_last": 20 },
+    "event_tail": {
+      "path": "/ops/EVENTS.ndjson",
+      "read_last": 20
+    },
     "latest_checkpoint": {
       "id": "ZUNGUN-CLOUDFLARE-PILOT-V0-CP001",
       "path": "/ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json"
     },
-    "remote_truth": ["GIT_HEAD", "GITHUB_ACTIONS", "RELEVANT_REMOTE_PLATFORM_STATE"],
-    "historical_only": ["GITHUB_ISSUES", "CHATS", "OLD_DRIVE_LEDGERS", "SUPERSEDED_BRANCH_CONTROL_FILES"],
+    "remote_truth": [
+      "GIT_HEAD",
+      "GITHUB_ACTIONS",
+      "RELEVANT_REMOTE_PLATFORM_STATE"
+    ],
+    "historical_only": [
+      "GITHUB_ISSUES",
+      "CHATS",
+      "OLD_DRIVE_LEDGERS",
+      "SUPERSEDED_BRANCH_CONTROL_FILES"
+    ],
     "fail_closed": true
   },
   "workset": {
     "id": "ZUNGUN-CLOUDFLARE-PILOT-V0",
     "order_id": "ZUNGUN-CLOUDFLARE-PILOT-V0",
     "status": "ACTIVE",
-    "phase": "IMPLEMENTATION",
+    "phase": "CHECKPOINT_READY",
     "objective": "Build and verify the first real Cloudflare Worker pilot for authenticated ZEP message validation, authoritative D1 persistence, safe lookup, atomic acknowledgement, and verifiable persisted processing receipts without deployment.",
     "risk": "HIGH",
     "mission_base_sha": "d2404cf232976a8f39abb1171ead2ed1f63533fa",
@@ -39,69 +51,8 @@
       "pilot/tools/**",
       "pilot/package.json",
       "pilot/package-lock.json",
-      "pilot/tsconfig.json",
       "pilot/wrangler.jsonc",
       ".github/workflows/zep-cloudflare-pilot-v0.yml",
       "ops/CURRENT.json",
       "ops/EVENTS.ndjson",
-      "ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json",
-      "tools/verify-gaos-lean.mjs",
-      "README.md",
-      "docs/product/**"
-    ],
-    "forbidden": [
-      "DEFAULT_BRANCH_CHANGE", "MERGE", "DEPLOY", "RELEASE", "PRODUCTION_ROUTE",
-      "CUSTOM_DOMAIN", "CLOUDFLARE_WRITE", "SECRET_READ", "SECRET_OUTPUT",
-      "SECRET_VALUE_IN_REPOSITORY", "EXTERNAL_NETWORK", "GENERAL_MESSAGING_PLATFORM",
-      "END_USER_DELIVERY_CLAIM", "SECOND_WORKSET", "INTERMEDIATE_AUDIT",
-      "GAOS_MIGRATION", "BASELINE_REBUILD", "FORCE_PUSH", "HISTORY_REWRITE"
-    ]
-  },
-  "claim": {
-    "id": "ZUNGUN-CLOUDFLARE-PILOT-V0-ARQ-CLAIM-001",
-    "role": "ARQ",
-    "executor": "ARQ",
-    "status": "ACTIVE",
-    "assigned_at": "2026-07-31T12:20:00Z",
-    "autonomy": "LONG_DEEP_AUTONOMOUS_WITHIN_WORKSET_SCOPE"
-  },
-  "baseline": {
-    "order_059_status": "CLOSED_DO_NOT_REOPEN",
-    "order_060_status": "CLOSED_BY_HUMAN_TRANSITION_NO_SEPARATE_AUDIT",
-    "order_060_corrected_head": "d2404cf232976a8f39abb1171ead2ed1f63533fa",
-    "order_060_corrected_ci_run_id": 30629569115,
-    "order_060_corrected_ci_conclusion": "SUCCESS"
-  },
-  "increment": {
-    "name": "ZEP_CLOUDFLARE_D1_PILOT_V0",
-    "environment": "CANARY_IMPLEMENTATION_LOCAL_ONLY",
-    "worker": "zungun-zep-cloudflare-pilot-v0",
-    "persistence": "D1_ONLY",
-    "authentication_binding_name": "ZUNGUN_PILOT_TOKEN",
-    "external_network": false,
-    "end_user_delivery_claim": false,
-    "remote_database_configured": false
-  },
-  "checkpoint": {
-    "latest_id": "ZUNGUN-CLOUDFLARE-PILOT-V0-CP001",
-    "path": "/ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json",
-    "status": "IN_PROGRESS",
-    "audit_status": "NOT_REQUESTED",
-    "checkpoint_accepted": false,
-    "blocking_findings": null,
-    "release_blockers": null
-  },
-  "platform": {
-    "write_authorized": false,
-    "cloudflare_write_authorized": false,
-    "deploy_authorized": false,
-    "release_authorized": false,
-    "production_change_authorized": false,
-    "secret_read_authorized": false,
-    "remote_d1_write_authorized": false,
-    "local_d1_test_authorized": true,
-    "external_network_authorized": false,
-    "state": "IMPLEMENTATION_LOCAL_ONLY_NO_REMOTE_RESOURCES"
-  },
-  "next_action": "IMPLEMENT_VERIFY_AND_REQUEST_SINGLE_FINAL_AUDIT"
-}
+      "ops/evidence/ZUNGUN-CLOU1IµA%1=PµXÀµ@ÀÀÄ¹©Í½¸ˆ°(€€€€€€‰Ñ½½±Ì½Ù•É¥™äµ…½Ìµ±•…¸¹µ©Ìˆ°(€€€€€€‰I5¹µˆ°(€€€€€€‰‘½Ì½ÁÉ½‘ÕĞ¼¨¨ˆ(€€€t°(€€€€‰™½É‰¥‘‘•¸ˆèl(€€€€€€‰U1Q}	I9!}!9ˆ°(€€€€€€‰5Iˆ°(€€€€€€‰A1=dˆ°(€€€€€€‰I1Mˆ°(€€€€€€‰AI=UQ%=9}I=UQˆ°(€€€€€€‰UMQ=5}=5%8ˆ°(€€€€€€‰1=U1I}]I%Qˆ°(€€€€€€‰MIQ}Iˆ°(€€€€€€‰MIQ}=UQAUPˆ°(€€€€€€‰MIQ}Y1U}%9}IA=M%Q=Idˆ°(€€€€€€‰aQI91}9Q]=I,ˆ°(€€€€€€‰9I1}5MM%9}A1Q=I4ˆ°(€€€€€€‰9}UMI}1%YIe}1%4ˆ°(€€€€€€‰M=9}]=I-MPˆ°(€€€€€€‰%9QI5%Q}U%Pˆ°(€€€€€€‰=M}5%IQ%=8ˆ°(€€€€€€‰	M1%9}I	U%1ˆ°(€€€€€€‰=I}AUM ˆ°(€€€€€€‰!%MQ=Ie}I]I%Qˆ(€€€t(€ô°(€€‰±…¥´ˆèì(€€€€‰¥ˆè€‰iU9U8µ1=U1IµA%1=PµXÀµIDµ1%4´ÀÀÄˆ°(€€€€‰É½±”ˆè€‰IDˆ°(€€€€‰•á•ÕÑ½Èˆè€‰IDˆ°(€€€€‰ÍÑ…ÑÕÌˆè€‰Q%Yˆ°(€€€€‰…ÍÍ¥¹•‘}…Ğˆè€ˆÈÀÈØ´ÀÜ´ÌÅPÄÈèÈÀèÀÁhˆ°(€€€€‰…ÕÑ½¹½µäˆè€‰1=9}A}UQ=9=5=UM}]%Q!%9}]=I-MQ}M=Aˆ(€ô°(€€‰‰…Í•±¥¹”ˆèì(€€€€‰½É‘•É|ÀÔå}ÍÑ…ÑÕÌˆè€‰1=M}=}9=Q}I=A8ˆ°(€€€€‰½É‘•É|ÀØÁ}ÍÑ…ÑÕÌˆè€‰1=M}	e}!U59}QI9M%Q%=9}9=}MAIQ}U%Pˆ°(€€€€‰½É‘•É|ÀØÁ}½ÉÉ•Ñ•‘}¡•…ˆè€‰ÈĞÀÑ˜ÈÌÈäÜÙ„á˜Ìå…‰ˆÄÄÜÅ•…É•Å˜ØÌÔÌÍ™„ˆ°(€€€€‰½É‘•É|ÀØÁ}½ÉÉ•Ñ•‘}¥}ÉÕ¹}¥ˆè€ÌÀØÈäÔØäÄÄÔ°(€€€€‰½É‘•É|ÀØÁ}½ÉÉ•Ñ•‘}¥}½¹±ÕÍ¥½¸ˆè€‰MUMLˆ(€ô°(€€‰¥¹É•µ•¹Ğˆèì(€€€€‰¹…µ”ˆè€‰iA}1=U1I}Å}A%1=Q}XÀˆ°(€€€€‰•¹Ù¥É½¹µ•¹Ğˆè€‰9Ie}%5A159QQ%=9}1=1}=91dˆ°(€€€€‰İ½É­•Èˆè€‰éÕ¹Õ¸µé•Àµ±½Õ‘™±…É”µÁ¥±½ĞµØÀˆ°(€€€€‰Á•ÉÍ¥ÍÑ•¹”ˆè€‰Å}=91dˆ°(€€€€‰…ÕÑ¡•¹Ñ¥…Ñ¥½¹}‰¥¹‘¥¹}¹…µ”ˆè€‰iU9U9}A%1=Q}Q=-8ˆ°(€€€€‰•áÑ•É¹…±}¹•Ñİ½É¬ˆè™…±Í”°(€€€€‰•¹‘}ÕÍ•É}‘•±¥Ù•Éå}±…¥´ˆè™…±Í”°(€€€€‰É•µ½Ñ•}‘…Ñ…‰…Í•}½¹™¥ÕÉ•ˆè™…±Í”(€ô°(€€‰¡•­Á½¥¹Ğˆèì(€€€€‰±…Ñ•ÍÑ}¥ˆè€‰iU9U8µ1=U1IµA%1=PµXÀµ@ÀÀÄˆ°(€€€€‰Á…Ñ ˆè€ˆ½½ÁÌ½•Ù¥‘•¹”½iU9U8µ1=U1IµA%1=PµXÀµ@ÀÀÄ¹©Í½¸ˆ°(€€€€‰ÍÑ…ÑÕÌˆè€‰AMLˆ°(€€€€‰µ…Ñ•É¥…±}½µµ¥Ñ}Í¡„ˆè€‰ŒÁ”Ù˜Í…”ÌĞÅÉ‰”ÄØÑÌäàÈÔİŒÙ…•‘ÔàÄÌäÅ•‰ˆ°(€€€€‰µ…Ñ•É¥…±}ÑÉ••}Í¡„ˆè€ˆÀÄÈÄØÀĞáˆÈÑ„ÜÍˆÑˆÈäÌÔÜÁ„àÄÄÜÑ™‘ŒÄÉ‰˜ÌÔäˆ°(€€€€‰ÁÕÍ¡}ÉÕ¹}¥ˆè€ÌÀØÌÌÜĞĞäÈÌ°(€€€€‰¡•­Ìˆèì(€€€€€€‰½¹ÑÉ½°µÁ±…¹”µÙ…±¥‘…Ñ”ˆè€‰MUMLˆ°(€€€€€€‰ÑåÁ•¡•¬µ…¹µÕ¹¥Ğˆè€‰MUMLˆ°(€€€€€€‰Äµ¥¹Ñ•É…Ñ¥½¸ˆè€‰MUMLˆ°(€€€€€€‰Í•ÕÉ¥Ñäµ…¹µ™Õéèˆè€‰MUMLˆ°(€€€€€€‰½É”µÉ•É•ÍÍ¥½¸ˆè€‰MUMLˆ°(€€€€€€‰İÉ…¹±•Èµ‘ÉäµÉÕ¸ˆè€‰MUMLˆ°(€€€€€€‰Á¥±½Ğµ…Ñ”ˆè€‰MUMLˆ(€€€ô°(€€€€‰…Õ‘¥Ñ}ÍÑ…ÑÕÌˆè€‰Ie}Q=}IEUMPˆ°(€€€€‰¡•­Á½¥¹Ñ}…•ÁÑ•ˆè™…±Í”°(€€€€‰‰±½­¥¹}™¥¹‘¥¹Ìˆè€À°(€€€€‰É•±•…Í•}‰±½­•ÉÌˆè€À(€ô°(€€‰Á±…Ñ™½É´ˆèì(€€€€‰İÉ¥Ñ•}…ÕÑ¡½É¥é•ˆè™…±Í”°(€€€€‰±½Õ‘™±…É•}İÉ¥Ñ•}…ÕÑ¡½É¥é•ˆè™…±Í”°(€€€€‰‘•Á±½å}…ÕÑ¡½É¥é•ˆè™…±Í”°(€€€€‰É•±•…Í•}…ÕÑ¡½É¥é•ˆè™…±Í”°(€€€€‰ÁÉ½‘ÕÑ¥½¹}¡…¹•}…ÕÑ¡½É¥é•ˆè™…±Í”°(€€€€‰Í•É•Ñ}É•…‘}…ÕÑ¡½É¥é•ˆè™…±Í”°(€€€€‰É•µ½Ñ•}Å}İÉ¥Ñ•}…ÕÑ¡½É¥é•ˆè™…±Í”°(€€€€‰±½…±}Å}Ñ•ÍÑ}…ÕÑ¡½É¥é•ˆèÑÉÕ”°(€€€€‰•áÑ•É¹…±}¹•Ñİ½É­}…ÕÑ¡½É¥é•ˆè™…±Í”°(€€€€‰ÍÑ…Ñ”ˆè€‰!-A=%9Q}Ie}1=1}=91e}9=}I5=Q}IM=UILˆ(€ô°(€€‰¹•áÑ}…Ñ¥½¸ˆè€‰IEUMQ}M%91}%91}U%Pˆ)ô(
