@@ -13,12 +13,12 @@
     "exactOptionalPropertyTypes": true,
     "useUnknownInCatchVariables": true,
     "forceConsistentCasingInFileNames": true,
-    "rootDir": "..",
-    "outDir": "dist",
+    "rootDir": "../..",
+    "outDir": "../dist",
     "skipLibCheck": true
   },
   "include": [
-    "worker/**/*.ts",
-    "../canary/zep-core-canary/vendor/zep-core/src/**/*.ts"
+    "../worker/**/*.ts",
+    "../../canary/zep-core-canary/vendor/zep-core/src/**/*.ts"
   ]
 }

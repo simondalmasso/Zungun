@@ -47,7 +47,7 @@ jobs:
           test "${#changed[@]}" -gt 0
           for p in "${changed[@]}"; do
             case "$p" in
-              canary/zep-core-canary/src/*|canary/zep-core-canary/test/*|canary/zep-core-canary/tools/*|canary/zep-core-canary/package.json|canary/zep-core-canary/package-lock.json|pilot/worker/*|pilot/migrations/*|pilot/test/*|pilot/tools/*|pilot/package.json|pilot/package-lock.json|pilot/tsconfig.json|pilot/wrangler.jsonc|.github/workflows/zep-cloudflare-pilot-v0.yml|ops/CURRENT.json|ops/EVENTS.ndjson|ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json|tools/verify-gaos-lean.mjs|README.md|docs/product/*) ;;
+              canary/zep-core-canary/src/*|canary/zep-core-canary/test/*|canary/zep-core-canary/tools/*|canary/zep-core-canary/package.json|canary/zep-core-canary/package-lock.json|pilot/worker/*|pilot/migrations/*|pilot/test/*|pilot/tools/*|pilot/package.json|pilot/package-lock.json|pilot/wrangler.jsonc|.github/workflows/zep-cloudflare-pilot-v0.yml|ops/CURRENT.json|ops/EVENTS.ndjson|ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json|tools/verify-gaos-lean.mjs|README.md|docs/product/*) ;;
               *) echo "OUT_OF_SCOPE=$p" >&2; exit 1 ;;
             esac
           done
