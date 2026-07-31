@@ -4,12 +4,23 @@
   "project": "ZUNGUN",
   "workset_id": "ZUNGUN-ZEP-TEST-LOOPBACK-060",
   "created_at": "2026-07-31T08:45:00Z",
-  "status": "IN_PROGRESS",
+  "status": "PASS",
   "materialization": {
     "mission_base_sha": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a",
     "branch": "feat/zep-test-loopback-transport-v1",
-    "commit_sha": null,
-    "tree_sha": null
+    "commit_sha": "c4c1f4e8ff97596ad983034c9358ad27c4a7c4ce",
+    "tree_sha": "b3a6744696039c663cd718f74365298405a8a6a0",
+    "changed_paths": [
+      ".github/workflows/gaos-lean-baseline.yml",
+      "canary/zep-core-canary/package.json",
+      "canary/zep-core-canary/src/test-transport.ts",
+      "canary/zep-core-canary/test/test-transport.test.ts",
+      "canary/zep-core-canary/tools/fuzz-test-codec.mjs",
+      "ops/CURRENT.json",
+      "ops/EVENTS.ndjson",
+      "ops/evidence/ZUNGUN-060-CP001.json",
+      "tools/verify-gaos-lean.mjs"
+    ]
   },
   "scope": {
     "runtime_behavior_change": true,
@@ -50,24 +61,80 @@
   },
   "functional": {
     "vertical": "VALIDATION_TO_SERIALIZATION_TO_IN_MEMORY_LOOPBACK_TO_RECEIVE_TO_DESERIALIZATION_TO_REVALIDATION_TO_PROCESSOR_TO_PROCESSING_RECEIPT",
-    "implemented": false,
-    "transport_boundary_real": false,
-    "processing_receipt_real": false
+    "implemented": true,
+    "transport_boundary_real": true,
+    "independent_serialized_bytes": true,
+    "defensive_transport_copy": true,
+    "receive_separate_from_send": true,
+    "strict_deserialization": true,
+    "post_receive_revalidation": true,
+    "processor_after_receive_only": true,
+    "processing_receipt_real": true,
+    "end_user_delivery_claim": false,
+    "duplicate_semantics": "PROCESS_EACH_ENQUEUED_DELIVERY"
   },
   "verification": {
     "local_focused": {
+      "node": "22.16.0",
+      "typescript": "5.8.3",
       "typecheck": "PASS",
       "transport_tests": "20_OF_20_PASS",
       "codec_fuzz_cases": 2048,
+      "codec_fuzz_accepted_mutations": 62,
+      "codec_fuzz_rejected_mutations": 1986,
       "raw_native_errors": 0,
       "prototype_pollution": 0,
       "lock_sha256": "c894790ca37a703f17ed9f190d078c0499578568d4284f4aae6162633eaa47e2"
     },
     "github_actions": {
-      "status": "PENDING",
-      "run_id": null,
-      "head_sha": null,
-      "conclusion": null
+      "workflow": "GAOS LEAN baseline",
+      "event": "push",
+      "run_id": 30619283127,
+      "head_branch": "feat/zep-test-loopback-transport-v1",
+      "head_sha": "c4c1f4e8ff97596ad983034c9358ad27c4a7c4ce",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "jobs": {
+        "control-plane-validate": {
+          "job_id": 91119700208,
+          "conclusion": "SUCCESS"
+        },
+        "runtime-regression": {
+          "job_id": 91119700180,
+          "conclusion": "SUCCESS"
+        },
+        "baseline-gate": {
+          "job_id": 91119803599,
+          "conclusion": "SUCCESS"
+        }
+      },
+      "typecheck": "PASS",
+      "canary_and_loopback_tests": "57_OF_57_PASS",
+      "new_loopback_tests": "20_OF_20_PASS",
+      "preexisting_canary_tests": "37_OF_37_PASS",
+      "canary_fuzz": {
+        "cases": 3392,
+        "positive_controls": 128,
+        "positive_passes": 128,
+        "unexpected_accepts": 0,
+        "native_failures": 0,
+        "reflections": 0
+      },
+      "codec_fuzz": {
+        "cases": 2048,
+        "accepted_mutations": 62,
+        "rejected_mutations": 1986,
+        "raw_native_errors": 0,
+        "prototype_pollution": 0
+      },
+      "core_tests": "48_OF_48_PASS",
+      "core_fuzz": {
+        "cases": 4138,
+        "raw_native_errors": 0,
+        "unexpected_accepts": 0,
+        "unclassified_exports": 0
+      },
+      "wrangler": "DRY_RUN_SUCCESS_NO_BINDINGS"
     }
   },
   "boundaries": {
@@ -81,7 +148,11 @@
   },
   "audit": {
     "trigger": "ONE_POST_CHECKPOINT_AUDIT",
-    "status": "NOT_REQUESTED",
-    "auditor": "NEW_AUD_PROMOTED"
-  }
+    "status": "READY_TO_REQUEST",
+    "auditor": "NEW_AUD_PROMOTED",
+    "range": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a..c4c1f4e8ff97596ad983034c9358ad27c4a7c4ce",
+    "requested": false,
+    "intermediate_audits": 0
+  },
+  "closed_at": "2026-07-31T09:18:00Z"
 }

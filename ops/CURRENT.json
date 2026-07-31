@@ -2,8 +2,8 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 6,
-  "updated_at": "2026-07-31T08:45:00Z",
+  "revision": 7,
+  "updated_at": "2026-07-31T09:18:00Z",
   "authority": {
     "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
@@ -33,7 +33,7 @@
     "id": "ZUNGUN-ZEP-TEST-LOOPBACK-060",
     "order_id": "ZUNGUN-ARQ-ZEP-TEST-LOOPBACK-TRANSPORT-060",
     "status": "ACTIVE",
-    "phase": "IMPLEMENTATION",
+    "phase": "CHECKPOINT_READY",
     "objective": "Build the smallest real test-only end-to-end ZEP vertical with validation, deterministic serialization, independent in-memory loopback bytes, receive, strict deserialization, revalidation, processing, and deterministic processing receipt.",
     "risk": "MEDIUM",
     "mission_base_sha": "940c2dabe81cccb8c9d5a3a140c61b0a8f2d499a",
@@ -100,10 +100,19 @@
   "checkpoint": {
     "latest_id": "ZUNGUN-060-CP001",
     "path": "/ops/evidence/ZUNGUN-060-CP001.json",
-    "status": "IN_PROGRESS",
+    "status": "PASS",
+    "material_commit_sha": "c4c1f4e8ff97596ad983034c9358ad27c4a7c4ce",
+    "material_tree_sha": "b3a6744696039c663cd718f74365298405a8a6a0",
+    "push_run_id": 30619283127,
+    "checks": {
+      "control-plane-validate": "SUCCESS",
+      "runtime-regression": "SUCCESS",
+      "baseline-gate": "SUCCESS"
+    },
+    "audit_status": "READY_TO_REQUEST",
     "checkpoint_accepted": false,
-    "blocking_findings": null,
-    "release_blockers": null
+    "blocking_findings": 0,
+    "release_blockers": 0
   },
   "prior_head_ratification": {
     "status": "RATIFIED_CONTROL_MATERIALIZED",
@@ -121,5 +130,5 @@
     "durable_storage_authorized": false,
     "state": "UNCHANGED_TEST_ONLY_WORKSET"
   },
-  "next_action": "IMPLEMENT_VERIFY_AND_REQUEST_SINGLE_AUDIT"
+  "next_action": "REQUEST_SINGLE_NEW_AUD_CHECKPOINT_AUDIT"
 }
