@@ -1,0 +1,112 @@
+name: GAOS LEAN baseline
+
+"on":
+  push:
+    branches: [feat/gaos-lean-product-baseline-v1]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gaos-lean-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  WRANGLER_SEND_METRICS: "false"
+  MISSION_BASE_SHA: 5c49374d5fa54858108cffe437520b793d0cfeb4
+  EXPECTED_LOCK_SHA256: c894790ca37a703f17ed9f190d078c0499578568d4284f4aae6162633eaa47e2
+
+jobs:
+  control-plane:
+    name: control-plane-validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Enforce mission scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$MISSION_BASE_SHA^{commit}"
+          test "$(git merge-base "$MISSION_BASE_SHA" HEAD)" = "$MISSION_BASE_SHA"
+          git diff --check "$MISSION_BASE_SHA..HEAD"
+          mapfile -t changed < <(git diff --name-only "$MISSION_BASE_SHA..HEAD")
+          test "${#changed[@]}" -gt 0
+          for p in "${changed[@]}"; do
+            case "$p" in
+              ops/*|README.md|docs/*|tools/*|.github/workflows/*|evidence/order057/*) ;;
+              *) echo "OUT_OF_SCOPE=$p" >&2; exit 1 ;;
+            esac
+          done
+          if git diff --name-only "$MISSION_BASE_SHA..HEAD" | grep -Eq '^canary/zep-core-canary/(src/|vendor/zep-core/src/)'; then exit 1; fi
+      - name: Validate GAOS LEAN
+        run: node tools/verify-gaos-lean.mjs .
+
+  runtime-regression:
+    name: runtime-regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: canary/zep-core-canary
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Install exact dependencies
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          test "$(sha256sum package-lock.json | cut -d' ' -f1)" = "$EXPECTED_LOCK_SHA256"
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Canary and core regression
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm test
+          npm run fuzz
+          rm -rf vendor/zep-core/dist
+          npx --no-install tsc -p vendor/zep-core/tsconfig.json --noEmit
+          npx --no-install tsc -p vendor/zep-core/tsconfig.json
+          node --test vendor/zep-core/dist/test/adversarial.test.js vendor/zep-core/dist/test/properties.test.js vendor/zep-core/dist/test/semantic-vectors.test.js
+          node vendor/zep-core/tools/fuzz-public-boundaries.mjs
+      - name: Wrangler dry-run only
+        run: |
+          set -euo pipefail
+          rm -rf .wrangler dist-gaos-lean worker-configuration.d.ts
+          npm run wrangler:types
+          npx --no-install wrangler deploy --dry-run --outdir dist-gaos-lean --metafile dist-gaos-lean/bundle-meta.json 2>&1 | tee /tmp/wrangler-gaos-lean.log
+          test -s dist-gaos-lean/worker.js
+          if grep -Eiq '(Successfully published|Successfully deployed|Uploaded .* Worker|workers\.dev)' /tmp/wrangler-gaos-lean.log; then exit 1; fi
+          if find ../.. -path '*/.wrangler/deploy/config.json' -print -quit | grep -q .; then exit 1; fi
+
+  gate:
+    name: baseline-gate
+    needs: [control-plane, runtime-regression]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Confirm bounded baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'HEAD=%s\nCONTROL_PLANE=PASS\nRUNTIME_REGRESSION=PASS\nRUNTIME_BEHAVIOR_CHANGE=0\nCLOUDFLARE_WRITE=0\nDEPLOY=0\nRELEASE=0\nPRODUCTION_CHANGE=0\n' "$GITHUB_SHA"

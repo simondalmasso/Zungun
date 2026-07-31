@@ -1,0 +1,22 @@
+{
+  "schema_version": "gaos-lean.release.v1",
+  "release_id": "GAOS-LEAN-BASELINE-001",
+  "project": "ZUNGUN",
+  "workset_id": "ZUNGUN-GAOS-LEAN-BASELINE-001",
+  "created_at": "2026-07-31T05:08:26Z",
+  "status": "NOT_AUTHORIZED",
+  "source_checkpoint": "GAOS-LEAN-BASELINE-CP001",
+  "authorization": {
+    "human_owner": false,
+    "technical_gate": false
+  },
+  "actions": {
+    "merge": false,
+    "tag": false,
+    "github_release": false,
+    "cloudflare_write": false,
+    "deploy": false,
+    "production_change": false
+  },
+  "reason": "Order 059 establishes a baseline only and expressly forbids release and production mutation."
+}
