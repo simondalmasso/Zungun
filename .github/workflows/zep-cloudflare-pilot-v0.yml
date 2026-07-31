@@ -1,0 +1,211 @@
+name: ZEP Cloudflare Pilot V0
+
+"on":
+  push:
+    branches:
+      - feat/zep-cloudflare-pilot-v0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zep-cloudflare-pilot-v0-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  WRANGLER_SEND_METRICS: "false"
+  PILOT_BASE_SHA: d2404cf232976a8f39abb1171ead2ed1f63533fa
+
+jobs:
+  control-plane:
+    name: control-plane-validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Enforce workset scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "feat/zep-cloudflare-pilot-v0"
+          git cat-file -e "$PILOT_BASE_SHA^{commit}"
+          test "$(git merge-base "$PILOT_BASE_SHA" HEAD)" = "$PILOT_BASE_SHA"
+          git diff --check "$PILOT_BASE_SHA..HEAD"
+          mapfile -t changed < <(git diff --name-only "$PILOT_BASE_SHA..HEAD")
+          test "${#changed[@]}" -gt 0
+          for p in "${changed[@]}"; do
+            case "$p" in
+              canary/zep-core-canary/src/*|canary/zep-core-canary/test/*|canary/zep-core-canary/tools/*|canary/zep-core-canary/package.json|canary/zep-core-canary/package-lock.json|pilot/worker/*|pilot/migrations/*|pilot/test/*|pilot/tools/*|pilot/package.json|pilot/package-lock.json|pilot/tsconfig.json|pilot/wrangler.jsonc|.github/workflows/zep-cloudflare-pilot-v0.yml|ops/CURRENT.json|ops/EVENTS.ndjson|ops/evidence/ZUNGUN-CLOUDFLARE-PILOT-V0-CP001.json|tools/verify-gaos-lean.mjs|README.md|docs/product/*) ;;
+              *) echo "OUT_OF_SCOPE=$p" >&2; exit 1 ;;
+            esac
+          done
+      - name: Validate GAOS LEAN
+        run: node tools/verify-gaos-lean.mjs .
+
+  typecheck-and-unit:
+    name: typecheck-and-unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: pilot
+        shell: bash
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: { node-version: 22.16.0, package-manager-cache: false }
+      - name: Install exact pilot dependencies
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck and unit tests
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run test:unit
+
+  d1-integration:
+    name: d1-integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: pilot
+        shell: bash
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: { node-version: 22.16.0, package-manager-cache: false }
+      - name: Install exact pilot dependencies
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Reproduce migrations and execute persistent local D1 integration
+        run: |
+          set -euo pipefail
+          unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+          npm run verify:migrations
+          npm run test:d1
+          test ! -e .dev.vars
+
+  security-and-fuzz:
+    name: security-and-fuzz
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: pilot
+        shell: bash
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: { node-version: 22.16.0, package-manager-cache: false }
+      - name: Install exact pilot dependencies
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Security boundaries and fuzz
+        run: |
+          set -euo pipefail
+          npm run verify:config
+          npm run verify:security
+          npm run fuzz
+
+  core-regression:
+    name: core-regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: canary/zep-core-canary
+        shell: bash
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: { node-version: 22.16.0, package-manager-cache: false }
+      - name: Install exact canary dependencies
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Canary, Order 060 corrections and core regression
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm test
+          npm run fuzz
+          rm -rf vendor/zep-core/dist
+          npx --no-install tsc -p vendor/zep-core/tsconfig.json --noEmit
+          npx --no-install tsc -p vendor/zep-core/tsconfig.json
+          node --test vendor/zep-core/dist/test/adversarial.test.js vendor/zep-core/dist/test/properties.test.js vendor/zep-core/dist/test/semantic-vectors.test.js
+          node vendor/zep-core/tools/fuzz-public-boundaries.mjs
+
+  wrangler-dry-run:
+    name: wrangler-dry-run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: pilot
+        shell: bash
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { persist-credentials: false }
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: { node-version: 22.16.0, package-manager-cache: false }
+      - name: Install exact pilot dependencies
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile Worker and run Wrangler without platform writes
+        run: |
+          set -euo pipefail
+          unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+          npm run verify:config
+          npm run wrangler:types
+          npm run dry-run 2>&1 | tee /tmp/zungun-pilot-dry-run.log
+          test -s dist-worker/index.js
+          grep -q 'DB' /tmp/zungun-pilot-dry-run.log
+          if grep -Eiq '(Successfully published|Successfully deployed|Uploaded .* Worker|workers\.dev)' /tmp/zungun-pilot-dry-run.log; then exit 1; fi
+          if find .. -path '*/.wrangler/deploy/config.json' -print -quit | grep -q .; then exit 1; fi
+
+  pilot-gate:
+    name: pilot-gate
+    needs: [control-plane, typecheck-and-unit, d1-integration, security-and-fuzz, core-regression, wrangler-dry-run]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Confirm bounded pilot checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'HEAD=%s\nCONTROL_PLANE_VALIDATE=PASS\nTYPECHECK_AND_UNIT=PASS\nD1_INTEGRATION=PASS\nSECURITY_AND_FUZZ=PASS\nCORE_REGRESSION=PASS\nWRANGLER_DRY_RUN=PASS\nCLOUDFLARE_WRITE=0\nDEPLOY=0\nRELEASE=0\nPRODUCTION_CHANGE=0\n' "$GITHUB_SHA"

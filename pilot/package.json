@@ -1,0 +1,27 @@
+{
+  "name": "@zungun/cloudflare-pilot-v0",
+  "version": "0.0.0-local",
+  "private": true,
+  "type": "module",
+  "description": "Local-only D1 persistence pilot for authenticated ZEP message storage and processing acknowledgements.",
+  "scripts": {
+    "clean": "rm -rf dist dist-worker worker-configuration.d.ts .wrangler .wrangler-integration .wrangler-migration-a .wrangler-migration-b .dev.vars",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test:unit": "npm run clean && npm run build && node --test test/*.test.mjs",
+    "test:d1": "node tools/run-d1-integration.mjs",
+    "fuzz": "npm run clean && npm run build && node tools/fuzz-pilot.mjs",
+    "verify:config": "node tools/verify-config.mjs",
+    "verify:migrations": "node tools/verify-migrations.mjs",
+    "verify:security": "node tools/security-scan.mjs",
+    "wrangler:types": "wrangler types worker-configuration.d.ts",
+    "dry-run": "rm -rf dist-worker .wrangler && wrangler deploy --dry-run --outdir dist-worker --metafile dist-worker/bundle-meta.json --x-provision=false --x-auto-create=false"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "wrangler": "4.114.0"
+  }
+}
