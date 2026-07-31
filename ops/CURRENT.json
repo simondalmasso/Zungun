@@ -2,10 +2,10 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 1,
-  "updated_at": "2026-07-31T05:08:26Z",
+  "revision": 2,
+  "updated_at": "2026-07-31T05:22:00Z",
   "authority": {
-    "status": "ACTIVE_AFTER_THIS_MATERIALIZATION_COMMIT",
+    "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
     "policy": "/ops/POLICY.md",
     "event_tail": {
@@ -33,10 +33,12 @@
     "id": "ZUNGUN-GAOS-LEAN-BASELINE-001",
     "order_id": "ZUNGUN-ARQ-CANONICAL-PRODUCT-BASELINE-059",
     "status": "ACTIVE",
+    "phase": "MATERIAL_CHECKPOINT_REACHED",
     "objective": "Materialize the minimal GAOS LEAN control plane and establish a documented, reusable-CI product baseline without runtime behavior change.",
     "risk": "MEDIUM",
     "mission_base_sha": "5c49374d5fa54858108cffe437520b793d0cfeb4",
     "implementation_branch": "feat/gaos-lean-product-baseline-v1",
+    "checkpoint_head_sha": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
     "allowed_paths": [
       "/ops/**",
       "README.md",
@@ -50,7 +52,6 @@
       "DEPENDENCY_VERSION_CHANGES",
       "DEFAULT_BRANCH_CHANGE",
       "CLOUDFLARE_WRITE",
-      "MERGE",
       "DEPLOY",
       "RELEASE",
       "PRODUCTION_CHANGE"
@@ -60,20 +61,28 @@
     "id": "ZUNGUN-GAOS-LEAN-ARQ-CLAIM-001",
     "role": "ARQ",
     "executor": "ARQ",
-    "status": "ACTIVE",
+    "status": "CHECKPOINT_REACHED_AWAITING_POST_AUDIT",
     "assigned_at": "2026-07-31T05:08:26Z",
     "autonomy": "AUTHORIZED_WITHIN_WORKSET_SCOPE"
   },
   "baseline": {
     "source_commit": "5c49374d5fa54858108cffe437520b793d0cfeb4",
     "branch": "feat/gaos-lean-product-baseline-v1",
+    "checkpoint_commit": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
     "runtime_behavior_change": false,
     "product_capability": "ZEP semantic protocol core plus stateless validation canary; no end-user messaging transport, persistence, routing, queueing, acknowledgement, or delivery."
   },
   "checkpoint": {
     "latest_id": "GAOS-LEAN-BASELINE-CP001",
     "path": "/ops/evidence/GAOS-LEAN-BASELINE-CP001.json",
-    "status": "PENDING_REMOTE_CI"
+    "status": "PASS",
+    "ci_run_id": 30606475977,
+    "ci_head_sha": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
+    "checks": {
+      "control-plane-validate": "SUCCESS",
+      "runtime-regression": "SUCCESS",
+      "baseline-gate": "SUCCESS"
+    }
   },
   "platform": {
     "write_authorized": false,
@@ -84,5 +93,5 @@
     "last_verified_at": null,
     "state": "UNCHANGED_BY_ORDER_059"
   },
-  "next_action": "PUSH_MATERIALIZATION_COMMIT_RUN_REQUIRED_CI_THEN_RECONCILE_CHECKPOINT"
+  "next_action": "TRIGGER_ONE_POST_AUDIT_AT_MATERIAL_CHECKPOINT"
 }
