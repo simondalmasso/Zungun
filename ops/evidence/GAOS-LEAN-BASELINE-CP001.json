@@ -68,6 +68,19 @@
           "production_change": false
         }
       }
+    },
+    "correction_push": {
+      "run_id": 30607938882,
+      "head_branch": "feat/gaos-lean-product-baseline-v1",
+      "head_sha": "ed7be00ff9f21abb62af7d58f251039198218888",
+      "tree_sha": "266f66214d9dbef286b46782668a0d990e0d5bb2",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "jobs": {
+        "control-plane-validate": "SUCCESS",
+        "runtime-regression": "SUCCESS",
+        "baseline-gate": "SUCCESS"
+      }
     }
   },
   "boundaries": {
@@ -79,20 +92,29 @@
   },
   "audit": {
     "trigger": "ONE_POST_AUDIT_AT_MATERIAL_CHECKPOINT",
-    "status": "BLOCKED_PENDING_SINGLE_CORRECTION",
-    "audit_id": "ZUNGUN-AUD-20260731-059-CP001-001",
-    "verdict": "BLOCK",
-    "blocking_findings": 1,
-    "release_blockers": 1,
-    "finding": "GAOS_LEAN_EVENT_PROTOCOL_NOT_IMPLEMENTED_AS_AUTHORIZED",
-    "correction_authorized": true,
+    "status": "PASS_WITH_FINDINGS",
+    "audit_id": "ZUNGUN-AUD-20260731-059-CP001-002",
+    "source_audit_id": "ZUNGUN-AUD-20260731-059-CP001-001",
+    "audit_type": "SINGLE_AUTHORIZED_REAUDIT",
+    "re_audit_count": 1,
     "re_audit_count_max": 1,
+    "comment_id": 5139817220,
+    "comment_url": "https://github.com/simonkey888/Zungun/issues/5#issuecomment-5139817220",
+    "verdict": "PASS_WITH_FINDINGS",
+    "checkpoint_accepted": true,
+    "blocking_findings": 0,
+    "release_blockers": 0,
+    "non_blocking_findings": 1,
+    "non_blocking_finding": "TRANSIENT_STAGING_COMMITS_AND_TMP_TEST_BRANCH_CREATED_DURING_CORRECTION",
+    "non_blocking_impact": "NO_FINAL_TREE_CONTAMINATION;NO_SCOPE_EXPANSION;NO_FORCE_REWRITE;NO_RUNTIME_OR_PLATFORM_EFFECT",
+    "non_blocking_disposition": "HISTORICAL_CLUTTER_ONLY;DO_NOT_OPEN_REMEDIATION_WORKSET;OPTIONAL_LATER_CLEANUP_WITHOUT_REAUDIT",
     "technical_evidence_unchanged": true,
-    "instruction": "Run exact-head push CI once, then request exactly one independent re-audit. Do not declare Order 059 complete before AUD returns."
+    "instruction": "Order 059 is ready for one final control-only closure write; no further audit or handoff."
   },
   "correction": {
-    "status": "PENDING_EXACT_HEAD_PUSH_CI",
+    "status": "COMPLETE",
     "authorized_by_audit_id": "ZUNGUN-AUD-20260731-059-CP001-001",
+    "accepted_by_audit_id": "ZUNGUN-AUD-20260731-059-CP001-002",
     "changed_paths": [
       "ops/POLICY.md",
       "ops/EVENTS.ndjson",
@@ -100,10 +122,19 @@
       "ops/evidence/GAOS-LEAN-BASELINE-CP001.json",
       "tools/verify-gaos-lean.mjs"
     ],
+    "corrected_head_sha": "ed7be00ff9f21abb62af7d58f251039198218888",
+    "corrected_tree_sha": "266f66214d9dbef286b46782668a0d990e0d5bb2",
+    "corrected_run_id": 30607938882,
     "merge": false,
     "deploy": false,
     "release": false,
     "production_change": false,
     "cloudflare_write": false
+  },
+  "closure": {
+    "status": "CLOSED",
+    "closed_at": "2026-07-31T06:44:00Z",
+    "order_id": "ZUNGUN-ARQ-CANONICAL-PRODUCT-BASELINE-059",
+    "next_action": "IDLE_AWAIT_HUMAN_WORKSET"
   }
 }
