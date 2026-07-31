@@ -28,6 +28,7 @@
       "DEPENDENCY_VERSION_CHANGES",
       "DEFAULT_BRANCH_CHANGE",
       "CLOUDFLARE_WRITE",
+      "MERGE_API_OR_MERGE_COMMIT",
       "DEPLOY",
       "RELEASE",
       "PRODUCTION_CHANGE"
@@ -60,10 +61,12 @@
     "ci_pr_head": "ci/gaos-lean-checkpoint-cp001",
     "ci_pr_base": "feat/gaos-lean-product-baseline-v1",
     "branch_update": "FAST_FORWARD_FORCE_FALSE",
+    "merge_api_used": false,
     "merge_commit_created": false,
     "github_pr_state_note": "GitHub recognized PR 7 as merged after the base branch was fast-forwarded to its tested head; no merge API or merge commit was used."
   },
   "boundaries": {
+    "merge": false,
     "default_branch_change": false,
     "cloudflare_write": false,
     "deploy": false,
