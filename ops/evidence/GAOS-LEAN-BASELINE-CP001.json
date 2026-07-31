@@ -4,12 +4,13 @@
   "project": "ZUNGUN",
   "workset_id": "ZUNGUN-GAOS-LEAN-BASELINE-001",
   "created_at": "2026-07-31T05:08:26Z",
-  "status": "PENDING_REMOTE_CI",
+  "closed_at": "2026-07-31T05:30:00Z",
+  "status": "PASS",
   "materialization": {
     "mission_base_sha": "5c49374d5fa54858108cffe437520b793d0cfeb4",
     "branch": "feat/gaos-lean-product-baseline-v1",
-    "commit_sha": null,
-    "tree_sha": null
+    "commit_sha": "19e0e39916d9dfb1bbc786b57d2efe3ab5905f92",
+    "tree_sha": "ccf733b9973bf4255b3a1eb6b459431a099f80c5"
   },
   "scope": {
     "runtime_behavior_change": false,
@@ -36,15 +37,38 @@
     "local_static_validation": "PASS_BEFORE_COMMIT",
     "github_actions": {
       "required_workflow": "GAOS LEAN baseline",
-      "run_id": null,
-      "head_sha": null,
-      "status": "PENDING"
-    },
-    "required_checks": [
-      "control-plane-validate",
-      "runtime-regression",
-      "baseline-gate"
-    ]
+      "event": "push",
+      "run_id": 30606393695,
+      "head_branch": "feat/gaos-lean-product-baseline-v1",
+      "head_sha": "19e0e39916d9dfb1bbc786b57d2efe3ab5905f92",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "jobs": {
+        "control-plane-validate": {
+          "job_id": 91079420180,
+          "conclusion": "SUCCESS"
+        },
+        "runtime-regression": {
+          "job_id": 91079420243,
+          "conclusion": "SUCCESS",
+          "canary_tests": "37_OF_37_PASS",
+          "canary_fuzz_cases": 3392,
+          "core_tests": "48_OF_48_PASS",
+          "core_fuzz_cases": 4138,
+          "wrangler": "DRY_RUN_ONLY"
+        },
+        "baseline-gate": {
+          "job_id": 91079487028,
+          "conclusion": "SUCCESS",
+          "reported_head": "19e0e39916d9dfb1bbc786b57d2efe3ab5905f92",
+          "runtime_behavior_change": false,
+          "cloudflare_write": false,
+          "deploy": false,
+          "release": false,
+          "production_change": false
+        }
+      }
+    }
   },
   "boundaries": {
     "merge": false,
@@ -55,6 +79,7 @@
   },
   "audit": {
     "trigger": "ONE_POST_AUDIT_AT_MATERIAL_CHECKPOINT",
-    "status": "NOT_TRIGGERED"
+    "status": "REQUEST_REQUIRED",
+    "instruction": "Do not declare Order 059 complete before independent AUD returns."
   }
 }
