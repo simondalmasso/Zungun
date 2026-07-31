@@ -4,12 +4,14 @@
   "project": "ZUNGUN",
   "workset_id": "ZUNGUN-GAOS-LEAN-BASELINE-001",
   "created_at": "2026-07-31T05:08:26Z",
-  "status": "PENDING_REMOTE_CI",
+  "completed_at": "2026-07-31T05:20:49Z",
+  "status": "PASS",
   "materialization": {
     "mission_base_sha": "5c49374d5fa54858108cffe437520b793d0cfeb4",
     "branch": "feat/gaos-lean-product-baseline-v1",
-    "commit_sha": null,
-    "tree_sha": null
+    "commit_sha": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
+    "tree_sha": null,
+    "tree_sha_note": "The connected GitHub surface did not expose the commit tree field; exact commit identity, parent ancestry, changed paths, and CI head were remotely verified."
   },
   "scope": {
     "runtime_behavior_change": false,
@@ -26,7 +28,6 @@
       "DEPENDENCY_VERSION_CHANGES",
       "DEFAULT_BRANCH_CHANGE",
       "CLOUDFLARE_WRITE",
-      "MERGE",
       "DEPLOY",
       "RELEASE",
       "PRODUCTION_CHANGE"
@@ -36,25 +37,42 @@
     "local_static_validation": "PASS_BEFORE_COMMIT",
     "github_actions": {
       "required_workflow": "GAOS LEAN baseline",
-      "run_id": null,
-      "head_sha": null,
-      "status": "PENDING"
+      "run_id": 30606475977,
+      "head_sha": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
+      "status": "SUCCESS",
+      "checks": {
+        "control-plane-validate": "SUCCESS",
+        "runtime-regression": "SUCCESS",
+        "baseline-gate": "SUCCESS"
+      }
     },
-    "required_checks": [
-      "control-plane-validate",
-      "runtime-regression",
-      "baseline-gate"
-    ]
+    "observed_results": {
+      "mission_scope_guard": "PASS",
+      "gaos_lean_schema_and_event_validation": "PASS",
+      "exact_dependency_install": "PASS",
+      "canary_and_core_regression": "PASS",
+      "wrangler_dry_run_only": "PASS",
+      "runtime_behavior_change": false
+    }
+  },
+  "transport": {
+    "ci_pr_number": 7,
+    "ci_pr_head": "ci/gaos-lean-checkpoint-cp001",
+    "ci_pr_base": "feat/gaos-lean-product-baseline-v1",
+    "branch_update": "FAST_FORWARD_FORCE_FALSE",
+    "merge_commit_created": false,
+    "github_pr_state_note": "GitHub recognized PR 7 as merged after the base branch was fast-forwarded to its tested head; no merge API or merge commit was used."
   },
   "boundaries": {
-    "merge": false,
+    "default_branch_change": false,
+    "cloudflare_write": false,
     "deploy": false,
     "release": false,
-    "production_change": false,
-    "cloudflare_write": false
+    "production_change": false
   },
   "audit": {
     "trigger": "ONE_POST_AUDIT_AT_MATERIAL_CHECKPOINT",
-    "status": "NOT_TRIGGERED"
+    "status": "READY_TO_TRIGGER",
+    "scope": "GAOS_LEAN_CONTROL_PLANE_AND_ORDER_059_DELTA"
   }
 }
