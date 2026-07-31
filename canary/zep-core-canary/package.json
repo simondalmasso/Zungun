@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
     "test": "npm run clean && npm run build && node --test dist/test/*.test.js",
-    "fuzz": "npm run clean && npm run build && node tools/fuzz-canary.mjs",
+    "fuzz": "npm run clean && npm run build && node tools/fuzz-canary.mjs && node tools/fuzz-test-codec.mjs",
     "verify:config": "node tools/verify-config.mjs",
     "verify:source": "node tools/verify-source-identity.mjs",
     "verify:available": "npm run typecheck && npm test && npm run fuzz && npm run verify:config",
@@ -17,11 +17,6 @@
     "dry-run": "rm -rf dist-worker .wrangler && wrangler deploy --dry-run --outdir dist-worker --metafile dist-worker/bundle-meta.json",
     "verify": "npm run verify:available && npm run wrangler:types && npm run dry-run"
   },
-  "engines": {
-    "node": ">=22"
-  },
-  "devDependencies": {
-    "typescript": "5.8.3",
-    "wrangler": "4.114.0"
-  }
+  "engines": { "node": ">=22" },
+  "devDependencies": { "typescript": "5.8.3", "wrangler": "4.114.0" }
 }
