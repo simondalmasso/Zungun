@@ -1,0 +1,12 @@
+{
+  "schema_version": "gaos-lean.ci-trigger.v1",
+  "project": "ZUNGUN",
+  "workset_id": "ZUNGUN-GAOS-LEAN-BASELINE-001",
+  "checkpoint_id": "GAOS-LEAN-BASELINE-CP001",
+  "created_at": "2026-07-31T05:20:00Z",
+  "purpose": "NON_AUTHORITATIVE_PULL_REQUEST_CI_TRIGGER_ONLY",
+  "merge_authorized": false,
+  "deploy_authorized": false,
+  "release_authorized": false,
+  "production_change_authorized": false
+}
