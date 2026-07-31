@@ -38,7 +38,8 @@
     "risk": "MEDIUM",
     "mission_base_sha": "5c49374d5fa54858108cffe437520b793d0cfeb4",
     "implementation_branch": "feat/gaos-lean-product-baseline-v1",
-    "checkpoint_head_sha": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
+    "material_checkpoint_commit": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
+    "current_head_resolution": "READ_REAL_REMOTE_BRANCH_HEAD",
     "allowed_paths": [
       "/ops/**",
       "README.md",
@@ -68,7 +69,7 @@
   "baseline": {
     "source_commit": "5c49374d5fa54858108cffe437520b793d0cfeb4",
     "branch": "feat/gaos-lean-product-baseline-v1",
-    "checkpoint_commit": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
+    "material_checkpoint_commit": "4bbf5f983c489e6ca397b8f1986f08af88839e89",
     "runtime_behavior_change": false,
     "product_capability": "ZEP semantic protocol core plus stateless validation canary; no end-user messaging transport, persistence, routing, queueing, acknowledgement, or delivery."
   },
