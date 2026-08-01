@@ -6,8 +6,7 @@ name: ZEP Cloudflare Pilot V0
   workflow_dispatch:
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 concurrency:
   group: zep-cloudflare-pilot-v0-${{ github.ref }}
@@ -23,17 +22,17 @@ env:
   EXPECTED_ACCOUNT_SUBDOMAIN: simondalmasso44
   EXPECTED_WORKER_URL: https://zungun.simondalmasso44.workers.dev
   EXPECTED_D1_NAME: zungun-pilot-v0-canary
-  D1_PLACEHOLDER_ID: 00000000-0000-0000-0000-000000000000
+  EXPECTED_D1_ID: 9493de0d-c6ad-4090-8731-5b902b03ae40
 
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    outputs:
-      database_id: ${{ steps.config.outputs.database_id }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { persist-credentials: false, fetch-depth: 0 }
-      - id: config
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Validate bounded Phase 2 configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -45,88 +44,23 @@ jobs:
           test "$(jq -r '.d1_databases | length' pilot/wrangler.jsonc)" = "1"
           test "$(jq -r '.d1_databases[0].binding' pilot/wrangler.jsonc)" = "DB"
           test "$(jq -r '.d1_databases[0].database_name' pilot/wrangler.jsonc)" = "$EXPECTED_D1_NAME"
-          id="$(jq -r '.d1_databases[0].database_id' pilot/wrangler.jsonc)"
-          test "$(jq -r '.d1_databases[0].preview_database_id' pilot/wrangler.jsonc)" = "$id"
-          echo "database_id=$id" >> "$GITHUB_OUTPUT"
-
-  bootstrap-d1:
-    needs: inspect
-    if: needs.inspect.outputs.database_id == '00000000-0000-0000-0000-000000000000'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { fetch-depth: 0 }
-      - name: Verify account, collision boundaries and create/reuse exact D1
-        shell: bash
-        run: |
-          set -euo pipefail
-          for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do test -n "$value"; echo "::add-mask::$value"; done
-          CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
-          CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
-          ZUNGUN_PILOT_TOKEN="$(printf %s "$ZUNGUN_PILOT_TOKEN" | tr -d '[:space:]')"
-          CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID#CLOUDFLARE_ACCOUNT_ID=}"
-          CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN#CLOUDFLARE_API_TOKEN=}"
-          ZUNGUN_PILOT_TOKEN="${ZUNGUN_PILOT_TOKEN#ZUNGUN_PILOT_TOKEN=}"
-          export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN ZUNGUN_PILOT_TOKEN
-          for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do test -n "$value"; echo "::add-mask::$value"; done
-          printf 'ACCOUNT_ID_LENGTH=%s\nAPI_TOKEN_LENGTH=%s\nPILOT_TOKEN_LENGTH=%s\n' "$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | wc -c)" "$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)" "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)"
-          printf %s "$CLOUDFLARE_ACCOUNT_ID" | grep -Eq '^[0-9a-fA-F]{32}$'
-          test "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)" -ge 32
-          api=https://api.cloudflare.com/client/v4
-          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
-          curl -fsS "${auth[@]}" "$api/user/tokens/verify" | jq -e '.success == true and .result.status == "active"' >/dev/null
-          subdomain="$(curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -er '.result.subdomain')"
-          test "$subdomain" = "$EXPECTED_ACCOUNT_SUBDOMAIN"
-          worker_code="$(curl -sS -o /tmp/worker-check -w '%{http_code}' "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$EXPECTED_WORKER_NAME")"
-          test "$worker_code" = "404"
-          curl -fsS --get "${auth[@]}" --data-urlencode "name=$EXPECTED_D1_NAME" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database" > /tmp/d1-list.json
-          count="$(jq '[.result[] | select(.name == env.EXPECTED_D1_NAME)] | length' /tmp/d1-list.json)"
-          test "$count" -le 1
-          if test "$count" -eq 0; then
-            jq -n --arg name "$EXPECTED_D1_NAME" '{name:$name}' > /tmp/d1-create.json
-            curl -fsS "${auth[@]}" -H 'Content-Type: application/json' --data-binary @/tmp/d1-create.json "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database" > /tmp/d1-created.json
-            database_id="$(jq -er '.result.uuid' /tmp/d1-created.json)"
-          else
-            database_id="$(jq -er '.result[] | select(.name == env.EXPECTED_D1_NAME) | .uuid' /tmp/d1-list.json)"
-          fi
-          test "$(printf %s "$database_id" | grep -Ec '^[0-9a-fA-F-]{36}$')" -eq 1
-          node - "$database_id" <<'NODE'
-          const fs = require('node:fs');
-          const id = process.argv[2];
-          const file = 'pilot/wrangler.jsonc';
-          const config = JSON.parse(fs.readFileSync(file, 'utf8'));
-          config.d1_databases[0].database_id = id;
-          config.d1_databases[0].preview_database_id = id;
-          fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
-          NODE
-          git diff --check
-          test "$(git diff --name-only | tr -d '\r')" = "pilot/wrangler.jsonc"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add pilot/wrangler.jsonc
-          git commit -m 'deploy: bind canary D1 database'
-          git push origin "HEAD:$GITHUB_REF_NAME"
-          curl -fsS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' --data '{"ref":"feat/zep-cloudflare-pilot-v0"}' "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/zep-cloudflare-pilot-v0.yml/dispatches"
-          printf 'CLOUDFLARE_AUTH=PASS\nACCOUNT_SUBDOMAIN=%s\nWORKER_COLLISION=FALSE\nD1_DATABASE_NAME=%s\nD1_DATABASE_ID=%s\nCONFIG_COMMIT=PASS\n' "$subdomain" "$EXPECTED_D1_NAME" "$database_id"
+          test "$(jq -r '.d1_databases[0].database_id' pilot/wrangler.jsonc)" = "$EXPECTED_D1_ID"
+          test "$(jq -r '.d1_databases[0].preview_database_id' pilot/wrangler.jsonc)" = "$EXPECTED_D1_ID"
 
   exact-ci:
     needs: inspect
-    if: needs.inspect.outputs.database_id != '00000000-0000-0000-0000-000000000000'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    permissions: { contents: read }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { persist-credentials: false, fetch-depth: 0 }
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with: { node-version: 22.16.0, package-manager-cache: false }
-      - name: Validate exact HEAD, scope, lock, pilot, D1 and core
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Validate exact HEAD, lock, pilot, D1 and core
         shell: bash
         run: |
           set -euo pipefail
@@ -168,29 +102,39 @@ jobs:
           grep -q -- '--dry-run: exiting now' /tmp/dry-run.log
           if grep -Eiq '(Successfully published|Successfully deployed|workers\.dev)' /tmp/dry-run.log; then exit 1; fi
           node ../tools/verify-gaos-lean.mjs ..
-          printf 'EXACT_HEAD_CI=PASS\nTYPECHECK_UNIT=PASS\nD1_LOCAL=PASS\nSECURITY_FUZZ=PASS\nCORE_REGRESSION=PASS\nWRANGLER_DRY_RUN=PASS\n'
+          printf '%s\n' \
+            'EXACT_HEAD_CI=PASS' \
+            'TYPECHECK_UNIT=PASS' \
+            'D1_LOCAL=PASS' \
+            'SECURITY_FUZZ=PASS' \
+            'CORE_REGRESSION=PASS' \
+            'WRANGLER_DRY_RUN=PASS'
 
   phase2-deploy:
     needs: [inspect, exact-ci]
-    if: needs.inspect.outputs.database_id != '00000000-0000-0000-0000-000000000000' && needs.exact-ci.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    permissions: { contents: read }
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with: { persist-credentials: false }
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with: { node-version: 22.16.0, package-manager-cache: false }
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
       - name: Preflight, migrate, deploy and smoke exact canary
         working-directory: pilot
         shell: bash
         run: |
           set -euo pipefail
-          for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do test -n "$value"; echo "::add-mask::$value"; done
+          for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
           CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
           CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
           ZUNGUN_PILOT_TOKEN="$(printf %s "$ZUNGUN_PILOT_TOKEN" | tr -d '[:space:]')"
@@ -198,19 +142,43 @@ jobs:
           CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN#CLOUDFLARE_API_TOKEN=}"
           ZUNGUN_PILOT_TOKEN="${ZUNGUN_PILOT_TOKEN#ZUNGUN_PILOT_TOKEN=}"
           export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN ZUNGUN_PILOT_TOKEN
-          for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do test -n "$value"; echo "::add-mask::$value"; done
-          printf 'ACCOUNT_ID_LENGTH=%s\nAPI_TOKEN_LENGTH=%s\nPILOT_TOKEN_LENGTH=%s\n' "$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | wc -c)" "$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)" "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)"
+          for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+          printf %s "$CLOUDFLARE_ACCOUNT_ID" | grep -Eq '^[0-9a-fA-F]{32}$'
           test "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)" -ge 32
           npm ci --ignore-scripts --no-audit --no-fund
+
           api=https://api.cloudflare.com/client/v4
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
-          curl -fsS "${auth[@]}" "$api/user/tokens/verify" | jq -e '.success == true and .result.status == "active"' >/dev/null
+          auth_header=(-H "Authorization: Bearer $ZUNGUN_PILOT_TOKEN")
+          json_header=(-H 'Content-Type: application/json')
+
+          curl -fsS "${auth[@]}" "$api/user/tokens/verify" |
+            jq -e '.success == true and .result.status == "active"' >/dev/null
           test "$(curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -er '.result.subdomain')" = "$EXPECTED_ACCOUNT_SUBDOMAIN"
+
           worker_code="$(curl -sS -o /tmp/worker-check -w '%{http_code}' "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$EXPECTED_WORKER_NAME")"
-          test "$worker_code" = "404"
-          database_id="$(jq -r '.d1_databases[0].database_id' wrangler.jsonc)"
+          case "$worker_code" in
+            404)
+              printf '%s\n' 'WORKER_PREEXISTED=FALSE'
+              ;;
+            200)
+              ownership_code="$(curl -sS -o /tmp/ownership.json -w '%{http_code}' "${auth_header[@]}" "$EXPECTED_WORKER_URL/v0/messages/phase2-ownership-probe-1")"
+              test "$ownership_code" = "404"
+              ! grep -Fq -- "$ZUNGUN_PILOT_TOKEN" /tmp/ownership.json
+              printf '%s\n' 'WORKER_PREEXISTED=TRUE' 'WORKER_OWNERSHIP=THIS_ORDER'
+              ;;
+            *)
+              printf 'UNEXPECTED_WORKER_LOOKUP_STATUS=%s\n' "$worker_code"
+              exit 1
+              ;;
+          esac
+
           curl -fsS --get "${auth[@]}" --data-urlencode "name=$EXPECTED_D1_NAME" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database" > /tmp/d1-list.json
-          test "$(jq --arg id "$database_id" '[.result[] | select(.name == env.EXPECTED_D1_NAME and .uuid == $id)] | length' /tmp/d1-list.json)" = "1"
+          test "$(jq --arg id "$EXPECTED_D1_ID" '[.result[] | select(.name == env.EXPECTED_D1_NAME and .uuid == $id)] | length' /tmp/d1-list.json)" = "1"
+
           npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
           umask 077
           jq -n --arg value "$ZUNGUN_PILOT_TOKEN" '{ZUNGUN_PILOT_TOKEN:$value}' > /tmp/zungun-secrets.json
@@ -218,45 +186,97 @@ jobs:
           npx wrangler deploy --config wrangler.jsonc --secrets-file /tmp/zungun-secrets.json --x-provision=false --x-auto-create=false 2>&1 | tee /tmp/deploy.log
           rm -f /tmp/zungun-secrets.json
           trap - EXIT
+
           grep -Fq "$EXPECTED_WORKER_URL" /tmp/deploy.log
           if grep -Fq 'zungun-zep-cloudflare-pilot-v0.simondalmasso44.workers.dev' /tmp/deploy.log; then exit 1; fi
-          curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$EXPECTED_WORKER_NAME/subdomain" | jq -e '.result.enabled == true and .result.previews_enabled == false' >/dev/null
-          curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" | jq -e '[.result[] | select(.service == env.EXPECTED_WORKER_NAME)] | length == 0' >/dev/null
+
+          jq -n '{enabled:true,previews_enabled:false}' > /tmp/subdomain.json
+          curl -fsS -X POST "${auth[@]}" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/subdomain.json \
+            "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$EXPECTED_WORKER_NAME/subdomain" |
+            jq -e '.success == true and .result.enabled == true and .result.previews_enabled == false' >/dev/null
+          curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$EXPECTED_WORKER_NAME/subdomain" |
+            jq -e '.success == true and .result.enabled == true and .result.previews_enabled == false' >/dev/null
+          curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" |
+            jq -e '[.result[] | select(.service == env.EXPECTED_WORKER_NAME)] | length == 0' >/dev/null
+
           base="$EXPECTED_WORKER_URL"
           message_id="phase2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           commitment="commitment-$message_id"
           now="$(node -p 'Date.now()')"
-          jq -n --arg id "$message_id" --arg commitment "$commitment" --argjson created "$((now-1000))" --argjson expires "$((now+3600000))" '{zepVersion:"0.1",messageId:$id,conversationId:"phase2-conversation",senderId:"phase2-sender",recipientIds:["phase2-recipient"],createdAtMs:$created,expiresAtMs:$expires,priority:2,contentType:"application/octet-stream",payloadBase64:"AAEC/f7/",receiptPolicy:"END_RECIPIENT_ACK",messageCommitment:$commitment}' > /tmp/message.json
-          auth_header=(-H "Authorization: Bearer $ZUNGUN_PILOT_TOKEN")
-          json_header=(-H 'Content-Type: application/json')
-          health="$(curl -sS -o /tmp/health.json -w '%{http_code}' "${auth_header[@]}" "$base/health")"; test "$health" = 200 -o "$health" = 404
-          first="$(curl -sS -o /tmp/first.json -w '%{http_code}' "${auth_header[@]}" "${json_header[@]}" --data-binary @/tmp/message.json "$base/v0/messages")"; test "$first" = 201
+          jq -n --arg id "$message_id" --arg commitment "$commitment" \
+            --argjson created "$((now-1000))" --argjson expires "$((now+3600000))" \
+            '{zepVersion:"0.1",messageId:$id,conversationId:"phase2-conversation",senderId:"phase2-sender",recipientIds:["phase2-recipient"],createdAtMs:$created,expiresAtMs:$expires,priority:2,contentType:"application/octet-stream",payloadBase64:"AAEC/f7/",receiptPolicy:"END_RECIPIENT_ACK",messageCommitment:$commitment}' > /tmp/message.json
+
+          health="$(curl -sS -o /tmp/health.json -w '%{http_code}' "${auth_header[@]}" "$base/health")"
+          test "$health" = 200 -o "$health" = 404
+          first="$(curl -sS -o /tmp/first.json -w '%{http_code}' "${auth_header[@]}" "${json_header[@]}" --data-binary @/tmp/message.json "$base/v0/messages")"
+          test "$first" = 201
           jq -e '.ok == true and .idempotent == false and .result.status == "STORED"' /tmp/first.json >/dev/null
-          retry="$(curl -sS -o /tmp/retry.json -w '%{http_code}' "${auth_header[@]}" "${json_header[@]}" --data-binary @/tmp/message.json "$base/v0/messages")"; test "$retry" = 200
+          retry="$(curl -sS -o /tmp/retry.json -w '%{http_code}' "${auth_header[@]}" "${json_header[@]}" --data-binary @/tmp/message.json "$base/v0/messages")"
+          test "$retry" = 200
           jq -e '.ok == true and .idempotent == true and .result.status == "STORED"' /tmp/retry.json >/dev/null
-          lookup="$(curl -sS -o /tmp/lookup.json -w '%{http_code}' "${auth_header[@]}" "$base/v0/messages/$message_id")"; test "$lookup" = 200
+          lookup="$(curl -sS -o /tmp/lookup.json -w '%{http_code}' "${auth_header[@]}" "$base/v0/messages/$message_id")"
+          test "$lookup" = 200
           jq -e '.result.status == "STORED" and (.result | has("payload") | not)' /tmp/lookup.json >/dev/null
-          ack1="$(curl -sS -X POST -o /tmp/ack1.json -w '%{http_code}' "${auth_header[@]}" "$base/v0/messages/$message_id/ack")"; test "$ack1" = 200
+          ack1="$(curl -sS -X POST -o /tmp/ack1.json -w '%{http_code}' "${auth_header[@]}" "$base/v0/messages/$message_id/ack")"
+          test "$ack1" = 200
           jq -e --arg id "$message_id" --arg c "$commitment" '.idempotent == false and .result.status == "ACKNOWLEDGED" and .result.processingReceipt.messageId == $id and .result.processingReceipt.messageCommitment == $c' /tmp/ack1.json >/dev/null
-          ack2="$(curl -sS -X POST -o /tmp/ack2.json -w '%{http_code}' "${auth_header[@]}" "$base/v0/messages/$message_id/ack")"; test "$ack2" = 200
+          ack2="$(curl -sS -X POST -o /tmp/ack2.json -w '%{http_code}' "${auth_header[@]}" "$base/v0/messages/$message_id/ack")"
+          test "$ack2" = 200
           jq -e '.idempotent == true and .result.status == "ACKNOWLEDGED"' /tmp/ack2.json >/dev/null
           cmp <(jq -S '.result.processingReceipt' /tmp/ack1.json) <(jq -S '.result.processingReceipt' /tmp/ack2.json)
-          final="$(curl -sS -o /tmp/final.json -w '%{http_code}' "${auth_header[@]}" "$base/v0/messages/$message_id")"; test "$final" = 200
+          final="$(curl -sS -o /tmp/final.json -w '%{http_code}' "${auth_header[@]}" "$base/v0/messages/$message_id")"
+          test "$final" = 200
           jq -e '.result.status == "ACKNOWLEDGED"' /tmp/final.json >/dev/null
-          unauth="$(curl -sS -o /tmp/unauth.json -w '%{http_code}' "$base/v0/messages/$message_id")"; test "$unauth" = 401
+          unauth="$(curl -sS -o /tmp/unauth.json -w '%{http_code}' "$base/v0/messages/$message_id")"
+          test "$unauth" = 401
           node -e 'process.stdout.write(JSON.stringify({padding:"A".repeat(70000)}))' > /tmp/oversized.json
-          oversized="$(curl -sS -o /tmp/oversized-response.json -w '%{http_code}' "${auth_header[@]}" "${json_header[@]}" --data-binary @/tmp/oversized.json "$base/v0/messages")"; test "$oversized" = 413
+          oversized="$(curl -sS -o /tmp/oversized-response.json -w '%{http_code}' "${auth_header[@]}" "${json_header[@]}" --data-binary @/tmp/oversized.json "$base/v0/messages")"
+          test "$oversized" = 413
           jq '.payloadBase64="AQID"' /tmp/message.json > /tmp/conflict.json
-          conflict="$(curl -sS -o /tmp/conflict-response.json -w '%{http_code}' "${auth_header[@]}" "${json_header[@]}" --data-binary @/tmp/conflict.json "$base/v0/messages")"; test "$conflict" = 409
+          conflict="$(curl -sS -o /tmp/conflict-response.json -w '%{http_code}' "${auth_header[@]}" "${json_header[@]}" --data-binary @/tmp/conflict.json "$base/v0/messages")"
+          test "$conflict" = 409
+
           for file in /tmp/first.json /tmp/retry.json /tmp/lookup.json /tmp/ack1.json /tmp/ack2.json /tmp/final.json /tmp/unauth.json /tmp/oversized-response.json /tmp/conflict-response.json; do
             ! grep -Fq 'AAEC/f7/' "$file"
             ! grep -Fq -- "$ZUNGUN_PILOT_TOKEN" "$file"
           done
-          npx wrangler d1 execute DB --remote --config wrangler.jsonc --command "SELECT message_id,status,processing_receipt_id IS NOT NULL AS has_receipt FROM messages WHERE message_id='$message_id'" --json > /tmp/d1-smoke.json
+
+          npx wrangler d1 execute DB --remote --config wrangler.jsonc \
+            --command "SELECT message_id,status,processing_receipt_id IS NOT NULL AS has_receipt FROM messages WHERE message_id='$message_id'" \
+            --json > /tmp/d1-smoke.json
           node - "$message_id" <<'NODE'
-          const fs=require('node:fs'); const id=process.argv[2]; const text=fs.readFileSync('/tmp/d1-smoke.json','utf8').trim();
-          let data; try{data=JSON.parse(text)}catch{const i=Math.min(...['[','{'].map(c=>{const x=text.indexOf(c);return x<0?Infinity:x}));data=JSON.parse(text.slice(i))}
-          const result=Array.isArray(data)?data[0]:data; const row=result?.results?.[0];
-          if(!row||row.message_id!==id||row.status!=='ACKNOWLEDGED'||Number(row.has_receipt)!==1) throw new Error('D1_REMOTE_PERSISTENCE_INVALID');
+          const fs = require('node:fs');
+          const id = process.argv[2];
+          const text = fs.readFileSync('/tmp/d1-smoke.json', 'utf8').trim();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch {
+            const starts = ['[', '{'].map((c) => text.indexOf(c)).filter((i) => i >= 0);
+            data = JSON.parse(text.slice(Math.min(...starts)));
+          }
+          const result = Array.isArray(data) ? data[0] : data;
+          const row = result?.results?.[0];
+          if (!row || row.message_id !== id || row.status !== 'ACKNOWLEDGED' || Number(row.has_receipt) !== 1) {
+            throw new Error('D1_REMOTE_PERSISTENCE_INVALID');
+          }
           NODE
-          printf 'WORKER_URL=%s\nCANARY_DEPLOYED=TRUE\nCANARY_ONLY=TRUE\nD1_PERSISTENCE_REMOTE=PASS\nIDEMPOTENCY_REMOTE=PASS\nACK_REMOTE=PASS\nAUTH_REMOTE=PASS\nOVERSIZED_BODY=REJECTED\nCONFLICTING_DUPLICATE=REJECTED\nPLAINTEXT_LOGGED=FALSE\nNO_PRODUCTION_ROUTE=TRUE\nCUSTOM_DOMAIN=NO\nDNS_WRITE=NO\nGATE_2=PASS\n' "$EXPECTED_WORKER_URL"
+
+          printf '%s\n' \
+            "WORKER_URL=$EXPECTED_WORKER_URL" \
+            'CANARY_DEPLOYED=TRUE' \
+            'CANARY_ONLY=TRUE' \
+            'D1_PERSISTENCE_REMOTE=PASS' \
+            'IDEMPOTENCY_REMOTE=PASS' \
+            'ACK_REMOTE=PASS' \
+            'AUTH_REMOTE=PASS' \
+            'OVERSIZED_BODY=REJECTED' \
+            'CONFLICTING_DUPLICATE=REJECTED' \
+            'PLAINTEXT_LOGGED=FALSE' \
+            'NO_PRODUCTION_ROUTE=TRUE' \
+            'CUSTOM_DOMAIN=NO' \
+            'DNS_WRITE=NO' \
+            'PREVIEW_URLS=FALSE' \
+            'GATE_2=PASS'
