@@ -4,6 +4,13 @@ export const PILOT_RECEIPT_SCHEMA = 'zungun.processing-receipt.v0' as const;
 export const PILOT_PROCESSOR_ID = 'zungun-d1-pilot-processor-v0' as const;
 export const PILOT_MAX_BODY_BYTES = 65_536;
 export const PILOT_MAX_PAYLOAD_BYTES = 48_000;
+export const SYNC_MAX_OUTGOING_ITEMS = 16;
+export const SYNC_MAX_ACK_ITEMS = 32;
+export const SYNC_MAX_PULL_ITEMS = 64;
+export const SYNC_MAX_OUTGOING_ENVELOPE_ITEMS = 32;
+export const SYNC_MAX_ACK_ENVELOPE_ITEMS = 64;
+export const SYNC_MIN_RESPONSE_BYTES = 512;
+export const SYNC_MAX_RESPONSE_BYTES = 65_536;
 
 export type PilotMessageStatus = 'STORED' | 'ACKNOWLEDGED';
 
@@ -49,6 +56,44 @@ export interface AcknowledgeResult {
   readonly transitioned: boolean;
 }
 
+export interface MailboxDelivery {
+  readonly entrySequence: number;
+  readonly mailboxId: string;
+  readonly acknowledgedAtMs: number | null;
+  readonly message: StoredMessage;
+}
+
+export interface MailboxAcknowledgeResult {
+  readonly found: boolean;
+  readonly idempotent: boolean;
+  readonly conflict: boolean;
+  readonly expired: boolean;
+}
+
+export interface CursorRecord {
+  readonly mailboxId: string;
+  readonly entrySequence: number;
+}
+
+export interface StoredSyncRequest {
+  readonly mailboxId: string;
+  readonly requestId: string;
+  readonly requestHash: string;
+  readonly cursorToken: string;
+  readonly cursorSequence: number;
+  readonly hasMore: boolean;
+  readonly outgoingResultsJson: string;
+  readonly ackResultsJson: string;
+  readonly deliverySequencesJson: string;
+  readonly maxResponseBytes: number;
+  readonly createdAtMs: number;
+}
+
+export interface StoreSyncRequestResult {
+  readonly record: StoredSyncRequest;
+  readonly created: boolean;
+}
+
 export interface MessageRepository {
   createOrGet(candidate: StoredMessage): Promise<CreateResult>;
   get(messageId: string): Promise<StoredMessage | null>;
@@ -60,6 +105,18 @@ export interface MessageRepository {
     processingReceiptId: string,
     processingReceiptJson: string,
   ): Promise<AcknowledgeResult | null>;
+  resolveCursor(cursorToken: string): Promise<CursorRecord | null>;
+  storeCursor(cursorToken: string, mailboxId: string, entrySequence: number, createdAtMs: number): Promise<void>;
+  pullPending(mailboxId: string, afterSequence: number, nowMs: number, limit: number): Promise<readonly MailboxDelivery[]>;
+  getDeliveriesBySequences(mailboxId: string, entrySequences: readonly number[]): Promise<readonly MailboxDelivery[]>;
+  acknowledgeMailbox(
+    mailboxId: string,
+    messageId: string,
+    messageCommitment: string,
+    acknowledgedAtMs: number,
+  ): Promise<MailboxAcknowledgeResult>;
+  getSyncRequest(mailboxId: string, requestId: string): Promise<StoredSyncRequest | null>;
+  storeSyncRequest(candidate: StoredSyncRequest): Promise<StoreSyncRequestResult>;
 }
 
 export interface StoredMessageProcessor {

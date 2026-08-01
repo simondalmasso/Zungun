@@ -1,0 +1,275 @@
+name: ZEP SyncBurst V0
+
+"on":
+  push:
+    branches: [feat/zep-syncburst-v0]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zep-syncburst-v0-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  WRANGLER_SEND_METRICS: "false"
+  PHASE3_BASE_SHA: 8c0c6611dc22efba1fa9970c1f219fb03f432873
+  PILOT_LOCK_SHA256: 208b261c3abcb629f79da97031c261b59d3e3e706cba28874dc0437d9d56ee50
+  EXPECTED_WORKER_NAME: zungun
+  EXPECTED_ACCOUNT_SUBDOMAIN: simondalmasso44
+  EXPECTED_WORKER_URL: https://zungun.simondalmasso44.workers.dev
+  EXPECTED_D1_NAME: zungun-pilot-v0-canary
+  EXPECTED_D1_ID: 9493de0d-c6ad-4090-8731-5b902b03ae40
+
+jobs:
+  exact-ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Validate exact Phase 3 HEAD and run complete gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/zep-syncburst-v0"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$PHASE3_BASE_SHA"
+          test "$(git merge-base "$PHASE3_BASE_SHA" HEAD)" = "$PHASE3_BASE_SHA"
+          mapfile -t changed < <(git diff --name-only "$PHASE3_BASE_SHA..HEAD")
+          expected=(
+            .github/workflows/zep-syncburst-v0.yml
+            pilot/migrations/0002_syncburst.sql
+            pilot/package.json
+            pilot/test/sync.test.mjs
+            pilot/tools/fuzz-sync.mjs
+            pilot/tools/run-sync-integration.mjs
+            pilot/tools/verify-migrations.mjs
+            pilot/worker/index.ts
+            pilot/worker/model.ts
+            pilot/worker/repository.ts
+            pilot/worker/sync-wire.ts
+            pilot/worker/sync.ts
+          )
+          test "${#changed[@]}" -eq "${#expected[@]}"
+          for index in "${!expected[@]}"; do test "${changed[$index]}" = "${expected[$index]}"; done
+          git diff --check "$PHASE3_BASE_SHA..HEAD"
+          test "$(sha256sum pilot/package-lock.json | awk '{print $1}')" = "$PILOT_LOCK_SHA256"
+
+          cd pilot
+          before="$(sha256sum package-lock.json | awk '{print $1}')"
+          npm ci --ignore-scripts --no-audit --no-fund
+          test "$(sha256sum package-lock.json | awk '{print $1}')" = "$before"
+          git -C .. diff --exit-code -- pilot/package-lock.json
+          npm run typecheck
+          npm run test:unit
+          npm run verify:migrations
+          npm run test:d1
+          npm run test:sync-d1
+          npm run verify:config
+          npm run verify:security
+          npm run fuzz
+          npm run fuzz:sync
+
+          export PATH="$PWD/node_modules/.bin:$PATH"
+          cd ../canary/zep-core-canary
+          npm run typecheck
+          npm test
+          npm run fuzz
+          rm -rf vendor/zep-core/dist
+          tsc -p vendor/zep-core/tsconfig.json --noEmit
+          tsc -p vendor/zep-core/tsconfig.json
+          node --test vendor/zep-core/dist/test/adversarial.test.js vendor/zep-core/dist/test/properties.test.js vendor/zep-core/dist/test/semantic-vectors.test.js
+          node vendor/zep-core/tools/fuzz-public-boundaries.mjs
+
+          cd ../../pilot
+          unset CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+          npm run wrangler:types
+          npm run dry-run 2>&1 | tee /tmp/dry-run.log
+          grep -q 'env.DB' /tmp/dry-run.log
+          grep -q -- '--dry-run: exiting now' /tmp/dry-run.log
+          if grep -Eiq '(Successfully published|Successfully deployed|workers\.dev)' /tmp/dry-run.log; then exit 1; fi
+          printf '%s\n' \
+            'EXACT_HEAD_CI=PASS' \
+            'UNIT_TESTS=PASS' \
+            'D1_INTEGRATION=PASS' \
+            'MIGRATION_REPLAY=PASS' \
+            'SYNC_SEND_MULTIPLE=PASS' \
+            'SYNC_PULL=PASS' \
+            'SYNC_ACK=PASS' \
+            'SYNC_CURSOR=PASS' \
+            'SYNC_MAX_RESPONSE_BYTES=PASS' \
+            'SYNC_HAS_MORE=PASS' \
+            'SYNC_LOST_RESPONSE_RETRY=PASS' \
+            'SYNC_NO_DUPLICATE=PASS' \
+            'SYNC_DUPLICATE_CONFLICT=PASS' \
+            'SYNC_EXPIRED_FILTER=PASS' \
+            'SYNC_UNAUTHORIZED=PASS' \
+            'LEGACY_ENDPOINT_REGRESSION=PASS' \
+            'SECURITY_AND_FUZZ=PASS'
+
+  deploy-canary:
+    needs: exact-ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Apply additive migration, deploy exact canary and run remote gate
+        working-directory: pilot
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$PHASE3_BASE_SHA"
+          for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+          CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
+          CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
+          ZUNGUN_PILOT_TOKEN="$(printf %s "$ZUNGUN_PILOT_TOKEN" | tr -d '[:space:]')"
+          CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID#CLOUDFLARE_ACCOUNT_ID=}"
+          CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN#CLOUDFLARE_API_TOKEN=}"
+          ZUNGUN_PILOT_TOKEN="${ZUNGUN_PILOT_TOKEN#ZUNGUN_PILOT_TOKEN=}"
+          export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN ZUNGUN_PILOT_TOKEN
+          test "$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | wc -c)" -eq 32
+          test "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)" -ge 32
+          npm ci --ignore-scripts --no-audit --no-fund
+
+          api=https://api.cloudflare.com/client/v4
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          pilot_auth=(-H "Authorization: Bearer $ZUNGUN_PILOT_TOKEN")
+          json_header=(-H 'Content-Type: application/json')
+          curl -fsS "${auth[@]}" "$api/user/tokens/verify" | jq -e '.success == true and .result.status == "active"' >/dev/null
+          test "$(curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -er '.result.subdomain')" = "$EXPECTED_ACCOUNT_SUBDOMAIN"
+          curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$EXPECTED_WORKER_NAME" >/dev/null
+          curl -fsS --get "${auth[@]}" --data-urlencode "name=$EXPECTED_D1_NAME" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database" > /tmp/d1-list.json
+          test "$(jq --arg id "$EXPECTED_D1_ID" '[.result[] | select(.name == env.EXPECTED_D1_NAME and .uuid == $id)] | length' /tmp/d1-list.json)" = "1"
+
+          npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
+          umask 077
+          jq -n --arg value "$ZUNGUN_PILOT_TOKEN" '{ZUNGUN_PILOT_TOKEN:$value}' > /tmp/zungun-secrets.json
+          trap 'rm -f /tmp/zungun-secrets.json' EXIT
+          npx wrangler deploy --config wrangler.jsonc --secrets-file /tmp/zungun-secrets.json --x-provision=false --x-auto-create=false 2>&1 | tee /tmp/deploy.log
+          rm -f /tmp/zungun-secrets.json
+          trap - EXIT
+          grep -Fq "$EXPECTED_WORKER_URL" /tmp/deploy.log
+
+          jq -n '{enabled:true,previews_enabled:false}' > /tmp/subdomain.json
+          curl -fsS -X POST "${auth[@]}" -H 'Content-Type: application/json' --data-binary @/tmp/subdomain.json \
+            "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$EXPECTED_WORKER_NAME/subdomain" |
+            jq -e '.success == true and .result.enabled == true and .result.previews_enabled == false' >/dev/null
+          curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" |
+            jq -e '[.result[] | select(.service == env.EXPECTED_WORKER_NAME)] | length == 0' >/dev/null
+
+          base="$EXPECTED_WORKER_URL"
+          health_code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$base/health")"
+          test "$health_code" = 200
+          jq -e '. == {ok:true,service:"zungun",version:"0.1",status:"canary"}' /tmp/health.json >/dev/null
+
+          unauthorized="$(curl -sS -o /tmp/unauthorized.json -w '%{http_code}' "${json_header[@]}" --data '{}' "$base/v0/sync")"
+          test "$unauthorized" = 401
+          jq -e '.error.code == "UNAUTHORIZED"' /tmp/unauthorized.json >/dev/null
+
+          run_key="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          now="$(node -p 'Date.now()')"
+          request_id="phase3-sync-$run_key"
+          mailbox="phase3-mailbox-$run_key"
+          jq -n --arg rid "$request_id" --arg mailbox "$mailbox" --arg key "$run_key" \
+            --argjson created "$((now-1000))" --argjson expires "$((now+3600000))" \
+            '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:null,maxResponseBytes:65536,pullLimit:64,outgoingMessages:[
+              {zepVersion:"0.1",messageId:("phase3-a-"+$key),conversationId:"phase3-conversation",senderId:"phase3-sender",recipientIds:[$mailbox],createdAtMs:$created,expiresAtMs:$expires,priority:2,contentType:"application/octet-stream",payloadBase64:"AAEC/f7/",receiptPolicy:"END_RECIPIENT_ACK",messageCommitment:("phase3-a-commitment-"+$key)},
+              {zepVersion:"0.1",messageId:("phase3-b-"+$key),conversationId:"phase3-conversation",senderId:"phase3-sender",recipientIds:[$mailbox],createdAtMs:$created,expiresAtMs:$expires,priority:2,contentType:"application/octet-stream",payloadBase64:"AQIDBA==",receiptPolicy:"END_RECIPIENT_ACK",messageCommitment:("phase3-b-commitment-"+$key)}
+            ],ackMessages:[]}' > /tmp/sync.json
+
+          sync_code="$(curl -sS -o /tmp/sync-first.json -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/sync.json "$base/v0/sync")"
+          test "$sync_code" = 200
+          jq -e '.ok == true and .idempotent == false and (.outgoingResults | length) == 2 and (.pendingMessages | length) == 2 and .hasMore == false and (.pendingMessages[0].entrySequence < .pendingMessages[1].entrySequence)' /tmp/sync-first.json >/dev/null
+          first_cursor="$(jq -er '.nextCursor' /tmp/sync-first.json)"
+
+          retry_code="$(curl -sS -o /tmp/sync-retry.json -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/sync.json "$base/v0/sync")"
+          test "$retry_code" = 200
+          jq -e --arg cursor "$first_cursor" '.idempotent == true and .nextCursor == $cursor' /tmp/sync-retry.json >/dev/null
+          cmp <(jq -S '.pendingMessages' /tmp/sync-first.json) <(jq -S '.pendingMessages' /tmp/sync-retry.json)
+
+          jq -n --arg rid "phase3-cursor-$run_key" --arg mailbox "$mailbox" --arg cursor "$first_cursor" \
+            '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:$cursor,maxResponseBytes:65536,pullLimit:64,outgoingMessages:[],ackMessages:[]}' > /tmp/cursor.json
+          cursor_code="$(curl -sS -o /tmp/cursor-response.json -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/cursor.json "$base/v0/sync")"
+          test "$cursor_code" = 200
+          jq -e '.pendingMessages | length == 0' /tmp/cursor-response.json >/dev/null
+
+          jq -n --arg rid "phase3-ack-$run_key" --arg mailbox "$mailbox" --arg cursor "$first_cursor" --arg key "$run_key" \
+            '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:$cursor,maxResponseBytes:65536,pullLimit:64,outgoingMessages:[],ackMessages:[{messageId:("phase3-a-"+$key),messageCommitment:("phase3-a-commitment-"+$key)}]}' > /tmp/ack.json
+          ack_code="$(curl -sS -o /tmp/ack.json.out -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/ack.json "$base/v0/sync")"
+          test "$ack_code" = 200
+          jq -e '.ackResults[0].status == "ACKNOWLEDGED" and .ackResults[0].idempotent == false' /tmp/ack.json.out >/dev/null
+
+          jq --arg rid "phase3-ack-retry-$run_key" '.requestId=$rid | .cursor=null' /tmp/ack.json > /tmp/ack-retry.json
+          ack_retry_code="$(curl -sS -o /tmp/ack-retry.json.out -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/ack-retry.json "$base/v0/sync")"
+          test "$ack_retry_code" = 200
+          jq -e '.ackResults[0].idempotent == true' /tmp/ack-retry.json.out >/dev/null
+
+          jq --arg rid "phase3-conflict-$run_key" '.requestId=$rid | .cursor=null | .pullLimit=0 | .outgoingMessages=[(.outgoingMessages[0] | .payloadBase64="AQID")]' /tmp/sync.json > /tmp/conflict.json
+          conflict_code="$(curl -sS -o /tmp/conflict.json.out -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/conflict.json "$base/v0/sync")"
+          test "$conflict_code" = 200
+          jq -e '.outgoingResults[0].error.code == "DUPLICATE_CONFLICT"' /tmp/conflict.json.out >/dev/null
+
+          jq -n --arg rid "phase3-expired-$run_key" --arg mailbox "$mailbox" --arg key "$run_key" --argjson created "$((now-1000))" --argjson expires "$now" \
+            '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:null,maxResponseBytes:65536,pullLimit:0,outgoingMessages:[{zepVersion:"0.1",messageId:("phase3-expired-"+$key),conversationId:"phase3-conversation",senderId:"phase3-sender",recipientIds:[$mailbox],createdAtMs:$created,expiresAtMs:$expires,priority:2,contentType:"application/octet-stream",payloadBase64:"AA==",receiptPolicy:"END_RECIPIENT_ACK",messageCommitment:("phase3-expired-commitment-"+$key)}],ackMessages:[]}' > /tmp/expired.json
+          expired_code="$(curl -sS -o /tmp/expired.json.out -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/expired.json "$base/v0/sync")"
+          test "$expired_code" = 200
+          jq -e '.outgoingResults[0].error.code == "EXPIRED"' /tmp/expired.json.out >/dev/null
+
+          large_payload="$(node -e 'process.stdout.write(Buffer.alloc(3000,7).toString("base64"))')"
+          jq -n --arg rid "phase3-large-seed-$run_key" --arg mailbox "$mailbox" --arg key "$run_key" --arg payload "$large_payload" --argjson created "$((now-1000))" --argjson expires "$((now+3600000))" \
+            '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:null,maxResponseBytes:65536,pullLimit:0,outgoingMessages:[{zepVersion:"0.1",messageId:("phase3-large-"+$key),conversationId:"phase3-conversation",senderId:"phase3-sender",recipientIds:[$mailbox],createdAtMs:$created,expiresAtMs:$expires,priority:2,contentType:"application/octet-stream",payloadBase64:$payload,receiptPolicy:"END_RECIPIENT_ACK",messageCommitment:("phase3-large-commitment-"+$key)}],ackMessages:[]}' > /tmp/large-seed.json
+          large_seed_code="$(curl -sS -o /tmp/large-seed.json.out -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/large-seed.json "$base/v0/sync")"
+          test "$large_seed_code" = 200
+          jq -n --arg rid "phase3-large-pull-$run_key" --arg mailbox "$mailbox" '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:null,maxResponseBytes:700,pullLimit:64,outgoingMessages:[],ackMessages:[]}' > /tmp/large-pull.json
+          large_code="$(curl -sS -o /tmp/large-pull.json.out -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/large-pull.json "$base/v0/sync")"
+          test "$large_code" = 200
+          test "$(wc -c < /tmp/large-pull.json.out)" -le 700
+          jq -e '(.pendingMessages | length) == 0 and .hasMore == true' /tmp/large-pull.json.out >/dev/null
+
+          legacy_id="phase3-legacy-$run_key"
+          jq -n --arg id "$legacy_id" --arg mailbox "$mailbox" --argjson created "$((now-1000))" --argjson expires "$((now+3600000))" \
+            '{zepVersion:"0.1",messageId:$id,conversationId:"phase3-legacy-conversation",senderId:"phase3-legacy-sender",recipientIds:[$mailbox],createdAtMs:$created,expiresAtMs:$expires,priority:2,contentType:"application/octet-stream",payloadBase64:"AAEC/f7/",receiptPolicy:"END_RECIPIENT_ACK",messageCommitment:("commitment-"+$id)}' > /tmp/legacy.json
+          test "$(curl -sS -o /tmp/legacy-create.json -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/legacy.json "$base/v0/messages")" = 201
+          test "$(curl -sS -o /tmp/legacy-get.json -w '%{http_code}' "${pilot_auth[@]}" "$base/v0/messages/$legacy_id")" = 200
+          test "$(curl -sS -X POST -o /tmp/legacy-ack.json -w '%{http_code}' "${pilot_auth[@]}" "$base/v0/messages/$legacy_id/ack")" = 200
+          jq -e '.result.status == "ACKNOWLEDGED"' /tmp/legacy-ack.json >/dev/null
+
+          npx wrangler d1 execute DB --remote --config wrangler.jsonc --command \
+            "SELECT (SELECT COUNT(*) FROM mailbox_deliveries WHERE mailbox_id='$mailbox') AS deliveries, (SELECT COUNT(DISTINCT message_id) FROM mailbox_deliveries WHERE mailbox_id='$mailbox') AS distinct_messages, (SELECT COUNT(*) FROM pragma_table_info('mailbox_deliveries') WHERE lower(name) LIKE '%payload%') + (SELECT COUNT(*) FROM pragma_table_info('sync_cursors') WHERE lower(name) LIKE '%payload%') + (SELECT COUNT(*) FROM pragma_table_info('sync_requests') WHERE lower(name) LIKE '%payload%') AS payload_columns" --json > /tmp/d1-proof.json
+          jq -e '.[0].results[0] | .deliveries == .distinct_messages and .payload_columns == 0' /tmp/d1-proof.json >/dev/null
+
+          printf '%s\n' \
+            'REMOTE_MIGRATION=PASS' \
+            'DEPLOY_CANARY=PASS' \
+            'HEALTH_PUBLIC=PASS' \
+            'SYNC_REMOTE_SMOKE=PASS' \
+            'LEGACY_ENDPOINT_REGRESSION=PASS' \
+            'PAYLOAD_DUPLICATION=FALSE' \
+            'CUSTOM_DOMAIN=NONE' \
+            'CUSTOM_ROUTE=NONE' \
+            'DNS_WRITE=NONE' \
+            'GATE_3=PASS'
