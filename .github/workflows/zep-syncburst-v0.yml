@@ -15,6 +15,7 @@ env:
   CI: "true"
   NO_COLOR: "1"
   WRANGLER_SEND_METRICS: "false"
+  EXPECTED_PARENT_SHA: 2664cf5e081050e5ea8d1d6075581360bd31721f
   PHASE3_BASE_SHA: 8c0c6611dc22efba1fa9970c1f219fb03f432873
   PILOT_LOCK_SHA256: 208b261c3abcb629f79da97031c261b59d3e3e706cba28874dc0437d9d56ee50
   EXPECTED_WORKER_NAME: zungun
@@ -42,7 +43,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "feat/zep-syncburst-v0"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$PHASE3_BASE_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
           test "$(git merge-base "$PHASE3_BASE_SHA" HEAD)" = "$PHASE3_BASE_SHA"
           mapfile -t changed < <(git diff --name-only "$PHASE3_BASE_SHA..HEAD")
           expected=(
@@ -139,7 +140,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$PHASE3_BASE_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
           for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do
             test -n "$value"
             echo "::add-mask::$value"
