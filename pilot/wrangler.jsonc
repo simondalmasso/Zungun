@@ -13,8 +13,8 @@
     {
       "binding": "DB",
       "database_name": "zungun-pilot-v0-canary",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "preview_database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "9493de0d-c6ad-4090-8731-5b902b03ae40",
+      "preview_database_id": "9493de0d-c6ad-4090-8731-5b902b03ae40",
       "migrations_dir": "migrations",
       "migrations_table": "d1_migrations"
     }
