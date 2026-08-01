@@ -18,6 +18,8 @@ env:
   NO_COLOR: "1"
   WRANGLER_SEND_METRICS: "false"
   PILOT_BASE_SHA: d2404cf232976a8f39abb1171ead2ed1f63533fa
+  PHASE1_BASE_SHA: c9898642898d9219f2669b1cb2a1e72ee880d3be
+  PILOT_LOCK_SHA256: 208b261c3abcb629f79da97031c261b59d3e3e706cba28874dc0437d9d56ee50
 
 jobs:
   control-plane:
@@ -35,13 +37,15 @@ jobs:
         with:
           node-version: 22.16.0
           package-manager-cache: false
-      - name: Enforce workset scope
+      - name: Enforce workset and Phase 1 scope
         shell: bash
         run: |
           set -euo pipefail
           test "${GITHUB_REF_NAME}" = "feat/zep-cloudflare-pilot-v0"
           git cat-file -e "$PILOT_BASE_SHA^{commit}"
+          git cat-file -e "$PHASE1_BASE_SHA^{commit}"
           test "$(git merge-base "$PILOT_BASE_SHA" HEAD)" = "$PILOT_BASE_SHA"
+          test "$(git merge-base "$PHASE1_BASE_SHA" HEAD)" = "$PHASE1_BASE_SHA"
           git diff --check "$PILOT_BASE_SHA..HEAD"
           mapfile -t changed < <(git diff --name-only "$PILOT_BASE_SHA..HEAD")
           test "${#changed[@]}" -gt 0
@@ -51,6 +55,33 @@ jobs:
               *) echo "OUT_OF_SCOPE=$p" >&2; exit 1 ;;
             esac
           done
+          mapfile -t phase1_changed < <(git diff --name-only "$PHASE1_BASE_SHA..HEAD")
+          test "${#phase1_changed[@]}" -eq 2
+          test "${phase1_changed[0]}" = ".github/workflows/zep-cloudflare-pilot-v0.yml"
+          test "${phase1_changed[1]}" = "pilot/package-lock.json"
+      - name: Verify reproducible pilot lock contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f pilot/package-lock.json
+          test "$(sha256sum pilot/package-lock.json | awk '{print $1}')" = "$PILOT_LOCK_SHA256"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const manifest = JSON.parse(fs.readFileSync("pilot/package.json", "utf8"));
+          const lock = JSON.parse(fs.readFileSync("pilot/package-lock.json", "utf8"));
+          const expected = { typescript: "5.8.3", wrangler: "4.114.0" };
+          const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+          if (!equal(manifest.devDependencies, expected)) throw new Error("PILOT_MANIFEST_DEPENDENCY_DRIFT");
+          if (!equal(lock.packages[""].devDependencies, expected)) throw new Error("PILOT_LOCK_ROOT_DEPENDENCY_DRIFT");
+          if (lock.packages["node_modules/typescript"]?.version !== "5.8.3") throw new Error("TYPESCRIPT_LOCK_DRIFT");
+          if (lock.packages["node_modules/wrangler"]?.version !== "4.114.0") throw new Error("WRANGLER_LOCK_DRIFT");
+          const canary = JSON.parse(fs.readFileSync("canary/zep-core-canary/package.json", "utf8"));
+          if (!equal(canary.devDependencies, expected)) throw new Error("CANARY_BUILD_DEPENDENCY_DRIFT");
+          NODE
+          if grep -Eq 'npm[[:space:]]+install[[:space:]]+--package-lock-only' .github/workflows/zep-cloudflare-pilot-v0.yml; then
+            echo "LOCKFILE_REGENERATION_PRESENT=TRUE" >&2
+            exit 1
+          fi
       - name: Validate GAOS LEAN
         run: node tools/verify-gaos-lean.mjs .
 
@@ -69,11 +100,15 @@ jobs:
       - name: Set up pinned Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with: { node-version: 22.16.0, package-manager-cache: false }
-      - name: Install exact pilot dependencies
+      - name: Install exact pilot dependencies without lock mutation
         run: |
           set -euo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          before="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$before" = "$PILOT_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund
+          after="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$after" = "$before"
+          git -C .. diff --exit-code -- pilot/package-lock.json
       - name: Typecheck and unit tests
         run: |
           set -euo pipefail
@@ -95,11 +130,15 @@ jobs:
       - name: Set up pinned Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with: { node-version: 22.16.0, package-manager-cache: false }
-      - name: Install exact pilot dependencies
+      - name: Install exact pilot dependencies without lock mutation
         run: |
           set -euo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          before="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$before" = "$PILOT_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund
+          after="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$after" = "$before"
+          git -C .. diff --exit-code -- pilot/package-lock.json
       - name: Reproduce migrations and execute persistent local D1 integration
         run: |
           set -euo pipefail
@@ -123,11 +162,15 @@ jobs:
       - name: Set up pinned Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with: { node-version: 22.16.0, package-manager-cache: false }
-      - name: Install exact pilot dependencies
+      - name: Install exact pilot dependencies without lock mutation
         run: |
           set -euo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          before="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$before" = "$PILOT_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund
+          after="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$after" = "$before"
+          git -C .. diff --exit-code -- pilot/package-lock.json
       - name: Security boundaries and fuzz
         run: |
           set -euo pipefail
@@ -150,20 +193,26 @@ jobs:
       - name: Set up pinned Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with: { node-version: 22.16.0, package-manager-cache: false }
-      - name: Install exact canary dependencies
+      - name: Install exact shared build dependencies from pilot lock
         run: |
           set -euo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          cd ../../pilot
+          before="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$before" = "$PILOT_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund
+          after="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$after" = "$before"
+          git -C .. diff --exit-code -- pilot/package-lock.json
       - name: Canary, Order 060 corrections and core regression
         run: |
           set -euo pipefail
+          export PATH="$GITHUB_WORKSPACE/pilot/node_modules/.bin:$PATH"
           npm run typecheck
           npm test
           npm run fuzz
           rm -rf vendor/zep-core/dist
-          npx --no-install tsc -p vendor/zep-core/tsconfig.json --noEmit
-          npx --no-install tsc -p vendor/zep-core/tsconfig.json
+          tsc -p vendor/zep-core/tsconfig.json --noEmit
+          tsc -p vendor/zep-core/tsconfig.json
           node --test vendor/zep-core/dist/test/adversarial.test.js vendor/zep-core/dist/test/properties.test.js vendor/zep-core/dist/test/semantic-vectors.test.js
           node vendor/zep-core/tools/fuzz-public-boundaries.mjs
 
@@ -182,11 +231,15 @@ jobs:
       - name: Set up pinned Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with: { node-version: 22.16.0, package-manager-cache: false }
-      - name: Install exact pilot dependencies
+      - name: Install exact pilot dependencies without lock mutation
         run: |
           set -euo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          before="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$before" = "$PILOT_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund
+          after="$(sha256sum package-lock.json | awk '{print $1}')"
+          test "$after" = "$before"
+          git -C .. diff --exit-code -- pilot/package-lock.json
       - name: Compile Worker and run Wrangler without platform writes
         run: |
           set -euo pipefail
@@ -208,4 +261,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf 'HEAD=%s\nCONTROL_PLANE_VALIDATE=PASS\nTYPECHECK_AND_UNIT=PASS\nD1_INTEGRATION=PASS\nSECURITY_AND_FUZZ=PASS\nCORE_REGRESSION=PASS\nWRANGLER_DRY_RUN=PASS\nCLOUDFLARE_WRITE=0\nDEPLOY=0\nRELEASE=0\nPRODUCTION_CHANGE=0\n' "$GITHUB_SHA"
+          printf 'HEAD=%s\nPACKAGE_LOCK_COMMITTED=TRUE\nCI_USES_NPM_CI_ONLY=TRUE\nLOCKFILE_UNCHANGED_AFTER_INSTALL=TRUE\nPILOT_LOGIC_CHANGED=FALSE\nCONTROL_PLANE_VALIDATE=PASS\nTYPECHECK_AND_UNIT=PASS\nD1_INTEGRATION=PASS\nSECURITY_AND_FUZZ=PASS\nCORE_REGRESSION=PASS\nWRANGLER_DRY_RUN=PASS\nCLOUDFLARE_WRITE=0\nDEPLOY=0\nRELEASE=0\nPRODUCTION_CHANGE=0\n' "$GITHUB_SHA"
