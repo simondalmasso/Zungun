@@ -67,12 +67,16 @@ jobs:
         run: |
           set -euo pipefail
           for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do test -n "$value"; echo "::add-mask::$value"; done
-          CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '\r\n')"
-          CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '\r\n')"
-          ZUNGUN_PILOT_TOKEN="$(printf %s "$ZUNGUN_PILOT_TOKEN" | tr -d '\r\n')"
+          CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
+          CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
+          ZUNGUN_PILOT_TOKEN="$(printf %s "$ZUNGUN_PILOT_TOKEN" | tr -d '[:space:]')"
+          CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID#CLOUDFLARE_ACCOUNT_ID=}"
+          CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN#CLOUDFLARE_API_TOKEN=}"
+          ZUNGUN_PILOT_TOKEN="${ZUNGUN_PILOT_TOKEN#ZUNGUN_PILOT_TOKEN=}"
           export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN ZUNGUN_PILOT_TOKEN
           for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do test -n "$value"; echo "::add-mask::$value"; done
-          test "$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | wc -c)" -eq 32
+          printf 'ACCOUNT_ID_LENGTH=%s\nAPI_TOKEN_LENGTH=%s\nPILOT_TOKEN_LENGTH=%s\n' "$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | wc -c)" "$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)" "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)"
+          printf %s "$CLOUDFLARE_ACCOUNT_ID" | grep -Eq '^[0-9a-fA-F]{32}$'
           test "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)" -ge 32
           api=https://api.cloudflare.com/client/v4
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
@@ -187,11 +191,15 @@ jobs:
         run: |
           set -euo pipefail
           for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do test -n "$value"; echo "::add-mask::$value"; done
-          CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '\r\n')"
-          CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '\r\n')"
-          ZUNGUN_PILOT_TOKEN="$(printf %s "$ZUNGUN_PILOT_TOKEN" | tr -d '\r\n')"
+          CLOUDFLARE_ACCOUNT_ID="$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
+          CLOUDFLARE_API_TOKEN="$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
+          ZUNGUN_PILOT_TOKEN="$(printf %s "$ZUNGUN_PILOT_TOKEN" | tr -d '[:space:]')"
+          CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID#CLOUDFLARE_ACCOUNT_ID=}"
+          CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN#CLOUDFLARE_API_TOKEN=}"
+          ZUNGUN_PILOT_TOKEN="${ZUNGUN_PILOT_TOKEN#ZUNGUN_PILOT_TOKEN=}"
           export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN ZUNGUN_PILOT_TOKEN
           for value in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do test -n "$value"; echo "::add-mask::$value"; done
+          printf 'ACCOUNT_ID_LENGTH=%s\nAPI_TOKEN_LENGTH=%s\nPILOT_TOKEN_LENGTH=%s\n' "$(printf %s "$CLOUDFLARE_ACCOUNT_ID" | wc -c)" "$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)" "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)"
           test "$(printf %s "$ZUNGUN_PILOT_TOKEN" | wc -c)" -ge 32
           npm ci --ignore-scripts --no-audit --no-fund
           api=https://api.cloudflare.com/client/v4
