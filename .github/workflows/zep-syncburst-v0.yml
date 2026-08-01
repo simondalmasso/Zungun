@@ -239,12 +239,13 @@ jobs:
           test "$expired_code" = 200
           jq -e '.outgoingResults[0].error.code == "EXPIRED"' /tmp/expired.json.out >/dev/null
 
+          large_mailbox="${mailbox}-large"
           large_payload="$(node -e 'process.stdout.write(Buffer.alloc(3000,7).toString("base64"))')"
-          jq -n --arg rid "phase3-large-seed-$run_key" --arg mailbox "$mailbox" --arg key "$run_key" --arg payload "$large_payload" --argjson created "$((now-1000))" --argjson expires "$((now+3600000))" \
+          jq -n --arg rid "phase3-large-seed-$run_key" --arg mailbox "$large_mailbox" --arg key "$run_key" --arg payload "$large_payload" --argjson created "$((now-1000))" --argjson expires "$((now+3600000))" \
             '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:null,maxResponseBytes:65536,pullLimit:0,outgoingMessages:[{zepVersion:"0.1",messageId:("phase3-large-"+$key),conversationId:"phase3-conversation",senderId:"phase3-sender",recipientIds:[$mailbox],createdAtMs:$created,expiresAtMs:$expires,priority:2,contentType:"application/octet-stream",payloadBase64:$payload,receiptPolicy:"END_RECIPIENT_ACK",messageCommitment:("phase3-large-commitment-"+$key)}],ackMessages:[]}' > /tmp/large-seed.json
           large_seed_code="$(curl -sS -o /tmp/large-seed.json.out -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/large-seed.json "$base/v0/sync")"
           test "$large_seed_code" = 200
-          jq -n --arg rid "phase3-large-pull-$run_key" --arg mailbox "$mailbox" '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:null,maxResponseBytes:700,pullLimit:64,outgoingMessages:[],ackMessages:[]}' > /tmp/large-pull.json
+          jq -n --arg rid "phase3-large-pull-$run_key" --arg mailbox "$large_mailbox" '{syncVersion:"0.1",requestId:$rid,mailboxId:$mailbox,cursor:null,maxResponseBytes:700,pullLimit:64,outgoingMessages:[],ackMessages:[]}' > /tmp/large-pull.json
           large_code="$(curl -sS -o /tmp/large-pull.json.out -w '%{http_code}' "${pilot_auth[@]}" "${json_header[@]}" --data-binary @/tmp/large-pull.json "$base/v0/sync")"
           test "$large_code" = 200
           test "$(wc -c < /tmp/large-pull.json.out)" -le 700

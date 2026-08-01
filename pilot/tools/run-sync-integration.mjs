@@ -139,12 +139,16 @@ try {
   }));
   if (expired.outgoingResults[0]?.error?.code !== 'EXPIRED') throw new Error('SYNC_EXPIRED_INVALID');
 
-  const largeMessage = message('large', now, { payloadBase64: Buffer.alloc(3000, 7).toString('base64') });
-  await sync(envelope('sync-d1-large-seed', { pullLimit: 0, outgoingMessages: [largeMessage] }));
+  const largeMailbox = 'sync-d1-mailbox-large';
+  const largeMessage = message('large', now, {
+    recipientIds: [largeMailbox],
+    payloadBase64: Buffer.alloc(3000, 7).toString('base64'),
+  });
+  await sync(envelope('sync-d1-large-seed', { mailboxId: largeMailbox, pullLimit: 0, outgoingMessages: [largeMessage] }));
   const limitedResponse = await authenticated('/v0/sync', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(envelope('sync-d1-large-pull', { maxResponseBytes: 700, pullLimit: 64 })),
+    body: JSON.stringify(envelope('sync-d1-large-pull', { mailboxId: largeMailbox, maxResponseBytes: 700, pullLimit: 64 })),
   });
   const limitedText = await limitedResponse.text();
   if (limitedResponse.status !== 200 || Buffer.byteLength(limitedText) > 700) throw new Error('SYNC_RESPONSE_LIMIT_INVALID');
