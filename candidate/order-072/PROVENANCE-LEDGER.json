@@ -1,0 +1,306 @@
+{
+  "canonical": false,
+  "deploy": false,
+  "externalBinaries": 0,
+  "externalFonts": 0,
+  "externalImages": 0,
+  "externalScripts": 0,
+  "files": [
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/.gitignore"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/PROTECTED-ORACLE-BLOBS.tsv"
+    },
+    {
+      "classification": "GENERATED",
+      "path": "candidate/order-072/PROVENANCE-LEDGER.json"
+    },
+    {
+      "classification": "GENERATED",
+      "path": "candidate/order-072/PROVENANCE.md"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/README.md"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/order-065/wo-2841.execution-proof.json"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/order-065/wo-2841.manifest.json"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/order-065/wo-2841.report.html"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/zungun-demo-kit-067/README-FIRST.md"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/zungun-demo-kit-067/demo-kit.manifest.json"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/zungun-demo-kit-067/demo-script.md"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/zungun-demo-kit-067/index.html"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/zungun-demo-kit-067/wo-2841.execution-proof.json"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/artifacts/zungun-demo-kit-067/wo-2841.manifest.json"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/docs/source-matrix.md"
+    },
+    {
+      "classification": "GENERATED",
+      "path": "candidate/order-072/package-lock.json"
+    },
+    {
+      "classification": "GENERATED",
+      "path": "candidate/order-072/package.json"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/artifacts.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/canonical.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/cli.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/demo.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/errors.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/execution-proof.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/index.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/message.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/receipts.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/reconciliation.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/reference-receiver.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/routing.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/src/extensions/types.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/test/core.test.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/test/demo.test.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/test/kit.test.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/test/node-shims.d.ts"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/browser-e2e.py"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/consumer-smoke.mjs"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/determinism.mjs"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/fuzz-public-boundaries.mjs"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/order071/differential.mjs"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/order071/verify-exports.mjs"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/order071/verify-kit-gates.mjs"
+    },
+    {
+      "classification": "GENERATED",
+      "path": "candidate/order-072/tools/order072/verify-protected.mjs"
+    },
+    {
+      "classification": "GENERATED",
+      "path": "candidate/order-072/tools/order072/verify-provenance.mjs"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/tamper-kit.mjs"
+    },
+    {
+      "classification": "071_SOURCE",
+      "path": "candidate/order-072/tools/verify-static.mjs"
+    },
+    {
+      "classification": "GENERATED",
+      "path": "candidate/order-072/tsconfig.json"
+    }
+  ],
+  "orderId": "ZUNGUN-AUD-ARQ-CANONICAL-CANDIDATE-MATERIALIZATION-072",
+  "release": false,
+  "remoteBaseCommit": "5c49374d5fa54858108cffe437520b793d0cfeb4",
+  "remoteReused": [
+    {
+      "blobSha": "4fd514a898f4620590949c46f2b7575284ed7785",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/package.json"
+    },
+    {
+      "blobSha": "77eefec7948086d7782d1ad9c2488c7b50b1ba59",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/tsconfig.json"
+    },
+    {
+      "blobSha": "5436d93ce6abd130a58f37e0f81386e3f79ad982",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/index.ts"
+    },
+    {
+      "blobSha": "17fcdf00c2d740b62f1f8e57c6c6983eb1c6f144",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/time.ts"
+    },
+    {
+      "blobSha": "512c3572996a284805e21e676da8ffd65e0ea680",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/errors.ts"
+    },
+    {
+      "blobSha": "b7df59cda98944c354056da6e1761aba6037cd33",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/fragments.ts"
+    },
+    {
+      "blobSha": "42f28bb5bb03584c03390b49880e5787b6dc5d1a",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/message.ts"
+    },
+    {
+      "blobSha": "c54b3aadd23282585feb22c0b1ec2552a58375a2",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/outcomes.ts"
+    },
+    {
+      "blobSha": "ac650a6e798d123da2cf92581c51520562ac3aeb",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/receipts.ts"
+    },
+    {
+      "blobSha": "8cf3268d1c61fa00c1292427d6b60183ad62a57f",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/routing.ts"
+    },
+    {
+      "blobSha": "538c8b7a116e707d0274ecd4e016391c655af94a",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/state-machine.ts"
+    },
+    {
+      "blobSha": "15828460231aaf2c5e0db0db2cec7730ada16a16",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/adapters.ts"
+    },
+    {
+      "blobSha": "1f504af2ac533af9bfc10a9d3d99bcc28a5247df",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/types.ts"
+    },
+    {
+      "blobSha": "b0957c8106de1adab6baa5372a6f7a1023ebd5d0",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/src/validation.ts"
+    },
+    {
+      "blobSha": "433912450f4a76bf22a8124fff4344a0a9a900e4",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/test/adversarial.test.ts"
+    },
+    {
+      "blobSha": "3d44d15cb397bc744d5efbe7b35b724a4a393479",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/test/helpers.ts"
+    },
+    {
+      "blobSha": "f03302b93149802ac1767a322ccd0684fb3f81a0",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/test/node-shims.d.ts"
+    },
+    {
+      "blobSha": "8017889a0dbd6b4deba8fe76612021f2272c0c9e",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/test/properties.test.ts"
+    },
+    {
+      "blobSha": "46170b8fe7c23d5b0a326cf88cc6d3a7952e3640",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/test/semantic-vectors.test.ts"
+    },
+    {
+      "blobSha": "020f18867f6b29d159594ac7fad223d89b4e7c8e",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/tools/fuzz-public-boundaries.mjs"
+    },
+    {
+      "blobSha": "b54812cddd4d1e2f1a0e43ac6459737ea8976841",
+      "classification": "REMOTE_REUSED",
+      "path": "canary/zep-core-canary/vendor/zep-core/evidence/runtime-exports.txt"
+    }
+  ],
+  "sourceCommit": "adc3ebdb2664858735c6628036d9bd708c91e4b6",
+  "unknownProvenanceFiles": 0
+}

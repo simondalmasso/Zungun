@@ -1,0 +1,211 @@
+<!doctype html>
+<!-- PROVENANCE: GENERATED_ARTIFACT -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WO-2841 Execution Proof</title><style>body{font-family:system-ui;max-width:900px;margin:40px auto;padding:0 20px;color:#172033}code,pre{background:#f4f6f8;padding:12px;border-radius:8px}dt{font-weight:700}dd{margin:0 0 12px}</style></head><body><h1>WO-2841 Execution Proof</h1><p><strong>REFERENCE DEMO ONLY</strong></p><dl><dt>Operation</dt><dd>OP-DEMO-WO-2841-001</dd><dt>Verdict</dt><dd>EFFECT_CONFIRMED</dd><dt>Action</dt><dd>DO_NOT_RETRY</dd></dl><pre id="proof-json">{
+  "action": "DO_NOT_RETRY",
+  "backendState": "EFFECT_APPLIED",
+  "caseId": "CASE-DEMO-2841",
+  "dataClassification": "FICTIONAL_DEMO_ONLY",
+  "deviceId": "DEV-DEMO-017",
+  "deviceState": "UNKNOWN",
+  "erpState": "WORK_ORDER_CLOSED",
+  "evidence": [
+    {
+      "atMs": 1800000000000,
+      "detail": "Work-order closure persisted with stable identity.",
+      "kind": "OPERATION_CAPTURED",
+      "reference": "EV-001",
+      "sequence": 1,
+      "source": "DEVICE"
+    },
+    {
+      "atMs": 1800000002000,
+      "detail": "The device sent the critical operation.",
+      "kind": "SEND_ATTEMPT",
+      "reference": "EV-002",
+      "sequence": 2,
+      "source": "DEVICE"
+    },
+    {
+      "atMs": 1800000003000,
+      "detail": "Reference receiver applied the simulated effect once.",
+      "kind": "EFFECT_APPLIED",
+      "reference": "EV-003",
+      "sequence": 3,
+      "source": "BACKEND"
+    },
+    {
+      "atMs": 1800000004000,
+      "detail": "The response was lost; success or failure was not assumed.",
+      "kind": "UNKNOWN",
+      "reference": "EV-004",
+      "sequence": 4,
+      "source": "DEVICE"
+    },
+    {
+      "atMs": 1800000005000,
+      "detail": "ERP projection shows WO-2841 closed.",
+      "kind": "WORK_ORDER_CLOSED",
+      "reference": "EV-005",
+      "sequence": 5,
+      "source": "ERP"
+    },
+    {
+      "atMs": 1800000006000,
+      "detail": "Receiver status was queried by stable operation identity.",
+      "kind": "STATUS_QUERY",
+      "reference": "EV-006",
+      "sequence": 6,
+      "source": "RECEIVER"
+    },
+    {
+      "atMs": 1800000007000,
+      "detail": "Application ACK bound to message commitment returned.",
+      "kind": "APPLICATION_ACK",
+      "reference": "RCP-DEMO-2841",
+      "sequence": 7,
+      "source": "RECEIVER"
+    },
+    {
+      "atMs": 1800000008000,
+      "detail": "Evidence converged; retry would risk duplication.",
+      "kind": "EFFECT_CONFIRMED",
+      "reference": "CASE-DEMO-2841",
+      "sequence": 8,
+      "source": "RECONCILER"
+    }
+  ],
+  "finalVerdict": "EFFECT_CONFIRMED",
+  "limitations": [
+    "REFERENCE_DEMO_ONLY",
+    "NO_ANDROID_RUNTIME",
+    "NO_PRODUCTION_PERSISTENCE",
+    "NO_NETWORK_CALLS",
+    "NO_DATABASE",
+    "NO_PRODUCTION_CRYPTOGRAPHY",
+    "NO_UNIVERSAL_EXACTLY_ONCE_CLAIM"
+  ],
+  "messageCommitment": "46c8509c048938da8a4cf0199c3d971537f21bb12f2c5177052117860200af4e",
+  "messageId": "MSG-DEMO-WO-2841-001",
+  "operationId": "OP-DEMO-WO-2841-001",
+  "provenance": "GENERATED_ARTIFACT",
+  "receipt": {
+    "applicationAcknowledgement": "EFFECT_APPLIED",
+    "cryptography": "DEMO_LOCAL_INTEGRITY_ONLY",
+    "integrityDigest": "652a94efeb5898fdd2b05289862cb9af4cdb749c0c38ee0fee787f155ec9e073",
+    "messageCommitment": "46c8509c048938da8a4cf0199c3d971537f21bb12f2c5177052117860200af4e",
+    "messageId": "MSG-DEMO-WO-2841-001",
+    "observedAtMs": 1800000003000,
+    "operationId": "OP-DEMO-WO-2841-001",
+    "receiptId": "RCP-DEMO-2841",
+    "recipientId": "BACKEND-DEMO-001"
+  },
+  "schemaVersion": "zungun.execution-proof.v1",
+  "semanticSourceProvenance": "RECONSTRUCTED_FROM_ORDER",
+  "technicianId": "FIELD-017",
+  "workOrderId": "WO-2841"
+}
+</pre><script type="application/json" id="execution-proof">{
+  "action": "DO_NOT_RETRY",
+  "backendState": "EFFECT_APPLIED",
+  "caseId": "CASE-DEMO-2841",
+  "dataClassification": "FICTIONAL_DEMO_ONLY",
+  "deviceId": "DEV-DEMO-017",
+  "deviceState": "UNKNOWN",
+  "erpState": "WORK_ORDER_CLOSED",
+  "evidence": [
+    {
+      "atMs": 1800000000000,
+      "detail": "Work-order closure persisted with stable identity.",
+      "kind": "OPERATION_CAPTURED",
+      "reference": "EV-001",
+      "sequence": 1,
+      "source": "DEVICE"
+    },
+    {
+      "atMs": 1800000002000,
+      "detail": "The device sent the critical operation.",
+      "kind": "SEND_ATTEMPT",
+      "reference": "EV-002",
+      "sequence": 2,
+      "source": "DEVICE"
+    },
+    {
+      "atMs": 1800000003000,
+      "detail": "Reference receiver applied the simulated effect once.",
+      "kind": "EFFECT_APPLIED",
+      "reference": "EV-003",
+      "sequence": 3,
+      "source": "BACKEND"
+    },
+    {
+      "atMs": 1800000004000,
+      "detail": "The response was lost; success or failure was not assumed.",
+      "kind": "UNKNOWN",
+      "reference": "EV-004",
+      "sequence": 4,
+      "source": "DEVICE"
+    },
+    {
+      "atMs": 1800000005000,
+      "detail": "ERP projection shows WO-2841 closed.",
+      "kind": "WORK_ORDER_CLOSED",
+      "reference": "EV-005",
+      "sequence": 5,
+      "source": "ERP"
+    },
+    {
+      "atMs": 1800000006000,
+      "detail": "Receiver status was queried by stable operation identity.",
+      "kind": "STATUS_QUERY",
+      "reference": "EV-006",
+      "sequence": 6,
+      "source": "RECEIVER"
+    },
+    {
+      "atMs": 1800000007000,
+      "detail": "Application ACK bound to message commitment returned.",
+      "kind": "APPLICATION_ACK",
+      "reference": "RCP-DEMO-2841",
+      "sequence": 7,
+      "source": "RECEIVER"
+    },
+    {
+      "atMs": 1800000008000,
+      "detail": "Evidence converged; retry would risk duplication.",
+      "kind": "EFFECT_CONFIRMED",
+      "reference": "CASE-DEMO-2841",
+      "sequence": 8,
+      "source": "RECONCILER"
+    }
+  ],
+  "finalVerdict": "EFFECT_CONFIRMED",
+  "limitations": [
+    "REFERENCE_DEMO_ONLY",
+    "NO_ANDROID_RUNTIME",
+    "NO_PRODUCTION_PERSISTENCE",
+    "NO_NETWORK_CALLS",
+    "NO_DATABASE",
+    "NO_PRODUCTION_CRYPTOGRAPHY",
+    "NO_UNIVERSAL_EXACTLY_ONCE_CLAIM"
+  ],
+  "messageCommitment": "46c8509c048938da8a4cf0199c3d971537f21bb12f2c5177052117860200af4e",
+  "messageId": "MSG-DEMO-WO-2841-001",
+  "operationId": "OP-DEMO-WO-2841-001",
+  "provenance": "GENERATED_ARTIFACT",
+  "receipt": {
+    "applicationAcknowledgement": "EFFECT_APPLIED",
+    "cryptography": "DEMO_LOCAL_INTEGRITY_ONLY",
+    "integrityDigest": "652a94efeb5898fdd2b05289862cb9af4cdb749c0c38ee0fee787f155ec9e073",
+    "messageCommitment": "46c8509c048938da8a4cf0199c3d971537f21bb12f2c5177052117860200af4e",
+    "messageId": "MSG-DEMO-WO-2841-001",
+    "observedAtMs": 1800000003000,
+    "operationId": "OP-DEMO-WO-2841-001",
+    "receiptId": "RCP-DEMO-2841",
+    "recipientId": "BACKEND-DEMO-001"
+  },
+  "schemaVersion": "zungun.execution-proof.v1",
+  "semanticSourceProvenance": "RECONSTRUCTED_FROM_ORDER",
+  "technicianId": "FIELD-017",
+  "workOrderId": "WO-2841"
+}
+</script></body></html>

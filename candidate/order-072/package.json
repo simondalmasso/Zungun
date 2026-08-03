@@ -1,0 +1,46 @@
+{
+  "name": "@zungun/zep-core",
+  "version": "0.1.5-recovery.072",
+  "private": true,
+  "type": "module",
+  "description": "Noncanonical recovery candidate: exact historical oracle plus isolated Orders 063-067 reference extensions.",
+  "exports": {
+    ".": {
+      "types": "./dist/canary/zep-core-canary/vendor/zep-core/src/index.d.ts",
+      "import": "./dist/canary/zep-core-canary/vendor/zep-core/src/index.js"
+    },
+    "./extensions": {
+      "types": "./dist/candidate/order-072/src/extensions/index.d.ts",
+      "import": "./dist/candidate/order-072/src/extensions/index.js"
+    }
+  },
+  "bin": {
+    "zungun-demo": "dist/candidate/order-072/src/extensions/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "PROVENANCE.md",
+    "PROVENANCE-LEDGER.json",
+    "PROTECTED-ORACLE-BLOBS.tsv"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist .generated .consumer *.tgz",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "verify:protected": "node tools/order072/verify-protected.mjs",
+    "test:historical": "cd ../../canary/zep-core-canary/vendor/zep-core && npm test",
+    "fuzz:historical": "cd ../../canary/zep-core-canary/vendor/zep-core && npm run fuzz",
+    "verify:historical": "cd ../../canary/zep-core-canary/vendor/zep-core && npm run verify:deep",
+    "test:extensions": "npm run build && node --test dist/candidate/order-072/test/*.test.js",
+    "fuzz:extensions": "npm run build && node tools/fuzz-public-boundaries.mjs",
+    "verify:exports": "npm run build && node tools/order071/verify-exports.mjs",
+    "verify:differential": "npm run build && node tools/order071/differential.mjs",
+    "verify:static": "node tools/verify-static.mjs",
+    "verify:provenance": "node tools/order072/verify-provenance.mjs",
+    "verify:kit": "npm run build && node tools/order071/verify-kit-gates.mjs",
+    "verify:pack": "npm run build && npm pack --silent && node tools/consumer-smoke.mjs",
+    "verify:deep": "npm run verify:protected && npm run typecheck && npm run verify:historical && npm run test:extensions && npm run fuzz:extensions && npm run verify:exports && npm run verify:differential && npm run verify:static && npm run verify:provenance && npm run verify:kit && npm run verify:pack"
+  },
+  "engines": { "node": ">=22" }
+}

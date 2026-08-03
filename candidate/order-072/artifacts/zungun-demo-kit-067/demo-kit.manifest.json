@@ -1,0 +1,46 @@
+{
+  "dataClassification": "FICTIONAL_DEMO_ONLY",
+  "files": [
+    {
+      "name": "index.html",
+      "sha256": "f316cf2776bb98b97ff136d4c3ac1039c1250c8198e3d790036aa2fbe8a09f94"
+    },
+    {
+      "name": "wo-2841.execution-proof.json",
+      "sha256": "1b6231839d5279f8dd17a168fb42da8d81f81f1a7e72e2c9ac62ce87d3d85bd6"
+    },
+    {
+      "name": "wo-2841.manifest.json",
+      "sha256": "e57c2843b056a5cbf62257edce210791afaaad825d57ecb76f6fe7936212076b"
+    },
+    {
+      "name": "demo-script.md",
+      "sha256": "aa3f8693b75d3a769dbb66b1622a4daa3eac55c57e64a4fab6e02415029936d4"
+    },
+    {
+      "name": "README-FIRST.md",
+      "sha256": "11db900b3a58072ee3df64b9d1341d8ef95f34f2100a444bf1cf4882095ddaaf"
+    }
+  ],
+  "generationMode": "DETERMINISTIC_LOCAL_REFERENCE_DEMO",
+  "limitations": [
+    "NO_ANDROID_RUNTIME",
+    "NO_NETWORK",
+    "NO_DATABASE",
+    "NO_PRODUCTION_CRYPTOGRAPHY",
+    "NO_UNIVERSAL_EXACTLY_ONCE_CLAIM"
+  ],
+  "package": "@zungun/zep-core",
+  "provenance": "GENERATED_ARTIFACT",
+  "routes": [
+    "#/overview",
+    "#/inbox",
+    "#/operations/OP-DEMO-WO-2841-001",
+    "#/operations/OP-DEMO-WO-2841-001/timeline",
+    "#/operations/OP-DEMO-WO-2841-001/proof",
+    "#/operations/OP-DEMO-WO-2841-001/decision",
+    "#/integration"
+  ],
+  "schemaVersion": "zungun.demo-kit-manifest.v1",
+  "version": "0.1.5-recovery.069r"
+}

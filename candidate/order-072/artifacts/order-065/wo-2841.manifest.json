@@ -1,0 +1,19 @@
+{
+  "caseId": "CASE-DEMO-2841",
+  "dataClassification": "FICTIONAL_DEMO_ONLY",
+  "files": [
+    {
+      "name": "wo-2841.execution-proof.json",
+      "sha256": "1b6231839d5279f8dd17a168fb42da8d81f81f1a7e72e2c9ac62ce87d3d85bd6"
+    },
+    {
+      "name": "wo-2841.report.html",
+      "sha256": "0b9a10eef1b4c04d2eb895eeb9bd94d0c9b03baedbd9669c9e501ed9b5fc1998"
+    }
+  ],
+  "integrityScope": "LOCAL_ARTIFACT_INTEGRITY_ONLY_NOT_PRODUCTION_RECEIPT_CRYPTOGRAPHY",
+  "package": "@zungun/zep-core",
+  "provenance": "GENERATED_ARTIFACT",
+  "schemaVersion": "zungun.demo-manifest.v1",
+  "version": "0.1.5-recovery.069r"
+}
