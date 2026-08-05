@@ -1,0 +1,79 @@
+name: Order 075 apply implementation overlay
+
+"on":
+  pull_request:
+    branches:
+      - recovery/order-072-oracle-extension-candidate-v1
+    paths:
+      - .github/order075-payload/**
+      - .github/workflows/order-075-apply-overlay.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: order-075-apply-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'feat/zungun-full-project-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Order 075 work branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: feat/zungun-full-project-v1
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify and apply deterministic implementation overlay
+        shell: bash
+        env:
+          START_SHA: 8b206b91fb98bc3d514f9709b6258dcb839ad5f1
+          START_TREE: d729a39e0d92ccf3ee3335412d68dfe6d3073387
+          OVERLAY_SHA256: cbc1828f1b7a2ae71c9245ae93f808dbdea6e071355ba8fcc4a942c6c95c0d97
+          OVERLAY_BASE64_SIZE: "67212"
+          EXPECTED_CANDIDATE_SUBTREE: 108629fc91c1e03454c18b14a6b557c2b62898d4
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --abbrev-ref HEAD)" = "feat/zungun-full-project-v1"
+          test "$(git rev-parse "$START_SHA^{tree}")" = "$START_TREE"
+          git merge-base --is-ancestor "$START_SHA" HEAD
+          test "$(git rev-parse "$START_SHA:candidate/order-072")" = "$EXPECTED_CANDIDATE_SUBTREE"
+          test -z "$(git status --porcelain)"
+
+          payload_b64="$RUNNER_TEMP/order075-overlay.b64"
+          payload_tar="$RUNNER_TEMP/order075-overlay.tar.gz"
+          LC_ALL=C cat .github/order075-payload/chunk-*.b64 > "$payload_b64"
+          test "$(wc -c < "$payload_b64")" = "$OVERLAY_BASE64_SIZE"
+          base64 -d "$payload_b64" > "$payload_tar"
+          test "$(sha256sum "$payload_tar" | cut -d' ' -f1)" = "$OVERLAY_SHA256"
+          tar -tzf "$payload_tar" > "$RUNNER_TEMP/order075-overlay-files.txt"
+          test "$(wc -l < "$RUNNER_TEMP/order075-overlay-files.txt")" -ge 90
+          tar -xzf "$payload_tar" -C .
+
+          rm -rf .github/order075-payload
+          rm -f .github/workflows/order-075-apply-overlay.yml
+          rm -f .github/workflows/order-075-bootstrap-source-export.yml
+          git add -A
+
+          changed="$RUNNER_TEMP/order075-changed-paths.txt"
+          git diff --cached --name-only | LC_ALL=C sort > "$changed"
+          test "$(wc -l < "$changed")" -ge 90
+          test -z "$(grep -E '^canary/zep-core-canary/vendor/zep-core/' "$changed" || true)"
+          test -z "$(grep -E '^candidate/order-072/' "$changed" || true)"
+          test -z "$(grep -E '^\.github/evidence/order-073/' "$changed" || true)"
+          test -f .github/workflows/order-075-full-project.yml
+          test -f android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt
+          test -f services/receiver/src/receiver.ts
+          test -f packages/security/src/receipts.ts
+          test -f apps/control-room/public/index.html
+          test -f tools/resilience-lab/src/scenarios.ts
+
+          git config user.name "Simon Dalmasso"
+          git config user.email "simondalmasso44@gmail.com"
+          git commit -m "feat(order-075): implement integrated critical-operation system"
+          git push origin HEAD:feat/zungun-full-project-v1
