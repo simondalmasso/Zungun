@@ -24,7 +24,7 @@ env:
 jobs:
   typescript-primary:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
     outputs:
       package_sha: ${{ steps.result.outputs.package_sha }}
     steps:
@@ -34,8 +34,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with: { node-version: 22.16.0, package-manager-cache: false }
-      - name: Verify immutable ancestry
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Verify immutable ancestry and candidate boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -43,18 +45,16 @@ jobs:
           git merge-base --is-ancestor "$START_SHA" "$head_sha"
           test "$(git rev-parse "$START_SHA^{tree}")" = "$START_TREE"
           test "$(git rev-parse "$head_sha:candidate/order-072")" = "$CANDIDATE_SUBTREE"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then test "$head_sha" = "$(jq -r .pull_request.head.sha "$GITHUB_EVENT_PATH")"; fi
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            test "$head_sha" = "$(jq -r .pull_request.head.sha "$GITHUB_EVENT_PATH")"
+          fi
+          test -z "$(git diff --name-only "$START_SHA..HEAD" | grep -E '^canary/zep-core-canary/vendor/zep-core/' || true)"
+          test -z "$(git diff --name-only "$START_SHA..HEAD" | grep -E '^candidate/order-072/' || true)"
           test -z "$(git status --porcelain)"
-      - name: Install pinned toolchains
+      - name: Install root toolchain
         shell: bash
-        run: |
-          set -euo pipefail
-          npm ci --ignore-scripts --no-audit --no-fund
-          cp .github/evidence/order-073/canary-package-lock.order057.json canary/zep-core-canary/package-lock.json
-          (cd canary/zep-core-canary && npm ci --ignore-scripts --no-audit --no-fund)
-          echo "$GITHUB_WORKSPACE/canary/zep-core-canary/node_modules/.bin" >> "$GITHUB_PATH"
-          (cd candidate/order-072 && npm ci --ignore-scripts --no-audit --no-fund)
-      - name: Full TypeScript and security matrix
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Full integrated TypeScript and security matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -70,15 +70,25 @@ jobs:
           npm run verify:no-placeholders
           npm run verify:secrets
           npm run verify:security-evidence
-          npm audit --audit-level=high --omit=optional
-          (cd candidate/order-072 && npm run verify:deep)
-          (cd canary/zep-core-canary && npm run verify:deep)
-          test -z "$(git status --porcelain --untracked-files=no)"
+          npm audit --registry=https://registry.npmjs.org --audit-level=high --omit=optional
+      - name: Re-run accepted historical candidate at its exact provenance commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          historical="$RUNNER_TEMP/order075-historical"
+          git worktree add --detach "$historical" "$START_SHA"
+          cp "$GITHUB_WORKSPACE/.github/evidence/order-073/canary-package-lock.order057.json" "$historical/canary/zep-core-canary/package-lock.json"
+          (cd "$historical/canary/zep-core-canary" && npm ci --ignore-scripts --no-audit --no-fund && npm run verify:deep)
+          export PATH="$historical/canary/zep-core-canary/node_modules/.bin:$PATH"
+          (cd "$historical/candidate/order-072" && npm ci --ignore-scripts --no-audit --no-fund && npm run verify:deep)
+          test "$(git -C "$historical" rev-parse HEAD:candidate/order-072)" = "$CANDIDATE_SUBTREE"
+          git worktree remove --force "$historical"
       - name: Seal TypeScript evidence
         id: result
         shell: bash
         run: |
           set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=no)"
           out="$RUNNER_TEMP/order075-ts-primary"
           mkdir -p "$out"
           cp -a .artifacts/. "$out/"
@@ -106,15 +116,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with: { node-version: 22.16.0, package-manager-cache: false }
-      - name: Reproduce package independently
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Reproduce integrated package independently
         shell: bash
         run: |
           set -euo pipefail
           npm ci --ignore-scripts --no-audit --no-fund
-          cp .github/evidence/order-073/canary-package-lock.order057.json canary/zep-core-canary/package-lock.json
-          (cd canary/zep-core-canary && npm ci --ignore-scripts --no-audit --no-fund)
-          echo "$GITHUB_WORKSPACE/canary/zep-core-canary/node_modules/.bin" >> "$GITHUB_PATH"
           npm run typecheck
           npm run verify:oracle
           npm test
@@ -143,7 +152,9 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with: { node-version: 22.16.0, package-manager-cache: false }
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
       - name: Browser E2E
         shell: bash
         run: |
@@ -155,6 +166,7 @@ jobs:
           test -n "$browser"
           "$browser" --version
           python tools/browser/control-room-e2e.py | tee control-room-e2e.json
+          grep -F '"ok": true' control-room-e2e.json
           mkdir -p "$RUNNER_TEMP/order075-browser"
           cp control-room-e2e.json "$RUNNER_TEMP/order075-browser/"
           sha256sum "$RUNNER_TEMP/order075-browser/control-room-e2e.json" > "$RUNNER_TEMP/order075-browser/MANIFEST.sha256"
@@ -186,13 +198,14 @@ jobs:
           yes | "$sdkmanager" --licenses >/dev/null || true
           "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" "system-images;android-35;google_apis;x86_64"
           printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
-      - name: Build lint test AAR and external consumers
+      - name: Build lint test AAR sample and external consumer
         id: build
         shell: bash
         run: |
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug :runtime:testDebugUnitTest :sample:assembleDebug :external-consumer:assembleDebug
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug :runtime:testDebugUnitTest :sample:assembleDebug
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :external-consumer:assembleDebug
           aar=android/runtime/build/outputs/aar/runtime-release.aar
           test -s "$aar"
           aar_sha="$(sha256sum "$aar" | cut -d' ' -f1)"
@@ -212,7 +225,10 @@ jobs:
           sudo chmod 666 /dev/kvm || true
           nohup "$sdkroot/emulator/emulator" -avd zungun-api35 -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
           "$sdkroot/platform-tools/adb" wait-for-device
-          for i in $(seq 1 180); do [ "$("$sdkroot/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break; sleep 2; done
+          for i in $(seq 1 180); do
+            if [ "$("$sdkroot/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then break; fi
+            sleep 2
+          done
           test "$("$sdkroot/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = "1"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest
           "$sdkroot/platform-tools/adb" emu kill || true
@@ -271,16 +287,26 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with: { node-version: 22.16.0, package-manager-cache: false }
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
       - name: Container and canary
         shell: bash
         run: |
           set -euo pipefail
           docker build --file infra/docker/receiver.Dockerfile --tag zungun-receiver:order075 .
           image_id="$(docker image inspect zungun-receiver:order075 --format '{{.Id}}')"
-          docker run --detach --name zungun-receiver-smoke --read-only --tmpfs /tmp --tmpfs /data -e RECEIVER_AUTH_TOKEN=container-smoke-token-order075 -p 18789:8788 zungun-receiver:order075
+          docker run --detach --name zungun-receiver-smoke --read-only \
+            --tmpfs /tmp:rw,nosuid,size=64m,mode=1777 \
+            -e RECEIVER_AUTH_TOKEN=container-smoke-token-order075 \
+            -e RECEIVER_DB=/tmp/receiver.sqlite \
+            -e RECEIVER_KEY_FILE=/tmp/receipt-key.json \
+            -p 18789:8788 zungun-receiver:order075
           ready=0
-          for i in $(seq 1 90); do if curl --fail --silent http://127.0.0.1:18789/ready; then ready=1; break; fi; sleep 1; done
+          for i in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:18789/ready; then ready=1; break; fi
+            sleep 1
+          done
           if [ "$ready" != 1 ]; then docker logs zungun-receiver-smoke; exit 1; fi
           curl --fail --silent http://127.0.0.1:18789/ | grep -F 'id="token"'
           docker logs zungun-receiver-smoke
@@ -302,7 +328,13 @@ jobs:
   completion-gate:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: [typescript-primary, typescript-independent, control-room-browser, android-primary, android-independent, container-and-canary]
+    needs:
+      - typescript-primary
+      - typescript-independent
+      - control-room-browser
+      - android-primary
+      - android-independent
+      - container-and-canary
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
