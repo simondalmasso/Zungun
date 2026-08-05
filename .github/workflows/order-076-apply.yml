@@ -28,7 +28,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/order076-payload/chunk-* > "$RUNNER_TEMP/order076.b64"
+          cat \
+            .github/order076-payload/chunk-00a \
+            .github/order076-payload/chunk-00b \
+            .github/order076-payload/chunk-01 \
+            .github/order076-payload/chunk-02 \
+            .github/order076-payload/chunk-03 \
+            .github/order076-payload/chunk-04 \
+            .github/order076-payload/chunk-05 \
+            .github/order076-payload/chunk-06 \
+            .github/order076-payload/chunk-07 \
+            .github/order076-payload/chunk-08 \
+            .github/order076-payload/chunk-09 \
+            .github/order076-payload/chunk-10 \
+            .github/order076-payload/chunk-11 \
+            > "$RUNNER_TEMP/order076.b64"
           base64 --decode "$RUNNER_TEMP/order076.b64" > "$RUNNER_TEMP/order076.tar.gz"
           printf '%s  %s\n' '2651be375d6ea94efeae058c0164e231892f8894ca1e0fda80541489700f1a68' "$RUNNER_TEMP/order076.tar.gz" | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/order076.tar.gz" -C .
