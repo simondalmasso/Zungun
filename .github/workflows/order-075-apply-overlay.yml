@@ -5,7 +5,6 @@ name: Order 075 apply implementation overlay
     branches:
       - recovery/order-072-oracle-extension-candidate-v1
     paths:
-      - .github/order075-payload/**
       - .github/workflows/order-075-apply-overlay.yml
   workflow_dispatch:
 
@@ -23,7 +22,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout Order 075 work branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: feat/zungun-full-project-v1
           fetch-depth: 0
@@ -47,6 +46,8 @@ jobs:
 
           payload_b64="$RUNNER_TEMP/order075-overlay.b64"
           payload_tar="$RUNNER_TEMP/order075-overlay.tar.gz"
+          preserved_workflow="$RUNNER_TEMP/order-075-full-project.yml"
+          cp .github/workflows/order-075-full-project.yml "$preserved_workflow"
           LC_ALL=C cat .github/order075-payload/chunk-*.b64 > "$payload_b64"
           test "$(wc -c < "$payload_b64")" = "$OVERLAY_BASE64_SIZE"
           base64 -d "$payload_b64" > "$payload_tar"
@@ -54,19 +55,19 @@ jobs:
           tar -tzf "$payload_tar" > "$RUNNER_TEMP/order075-overlay-files.txt"
           test "$(wc -l < "$RUNNER_TEMP/order075-overlay-files.txt")" -ge 90
           tar -xzf "$payload_tar" -C .
-
+          cp "$preserved_workflow" .github/workflows/order-075-full-project.yml
           rm -rf .github/order075-payload
-          rm -f .github/workflows/order-075-apply-overlay.yml
           rm -f .github/workflows/order-075-bootstrap-source-export.yml
-          git add -A
 
+          test -z "$(git diff --name-only -- .github/workflows/ || true)"
+          git add -A
           changed="$RUNNER_TEMP/order075-changed-paths.txt"
           git diff --cached --name-only | LC_ALL=C sort > "$changed"
           test "$(wc -l < "$changed")" -ge 90
+          test -z "$(grep -E '^\.github/workflows/' "$changed" || true)"
           test -z "$(grep -E '^canary/zep-core-canary/vendor/zep-core/' "$changed" || true)"
           test -z "$(grep -E '^candidate/order-072/' "$changed" || true)"
           test -z "$(grep -E '^\.github/evidence/order-073/' "$changed" || true)"
-          test -f .github/workflows/order-075-full-project.yml
           test -f android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt
           test -f services/receiver/src/receiver.ts
           test -f packages/security/src/receipts.ts
