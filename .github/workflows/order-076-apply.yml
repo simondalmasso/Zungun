@@ -94,9 +94,15 @@ jobs:
           yes | "$sdkmanager" --licenses >/dev/null || true
           "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           export ANDROID_SDK_ROOT="$sdkroot" ANDROID_HOME="$sdkroot"
+          # `dependencies` alone does not materialize detached AAPT2 transforms.
+          # Resolve the actual build graph while generating the immutable evidence.
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             --write-locks --write-verification-metadata sha256 \
-            :runtime:dependencies :sample:dependencies :external-consumer:dependencies
+            :runtime:dependencies :sample:dependencies :external-consumer:dependencies \
+            :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
+            :runtime:testDebugUnitTest :sample:assembleDebug \
+            :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          # Prove the generated locks and metadata are sufficient in strict mode.
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
             :runtime:testDebugUnitTest :sample:assembleDebug \
