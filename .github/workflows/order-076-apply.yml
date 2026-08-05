@@ -46,9 +46,9 @@ jobs:
           base64 --decode "$RUNNER_TEMP/order076.b64" > "$RUNNER_TEMP/order076.tar.gz"
           printf '%s  %s\n' '2651be375d6ea94efeae058c0164e231892f8894ca1e0fda80541489700f1a68' "$RUNNER_TEMP/order076.tar.gz" | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/order076.tar.gz" -C .
-          rm -f .github/workflows/order-076-source-export.yml
-          rm -rf .github/order076-payload
-          rm -f .github/workflows/order-076-apply.yml
+          git rm -f .github/workflows/order-076-source-export.yml
+          git rm -rf .github/order076-payload
+          git rm -f .github/workflows/order-076-apply.yml
           test -z "$(git diff --name-only HEAD -- canary/zep-core-canary/vendor/zep-core candidate/order-072)"
       - name: Verify corrective TypeScript system before commit
         shell: bash
