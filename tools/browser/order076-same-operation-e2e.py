@@ -24,7 +24,7 @@ with sync_playwright() as playwright:
     page.fill('#token', tokens['reader'])
     page.locator('#authForm button[type=submit]').click()
     page.wait_for_function("Number(document.querySelector('#observedCount').textContent) > 25")
-    assert page.locator('#nextPage').is_enabled()
+    page.wait_for_function("!document.querySelector('#nextPage').disabled")
     page.fill('#query', operation_id)
     page.locator('#filters button[type=submit]').click()
     page.wait_for_selector(f'[data-operation="{operation_id}"]')
