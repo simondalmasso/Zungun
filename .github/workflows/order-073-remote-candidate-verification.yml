@@ -20,12 +20,16 @@ concurrency:
 env:
   IMPLEMENTATION_COMMIT: b42bf7bdec0de0e5aa7ff75cf1d2e8fe9e6a7a1a
   FIRST_EVIDENCE_COMMIT: b87a28c8fe19b54516443aa52350b2440833c5c1
+  PLACEHOLDER_COMMIT: 3eb690757a15094dea333bdc2ca142fe3730fcb2
+  REPAIR_COMMIT: 7b7e25c184316d3edc155351544f1426f143207b
   BASE_SHA: 5c49374d5fa54858108cffe437520b793d0cfeb4
   CANDIDATE_SUBTREE: 108629fc91c1e03454c18b14a6b557c2b62898d4
   WORKFLOW_PATH: .github/workflows/order-073-remote-candidate-verification.yml
   LOCK_EVIDENCE_PATH: .github/evidence/order-073/canary-package-lock.order057.json
   TARGET_BASE: feat/zep-remote-release-candidate-v1
+  EXPECTED_CANARY_LOCK_BLOB_SHA: dadb1df67d0feff4912b440ea491f92aec4e5ad4
   EXPECTED_CANARY_LOCK_SHA256: c894790ca37a703f17ed9f190d078c0499578568d4284f4aae6162633eaa47e2
+  EXPECTED_CANARY_LOCK_SIZE: "49955"
   CI: "true"
   NO_COLOR: "1"
   NPM_CONFIG_UPDATE_NOTIFIER: "false"
@@ -45,7 +49,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 4
+          fetch-depth: 6
           persist-credentials: false
 
       - name: Set up pinned Node
@@ -61,13 +65,15 @@ jobs:
           evidence="$RUNNER_TEMP/order073-primary"
           mkdir -p "$evidence/commands"
           head_sha="$(git rev-parse HEAD)"
-          test "$(git rev-parse HEAD^)" = "$FIRST_EVIDENCE_COMMIT"
+          test "$(git rev-parse HEAD^)" = "$REPAIR_COMMIT"
+          test "$(git rev-parse "$REPAIR_COMMIT^")" = "$PLACEHOLDER_COMMIT"
+          test "$(git rev-parse "$PLACEHOLDER_COMMIT^")" = "$FIRST_EVIDENCE_COMMIT"
           test "$(git rev-parse "$FIRST_EVIDENCE_COMMIT^")" = "$IMPLEMENTATION_COMMIT"
           test "$(git rev-parse "$IMPLEMENTATION_COMMIT^")" = "$BASE_SHA"
-          test "$(git rev-list --count "$BASE_SHA..HEAD")" = "3"
-          test "$(git rev-parse HEAD:candidate/order-072)" = "$CANDIDATE_SUBTREE"
-          test "$(git rev-parse "$FIRST_EVIDENCE_COMMIT:candidate/order-072")" = "$CANDIDATE_SUBTREE"
-          test "$(git rev-parse "$IMPLEMENTATION_COMMIT:candidate/order-072")" = "$CANDIDATE_SUBTREE"
+          test "$(git rev-list --count "$BASE_SHA..HEAD")" = "5"
+          for commit in "$IMPLEMENTATION_COMMIT" "$FIRST_EVIDENCE_COMMIT" "$PLACEHOLDER_COMMIT" "$REPAIR_COMMIT" HEAD; do
+            test "$(git rev-parse "$commit:candidate/order-072")" = "$CANDIDATE_SUBTREE"
+          done
 
           git diff --name-only "$BASE_SHA..$IMPLEMENTATION_COMMIT" | tee "$evidence/implementation-paths.txt"
           test "$(wc -l < "$evidence/implementation-paths.txt")" = "46"
@@ -76,18 +82,52 @@ jobs:
           git diff --name-only "$IMPLEMENTATION_COMMIT..$FIRST_EVIDENCE_COMMIT" | tee "$evidence/first-evidence-paths.txt"
           test "$(cat "$evidence/first-evidence-paths.txt")" = "$WORKFLOW_PATH"
 
-          git diff --name-only "$FIRST_EVIDENCE_COMMIT..HEAD" | LC_ALL=C sort | tee "$evidence/repair-paths.txt"
+          git diff --name-only "$FIRST_EVIDENCE_COMMIT..$PLACEHOLDER_COMMIT" | tee "$evidence/placeholder-paths.txt"
+          test "$(cat "$evidence/placeholder-paths.txt")" = "$LOCK_EVIDENCE_PATH"
+          test "$(git cat-file -s "$PLACEHOLDER_COMMIT:$LOCK_EVIDENCE_PATH")" = "11"
+          test "$(git show "$PLACEHOLDER_COMMIT:$LOCK_EVIDENCE_PATH")" = "placeholder"
+
+          git diff --name-only "$PLACEHOLDER_COMMIT..$REPAIR_COMMIT" | LC_ALL=C sort | tee "$evidence/repair-paths.txt"
           printf '%s\n%s\n' "$LOCK_EVIDENCE_PATH" "$WORKFLOW_PATH" | LC_ALL=C sort > "$evidence/expected-repair-paths.txt"
           diff -u "$evidence/expected-repair-paths.txt" "$evidence/repair-paths.txt"
+
+          git diff --name-only "$REPAIR_COMMIT..HEAD" | tee "$evidence/order073t-paths.txt"
+          test "$(cat "$evidence/order073t-paths.txt")" = "$WORKFLOW_PATH"
+
+          git diff --name-only "$IMPLEMENTATION_COMMIT..HEAD" | LC_ALL=C sort | tee "$evidence/cumulative-evidence-paths.txt"
+          diff -u "$evidence/expected-repair-paths.txt" "$evidence/cumulative-evidence-paths.txt"
+
+          test "$(git rev-parse "HEAD:$LOCK_EVIDENCE_PATH")" = "$EXPECTED_CANARY_LOCK_BLOB_SHA"
+          test "$(sha256sum "$LOCK_EVIDENCE_PATH" | cut -d' ' -f1)" = "$EXPECTED_CANARY_LOCK_SHA256"
+          test "$(wc -c < "$LOCK_EVIDENCE_PATH")" = "$EXPECTED_CANARY_LOCK_SIZE"
+          ! grep -Fxq 'placeholder' "$LOCK_EVIDENCE_PATH"
+
+          {
+            printf 'PLACEHOLDER_COMMIT=%s\n' "$PLACEHOLDER_COMMIT"
+            printf 'PLACEHOLDER_PATH=%s\n' "$LOCK_EVIDENCE_PATH"
+            printf 'PLACEHOLDER_CONTENT=placeholder\n'
+            printf 'PLACEHOLDER_SIZE=11\n'
+            printf 'REPAIR_COMMIT=%s\n' "$REPAIR_COMMIT"
+            printf 'LOCK_BLOB_SHA=%s\n' "$(git rev-parse "HEAD:$LOCK_EVIDENCE_PATH")"
+            printf 'LOCK_SHA256=%s\n' "$(sha256sum "$LOCK_EVIDENCE_PATH" | cut -d' ' -f1)"
+          } > "$evidence/append-only-ledger.txt"
 
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             test "$(jq -r '.pull_request.base.ref' "$GITHUB_EVENT_PATH")" = "$TARGET_BASE"
             test "$(jq -r '.pull_request.head.sha' "$GITHUB_EVENT_PATH")" = "$head_sha"
           fi
           test -z "$(git status --porcelain)"
-          printf 'HEAD=%s\nPARENT=%s\nFIRST_EVIDENCE=%s\nIMPLEMENTATION=%s\nBASE=%s\nCANDIDATE_SUBTREE=%s\n' \
-            "$head_sha" "$(git rev-parse HEAD^)" "$FIRST_EVIDENCE_COMMIT" "$IMPLEMENTATION_COMMIT" "$BASE_SHA" "$CANDIDATE_SUBTREE" \
-            > "$evidence/context.txt"
+          {
+            printf 'HEAD=%s\n' "$head_sha"
+            printf 'PARENT=%s\n' "$(git rev-parse HEAD^)"
+            printf 'REPAIR=%s\n' "$REPAIR_COMMIT"
+            printf 'PLACEHOLDER=%s\n' "$PLACEHOLDER_COMMIT"
+            printf 'FIRST_EVIDENCE=%s\n' "$FIRST_EVIDENCE_COMMIT"
+            printf 'IMPLEMENTATION=%s\n' "$IMPLEMENTATION_COMMIT"
+            printf 'BASE=%s\n' "$BASE_SHA"
+            printf 'COMMITS_OVER_BASE=5\n'
+            printf 'CANDIDATE_SUBTREE=%s\n' "$CANDIDATE_SUBTREE"
+          } > "$evidence/context.txt"
 
       - name: Install immutable historical canary toolchain
         shell: bash
@@ -95,16 +135,27 @@ jobs:
           set -euo pipefail
           evidence="$RUNNER_TEMP/order073-primary"
           committed_lock="$GITHUB_WORKSPACE/$LOCK_EVIDENCE_PATH"
+          committed_size="$(wc -c < "$committed_lock")"
           committed_sha="$(sha256sum "$committed_lock" | cut -d' ' -f1)"
+          test "$committed_size" = "$EXPECTED_CANARY_LOCK_SIZE"
           test "$committed_sha" = "$EXPECTED_CANARY_LOCK_SHA256"
           cp "$committed_lock" canary/zep-core-canary/package-lock.json
+          cmp -s "$committed_lock" canary/zep-core-canary/package-lock.json
+          copied_size="$(wc -c < canary/zep-core-canary/package-lock.json)"
           copied_sha="$(sha256sum canary/zep-core-canary/package-lock.json | cut -d' ' -f1)"
+          test "$copied_size" = "$EXPECTED_CANARY_LOCK_SIZE"
           test "$copied_sha" = "$EXPECTED_CANARY_LOCK_SHA256"
           cd canary/zep-core-canary
           npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee "$evidence/commands/canary-npm-ci.log"
-          printf 'NODE=%s\nNPM=%s\nTSC=%s\nCOMMITTED_LOCK_SHA256=%s\nCOPIED_LOCK_SHA256=%s\n' \
-            "$(node --version)" "$(npm --version)" "$(npx --no-install tsc --version)" "$committed_sha" "$copied_sha" \
-            > "$evidence/toolchain.txt"
+          {
+            printf 'NODE=%s\n' "$(node --version)"
+            printf 'NPM=%s\n' "$(npm --version)"
+            printf 'TSC=%s\n' "$(npx --no-install tsc --version)"
+            printf 'COMMITTED_LOCK_SIZE=%s\n' "$committed_size"
+            printf 'COMMITTED_LOCK_SHA256=%s\n' "$committed_sha"
+            printf 'COPIED_LOCK_SIZE=%s\n' "$copied_size"
+            printf 'COPIED_LOCK_SHA256=%s\n' "$copied_sha"
+          } > "$evidence/toolchain.txt"
           echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Install pinned browser harness
@@ -192,7 +243,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 4
+          fetch-depth: 6
           persist-credentials: false
 
       - name: Set up pinned Node
@@ -207,31 +258,84 @@ jobs:
           set -euo pipefail
           evidence="$RUNNER_TEMP/order073-reproduce"
           mkdir -p "$evidence/commands"
-          test "$(git rev-parse HEAD^)" = "$FIRST_EVIDENCE_COMMIT"
+          head_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$REPAIR_COMMIT"
+          test "$(git rev-parse "$REPAIR_COMMIT^")" = "$PLACEHOLDER_COMMIT"
+          test "$(git rev-parse "$PLACEHOLDER_COMMIT^")" = "$FIRST_EVIDENCE_COMMIT"
           test "$(git rev-parse "$FIRST_EVIDENCE_COMMIT^")" = "$IMPLEMENTATION_COMMIT"
           test "$(git rev-parse "$IMPLEMENTATION_COMMIT^")" = "$BASE_SHA"
-          test "$(git rev-list --count "$BASE_SHA..HEAD")" = "3"
-          test "$(git rev-parse HEAD:candidate/order-072)" = "$CANDIDATE_SUBTREE"
-          test "$(git rev-parse "$IMPLEMENTATION_COMMIT:candidate/order-072")" = "$CANDIDATE_SUBTREE"
+          test "$(git rev-list --count "$BASE_SHA..HEAD")" = "5"
+          for commit in "$IMPLEMENTATION_COMMIT" "$FIRST_EVIDENCE_COMMIT" "$PLACEHOLDER_COMMIT" "$REPAIR_COMMIT" HEAD; do
+            test "$(git rev-parse "$commit:candidate/order-072")" = "$CANDIDATE_SUBTREE"
+          done
 
           git diff --name-only "$BASE_SHA..$IMPLEMENTATION_COMMIT" | tee "$evidence/implementation-paths.txt"
           test "$(wc -l < "$evidence/implementation-paths.txt")" = "46"
           test -z "$(grep -Ev '^candidate/order-072/' "$evidence/implementation-paths.txt" || true)"
-          git diff --name-only "$FIRST_EVIDENCE_COMMIT..HEAD" | LC_ALL=C sort | tee "$evidence/repair-paths.txt"
+
+          git diff --name-only "$IMPLEMENTATION_COMMIT..$FIRST_EVIDENCE_COMMIT" | tee "$evidence/first-evidence-paths.txt"
+          test "$(cat "$evidence/first-evidence-paths.txt")" = "$WORKFLOW_PATH"
+
+          git diff --name-only "$FIRST_EVIDENCE_COMMIT..$PLACEHOLDER_COMMIT" | tee "$evidence/placeholder-paths.txt"
+          test "$(cat "$evidence/placeholder-paths.txt")" = "$LOCK_EVIDENCE_PATH"
+          test "$(git cat-file -s "$PLACEHOLDER_COMMIT:$LOCK_EVIDENCE_PATH")" = "11"
+          test "$(git show "$PLACEHOLDER_COMMIT:$LOCK_EVIDENCE_PATH")" = "placeholder"
+
+          git diff --name-only "$PLACEHOLDER_COMMIT..$REPAIR_COMMIT" | LC_ALL=C sort | tee "$evidence/repair-paths.txt"
           printf '%s\n%s\n' "$LOCK_EVIDENCE_PATH" "$WORKFLOW_PATH" | LC_ALL=C sort > "$evidence/expected-repair-paths.txt"
           diff -u "$evidence/expected-repair-paths.txt" "$evidence/repair-paths.txt"
 
+          git diff --name-only "$REPAIR_COMMIT..HEAD" | tee "$evidence/order073t-paths.txt"
+          test "$(cat "$evidence/order073t-paths.txt")" = "$WORKFLOW_PATH"
+
+          git diff --name-only "$IMPLEMENTATION_COMMIT..HEAD" | LC_ALL=C sort | tee "$evidence/cumulative-evidence-paths.txt"
+          diff -u "$evidence/expected-repair-paths.txt" "$evidence/cumulative-evidence-paths.txt"
+
+          test "$(git rev-parse "HEAD:$LOCK_EVIDENCE_PATH")" = "$EXPECTED_CANARY_LOCK_BLOB_SHA"
+          test "$(sha256sum "$LOCK_EVIDENCE_PATH" | cut -d' ' -f1)" = "$EXPECTED_CANARY_LOCK_SHA256"
+          test "$(wc -c < "$LOCK_EVIDENCE_PATH")" = "$EXPECTED_CANARY_LOCK_SIZE"
+          ! grep -Fxq 'placeholder' "$LOCK_EVIDENCE_PATH"
+
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            test "$(jq -r '.pull_request.base.ref' "$GITHUB_EVENT_PATH")" = "$TARGET_BASE"
+            test "$(jq -r '.pull_request.head.sha' "$GITHUB_EVENT_PATH")" = "$head_sha"
+          fi
+          test -z "$(git status --porcelain)"
+          {
+            printf 'HEAD=%s\n' "$head_sha"
+            printf 'PARENT=%s\n' "$(git rev-parse HEAD^)"
+            printf 'REPAIR=%s\n' "$REPAIR_COMMIT"
+            printf 'PLACEHOLDER=%s\n' "$PLACEHOLDER_COMMIT"
+            printf 'FIRST_EVIDENCE=%s\n' "$FIRST_EVIDENCE_COMMIT"
+            printf 'IMPLEMENTATION=%s\n' "$IMPLEMENTATION_COMMIT"
+            printf 'BASE=%s\n' "$BASE_SHA"
+            printf 'COMMITS_OVER_BASE=5\n'
+            printf 'CANDIDATE_SUBTREE=%s\n' "$CANDIDATE_SUBTREE"
+            printf 'LOCK_BLOB_SHA=%s\n' "$(git rev-parse "HEAD:$LOCK_EVIDENCE_PATH")"
+          } > "$evidence/context.txt"
+
           committed_lock="$GITHUB_WORKSPACE/$LOCK_EVIDENCE_PATH"
+          committed_size="$(wc -c < "$committed_lock")"
           committed_sha="$(sha256sum "$committed_lock" | cut -d' ' -f1)"
+          test "$committed_size" = "$EXPECTED_CANARY_LOCK_SIZE"
           test "$committed_sha" = "$EXPECTED_CANARY_LOCK_SHA256"
           cp "$committed_lock" canary/zep-core-canary/package-lock.json
+          cmp -s "$committed_lock" canary/zep-core-canary/package-lock.json
+          copied_size="$(wc -c < canary/zep-core-canary/package-lock.json)"
           copied_sha="$(sha256sum canary/zep-core-canary/package-lock.json | cut -d' ' -f1)"
+          test "$copied_size" = "$EXPECTED_CANARY_LOCK_SIZE"
           test "$copied_sha" = "$EXPECTED_CANARY_LOCK_SHA256"
           cd canary/zep-core-canary
           npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee "$evidence/commands/canary-npm-ci.log"
-          printf 'NODE=%s\nNPM=%s\nTSC=%s\nCOMMITTED_LOCK_SHA256=%s\nCOPIED_LOCK_SHA256=%s\n' \
-            "$(node --version)" "$(npm --version)" "$(npx --no-install tsc --version)" "$committed_sha" "$copied_sha" \
-            > "$evidence/toolchain.txt"
+          {
+            printf 'NODE=%s\n' "$(node --version)"
+            printf 'NPM=%s\n' "$(npm --version)"
+            printf 'TSC=%s\n' "$(npx --no-install tsc --version)"
+            printf 'COMMITTED_LOCK_SIZE=%s\n' "$committed_size"
+            printf 'COMMITTED_LOCK_SHA256=%s\n' "$committed_sha"
+            printf 'COPIED_LOCK_SIZE=%s\n' "$copied_size"
+            printf 'COPIED_LOCK_SHA256=%s\n' "$copied_sha"
+          } > "$evidence/toolchain.txt"
           echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Execute independent non-browser matrix
@@ -287,14 +391,14 @@ jobs:
           cp -a "$RUNNER_TEMP/order073-primary/." "$final/primary/"
           cp -a "$reproduce/." "$final/reproduce/"
           cat > "$final/result.json" <<JSON
-          {"ok":true,"orderId":"ZUNGUN-AUD-ARQ-REMOTE-INDEPENDENT-VERIFICATION-073R","head":"$(git rev-parse HEAD)","historicalLockSha256":"$EXPECTED_CANARY_LOCK_SHA256","candidateSubtreeJob1":"${{ needs.primary-clean-runner.outputs.candidate_subtree }}","candidateSubtreeJob2":"$(cat "$reproduce/candidate-subtree.txt")","packageSha256Job1":"${{ needs.primary-clean-runner.outputs.package_sha256 }}","packageSha256Job2":"$(cat "$reproduce/package.sha256")","hashesMatch":true,"jobs":"2/2_PASS","merge":false,"deploy":false,"release":false,"canonical":false}
+          {"ok":true,"orderId":"ZUNGUN-AUD-ARQ-REMOTE-INDEPENDENT-VERIFICATION-073T","head":"$(git rev-parse HEAD)","historicalLockSha256":"$EXPECTED_CANARY_LOCK_SHA256","candidateSubtreeJob1":"${{ needs.primary-clean-runner.outputs.candidate_subtree }}","candidateSubtreeJob2":"$(cat "$reproduce/candidate-subtree.txt")","packageSha256Job1":"${{ needs.primary-clean-runner.outputs.package_sha256 }}","packageSha256Job2":"$(cat "$reproduce/package.sha256")","hashesMatch":true,"jobs":"2/2_PASS","merge":false,"deploy":false,"release":false,"canonical":false}
           JSON
           find "$final" -type f ! -name SHA256SUMS.txt -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$final/SHA256SUMS.txt"
 
-      - name: Upload bounded Order 073R evidence
+      - name: Upload bounded Order 073T evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: zungun-order073r-remote-ci-${{ github.run_id }}
+          name: zungun-order073t-remote-ci-${{ github.run_id }}
           path: ${{ runner.temp }}/order073-final
           if-no-files-found: error
           retention-days: 14
