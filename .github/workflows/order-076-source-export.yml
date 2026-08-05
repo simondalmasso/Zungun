@@ -1,0 +1,38 @@
+name: Order 076 source export
+
+"on":
+  push:
+    branches:
+      - feat/zungun-full-project-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify and archive exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$RUNNER_TEMP/order076-source"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/order076-source/zungun-source.tar.gz" HEAD
+          git rev-parse HEAD > "$RUNNER_TEMP/order076-source/HEAD.txt"
+          git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/order076-source/TREE.txt"
+          sha256sum "$RUNNER_TEMP/order076-source"/* > "$RUNNER_TEMP/order076-source/MANIFEST.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order076-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/order076-source
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
