@@ -1,0 +1,63 @@
+name: Order 076 apply corrective payload
+
+"on":
+  push:
+    branches:
+      - feat/zungun-full-project-v1
+    paths:
+      - .github/order076-payload/READY
+
+permissions:
+  contents: write
+
+concurrency:
+  group: order-076-apply-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Reconstruct and verify payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/order076-payload/chunk-* > "$RUNNER_TEMP/order076.b64"
+          base64 --decode "$RUNNER_TEMP/order076.b64" > "$RUNNER_TEMP/order076.tar.gz"
+          printf '%s  %s\n' '2651be375d6ea94efeae058c0164e231892f8894ca1e0fda80541489700f1a68' "$RUNNER_TEMP/order076.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/order076.tar.gz" -C .
+          rm -f .github/workflows/order-076-source-export.yml
+          rm -rf .github/order076-payload
+          rm -f .github/workflows/order-076-apply.yml
+          test -z "$(git diff --name-only HEAD -- canary/zep-core-canary/vendor/zep-core candidate/order-072)"
+      - name: Verify corrective TypeScript system before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run test:resilience
+          npm run demo:field-service
+          npm run verify:docs
+          npm run verify:no-placeholders
+          npm run verify:secrets
+      - name: Commit exact corrective state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Simon Dalmasso'
+          git config user.email 'simondalmasso44@gmail.com'
+          git add -A
+          test -n "$(git status --porcelain)"
+          test -z "$(git diff --cached --name-only -- canary/zep-core-canary/vendor/zep-core candidate/order-072)"
+          git commit -m 'fix(order-076): implement evidence-safe corrective system'
+          git push origin HEAD:feat/zungun-full-project-v1
