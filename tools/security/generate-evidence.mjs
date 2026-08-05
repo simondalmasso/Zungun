@@ -37,19 +37,26 @@ for (const file of gradleLockFiles) {
 }
 if (gradleCoordinates.size === 0) throw new Error('GRADLE_GRAPH_EMPTY');
 
-const licenseRules = [
-  [/^(androidx\.|com\.android\.|com\.google\.|org\.jetbrains\.|org\.jetbrains\.kotlin)/, 'Apache-2.0'],
-  [/^junit:junit:/, 'EPL-1.0'],
-  [/^org\.hamcrest:/, 'BSD-3-Clause'],
-  [/^org\.ow2\.asm:/, 'BSD-3-Clause'],
-  [/^org\.checkerframework:/, 'MIT'],
-  [/^com\.squareup:/, 'Apache-2.0'],
-  [/^com\.google\.code\.findbugs:/, 'Apache-2.0'],
-];
+const mavenLicenseCatalogPath = 'tools/security/maven-license-catalog.json';
+const mavenLicenseCatalog = JSON.parse(readFileSync(mavenLicenseCatalogPath, 'utf8'));
+if (mavenLicenseCatalog?.policy?.matching !== 'exact-group-and-artifact'
+  || mavenLicenseCatalog?.policy?.unknownDenied !== true
+  || mavenLicenseCatalog?.policy?.wildcardsAllowed !== false) {
+  throw new Error('MAVEN_LICENSE_CATALOG_POLICY_INVALID');
+}
+const exactMavenLicenses = mavenLicenseCatalog.components ?? {};
 const gradleComponents = [...gradleCoordinates].sort().map((coordinate) => {
   const [group, name, version] = coordinate.split(':');
-  const license = licenseRules.find(([pattern]) => pattern.test(coordinate))?.[1] ?? 'UNKNOWN';
-  return { type: 'library', ecosystem: 'Maven', group, name, version, license, coordinate };
+  const catalogKey = `${group}:${name}`;
+  const license = exactMavenLicenses[catalogKey] ?? 'UNKNOWN';
+  const repositoryBase = /^(androidx\.|com\.android\.tools|com\.google\.testing\.platform)/.test(group)
+    ? 'https://dl.google.com/dl/android/maven2'
+    : 'https://repo1.maven.org/maven2';
+  const metadataUrl = `${repositoryBase}/${group.replaceAll('.', '/')}/${name}/${version}/${name}-${version}.pom`;
+  return {
+    type: 'library', ecosystem: 'Maven', group, name, version, license, coordinate,
+    licenseEvidence: license === 'UNKNOWN' ? null : { basis: 'publisher-pom-license', metadataUrl },
+  };
 });
 const unknownLicenses = [...npmComponents, ...gradleComponents].filter((component) => component.license === 'UNKNOWN');
 if (unknownLicenses.length > 0) throw new Error(`UNKNOWN_LICENSES:${unknownLicenses.map((item) => item.name).join(',')}`);
@@ -89,7 +96,9 @@ writeFileSync(`${out}/sbom.cdx.json`, `${JSON.stringify(sbom, null, 2)}\n`);
 writeFileSync(`${out}/licenses.json`, `${JSON.stringify({
   schema: 'zungun.licenses.v2',
   policy: { unknownDenied: true, componentCount: components.length },
-  components: components.map(({ ecosystem, name, version, license }) => ({ ecosystem, name, version, license })),
+  components: components.map(({ ecosystem, name, version, license, licenseEvidence }) => ({
+    ecosystem, name, version, license, licenseEvidence: licenseEvidence ?? null,
+  })),
 }, null, 2)}\n`);
 const provenance = {
   schema: 'zungun.provenance.v2',
@@ -102,6 +111,7 @@ const provenance = {
   npmLockSha256: sha256(readFileSync('package-lock.json')),
   gradleLockFiles: gradleLockFiles.map((file) => ({ file, sha256: sha256(readFileSync(file)) })),
   gradleVerificationMetadataSha256: sha256(verificationBytes),
+  mavenLicenseCatalogSha256: sha256(readFileSync(mavenLicenseCatalogPath)),
   githubRunId: process.env.GITHUB_RUN_ID ?? null,
   githubWorkflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null,
 };
@@ -130,6 +140,7 @@ const manifests = [
   'android/build.gradle.kts',
   'android/settings.gradle.kts',
   'android/gradle/verification-metadata.xml',
+  mavenLicenseCatalogPath,
   ...gradleLockFiles,
 ].map((file) => ({ file, sha256: sha256(readFileSync(file)), size: statSync(file).size }));
 writeFileSync(`${out}/dependency-provenance.json`, `${JSON.stringify({

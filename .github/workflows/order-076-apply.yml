@@ -8,7 +8,7 @@ name: Order 076B apply real E2E payload
       - .github/order076b-payload/READY
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: order-076b-apply-${{ github.ref }}
@@ -23,7 +23,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Reconstruct and verify bounded payload
         shell: bash
@@ -115,14 +115,9 @@ jobs:
           npm run verify:security-evidence
           npm audit --registry=https://registry.npmjs.org --audit-level=high --omit=optional
 
-      - name: Commit bounded corrective state
+      - name: Assert read-only payload audit
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'Simon Dalmasso'
-          git config user.email 'simondalmasso44@gmail.com'
-          git add -A
           test -n "$(git status --porcelain)"
-          test -z "$(git diff --cached --name-only -- .github/workflows canary/zep-core-canary/vendor/zep-core candidate/order-072)"
-          git commit -m 'test(order-076b): add real Android receiver recovery matrix'
-          git push origin HEAD:feat/zungun-full-project-v1
+          echo "Payload verified transiently; ORDER 077 forbids CI self-push."

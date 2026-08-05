@@ -148,9 +148,13 @@ try:
 
         page.fill('#token', TOKENS['reader'])
         page.locator('#authForm button[type=submit]').click()
-        page.wait_for_selector(f'[data-operation="{primary_operation}"]', timeout=15_000)
         page.wait_for_function("document.querySelector('#observedCount').textContent === '26'")
         assert page.locator('#nextPage').is_enabled()
+        # The target is intentionally older than the first 25-row page. Locate the exact
+        # operation through the backend-backed query instead of assuming first-page visibility.
+        page.fill('#query', primary_operation)
+        page.wait_for_selector(f'[data-operation="{primary_operation}"]', timeout=15_000)
+        assert page.locator('[data-operation]').count() == 1
         page.locator(f'[data-operation="{primary_operation}"]').click()
         page.wait_for_selector('.timeline', timeout=10_000)
         assert page.locator('h1').inner_text() == 'Control Room'
@@ -165,6 +169,7 @@ try:
 
         page.fill('#token', TOKENS['reviewer'])
         page.locator('#authForm button[type=submit]').click()
+        page.fill('#query', primary_operation)
         page.wait_for_selector(f'[data-operation="{primary_operation}"]')
         page.locator(f'[data-operation="{primary_operation}"]').click()
         page.wait_for_selector('#reviewForm:not([hidden])')

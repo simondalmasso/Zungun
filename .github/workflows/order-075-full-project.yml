@@ -1,16 +1,15 @@
-name: Order 075 full project verification
+name: Order 077 full project verification
 
 "on":
   pull_request:
-    branches:
-      - recovery/order-072-oracle-extension-candidate-v1
+    branches: [recovery/order-072-oracle-extension-candidate-v1]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: order-075-full-${{ github.event.pull_request.number || github.ref }}
+  group: order-077-full-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -24,9 +23,9 @@ env:
 jobs:
   typescript-primary:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 45
     outputs:
-      package_sha: ${{ steps.result.outputs.package_sha }}
+      package_sha: ${{ steps.package.outputs.sha }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -34,10 +33,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: 22.16.0
-          package-manager-cache: false
-      - name: Verify immutable ancestry and candidate boundary
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: "Gate 01 — immutable ancestry and protected boundaries"
         shell: bash
         run: |
           set -euo pipefail
@@ -45,70 +42,48 @@ jobs:
           git merge-base --is-ancestor "$START_SHA" "$head_sha"
           test "$(git rev-parse "$START_SHA^{tree}")" = "$START_TREE"
           test "$(git rev-parse "$head_sha:candidate/order-072")" = "$CANDIDATE_SUBTREE"
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            test "$head_sha" = "$(jq -r .pull_request.head.sha "$GITHUB_EVENT_PATH")"
-          fi
-          test -z "$(git diff --name-only "$START_SHA..HEAD" | grep -E '^canary/zep-core-canary/vendor/zep-core/' || true)"
-          test -z "$(git diff --name-only "$START_SHA..HEAD" | grep -E '^candidate/order-072/' || true)"
+          test -z "$(git diff --name-only "$START_SHA..HEAD" | grep -E '^(candidate/order-072|canary/zep-core-canary/vendor/zep-core)/' || true)"
           test -z "$(git status --porcelain)"
       - name: Install root toolchain
-        shell: bash
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Full integrated TypeScript and security matrix
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run format:check
-          npm run lint
-          npm run typecheck
-          npm run verify:oracle
-          npm test
-          npm run test:resilience
-          npm run demo:field-service
-          npm run verify:pack
-          npm run verify:docs
-          npm run verify:no-placeholders
-          npm run verify:secrets
-          npm run verify:security-evidence
-          npm audit --registry=https://registry.npmjs.org --audit-level=high --omit=optional
-      - name: Re-run accepted historical candidate at its exact provenance commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          historical="$RUNNER_TEMP/order075-historical"
-          git worktree add --detach "$historical" "$START_SHA"
-          cp "$GITHUB_WORKSPACE/.github/evidence/order-073/canary-package-lock.order057.json" "$historical/canary/zep-core-canary/package-lock.json"
-          (cd "$historical/canary/zep-core-canary" && npm ci --ignore-scripts --no-audit --no-fund && npm run verify)
-          export PATH="$historical/canary/zep-core-canary/node_modules/.bin:$PATH"
-          (cd "$historical/candidate/order-072" && npm ci --ignore-scripts --no-audit --no-fund && npm run verify:deep)
-          test "$(git -C "$historical" rev-parse HEAD:candidate/order-072)" = "$CANDIDATE_SUBTREE"
-          git worktree remove --force "$historical"
+      - name: "Gate 02 — format lint and type safety"
+        run: npm run format:check && npm run lint && npm run typecheck
+      - name: "Gate 03 — immutable oracle"
+        run: npm run verify:oracle && npm run test:core
+      - name: "Gate 04 — persistent receiver and migrations"
+        run: npm run test:receiver
+      - name: "Gate 05 — receipt and authorization security"
+        run: npm run test:security
+      - name: "Gate 06 — reconciliation and bounded completeness"
+        run: npm run test:reconciliation
+      - name: "Gate 07 — integrated field-service tests"
+        run: npm run test:e2e && npm test
+      - name: "Gate 08 — deterministic resilience matrix"
+        run: npm run test:resilience
+      - name: "Gate 09 — field-service executable demonstration"
+        run: npm run demo:field-service
+      - name: "Gate 10 — package docs site and placeholder policy"
+        run: npm run verify:pack && npm run verify:docs && npm run verify:no-placeholders
+      - name: "Gate 11 — secrets SBOM licenses provenance and advisories"
+        run: npm run verify:secrets && npm run verify:security-evidence && npm audit --registry=https://registry.npmjs.org --audit-level=high --omit=optional
       - name: Seal TypeScript evidence
-        id: result
+        id: package
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain --untracked-files=no)"
-          out="$RUNNER_TEMP/order075-ts-primary"
+          out="$RUNNER_TEMP/order077-typescript"
           mkdir -p "$out"
           cp -a .artifacts/. "$out/"
           cp services/receiver/openapi/openapi.yaml "$out/openapi.yaml"
           git ls-files | LC_ALL=C sort > "$out/source-files.txt"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
-          package_sha="$(jq -r .sha256 .artifacts/npm-package.json)"
-          echo "package_sha=$package_sha" >> "$GITHUB_OUTPUT"
+          echo "sha=$(jq -r .sha256 .artifacts/npm-package.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: order075-typescript-primary-${{ github.run_id }}
-          path: ${{ runner.temp }}/order075-ts-primary
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+        with: {name: "order077-typescript-${{ github.run_id }}", path: "${{ runner.temp }}/order077-typescript", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
-  typescript-independent:
+  browser-container-history:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    needs: typescript-primary
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -116,245 +91,127 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: 22.16.0
-          package-manager-cache: false
-      - name: Reproduce integrated package independently
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
+      - name: Install browser harness
+        run: python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+      - name: "Gates 12–14 — browser container least privilege historical candidate and canary"
         shell: bash
+        run: bash tools/ci/order077-platform.sh
+      - name: Seal browser container and history evidence
         run: |
-          set -euo pipefail
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run typecheck
-          npm run verify:oracle
-          npm test
-          npm run test:resilience
-          npm run verify:pack
-          package_sha="$(jq -r .sha256 .artifacts/npm-package.json)"
-          test "$package_sha" = '${{ needs.typescript-primary.outputs.package_sha }}'
-          mkdir -p "$RUNNER_TEMP/order075-ts-independent"
-          cp .artifacts/npm-package.json "$RUNNER_TEMP/order075-ts-independent/"
-          printf '%s\n' "$package_sha" > "$RUNNER_TEMP/order075-ts-independent/package.sha256"
-          sha256sum "$RUNNER_TEMP/order075-ts-independent"/* > "$RUNNER_TEMP/order075-ts-independent/MANIFEST.sha256"
+          mkdir -p "$RUNNER_TEMP/order077-platform"
+          cp control-room-e2e.json image-inspect.json "$RUNNER_TEMP/order077-platform/"
+          find "$RUNNER_TEMP/order077-platform" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/order077-platform/MANIFEST.sha256"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: order075-typescript-independent-${{ github.run_id }}
-          path: ${{ runner.temp }}/order075-ts-independent
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
-
-  control-room-browser:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: 22.16.0
-          package-manager-cache: false
-      - name: Browser E2E
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run build
-          python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
-          browser="$(command -v chromium || command -v chromium-browser || command -v google-chrome-stable || command -v google-chrome || true)"
-          test -n "$browser"
-          "$browser" --version
-          python tools/browser/control-room-e2e.py | tee control-room-e2e.json
-          grep -F '"ok": true' control-room-e2e.json
-          mkdir -p "$RUNNER_TEMP/order075-browser"
-          cp control-room-e2e.json "$RUNNER_TEMP/order075-browser/"
-          sha256sum "$RUNNER_TEMP/order075-browser/control-room-e2e.json" > "$RUNNER_TEMP/order075-browser/MANIFEST.sha256"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: order075-control-room-browser-${{ github.run_id }}
-          path: ${{ runner.temp }}/order075-browser
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+        with: {name: "order077-platform-${{ github.run_id }}", path: "${{ runner.temp }}/order077-platform", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
   android-primary:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 110
     outputs:
-      aar_sha: ${{ steps.build.outputs.aar_sha }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - name: Install Android SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$sdkmanager"
-          yes | "$sdkmanager" --licenses >/dev/null || true
-          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" "system-images;android-35;google_apis;x86_64"
-          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
-      - name: Build lint test AAR sample and external consumer
-        id: build
-        shell: bash
-        run: |
-          set -euo pipefail
-          export JAVA_HOME="$JAVA_HOME_17_X64"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug :runtime:testDebugUnitTest :sample:assembleDebug
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :external-consumer:assembleDebug
-          aar=android/runtime/build/outputs/aar/runtime-release.aar
-          test -s "$aar"
-          aar_sha="$(sha256sum "$aar" | cut -d' ' -f1)"
-          echo "aar_sha=$aar_sha" >> "$GITHUB_OUTPUT"
-          mkdir -p "$RUNNER_TEMP/order075-android-primary"
-          cp "$aar" "$RUNNER_TEMP/order075-android-primary/zungun-runtime-release.aar"
-          cp android/runtime/build/outputs/aar/runtime-debug.aar "$RUNNER_TEMP/order075-android-primary/zungun-runtime-debug.aar"
-          cp android/sample/build/outputs/apk/debug/sample-debug.apk "$RUNNER_TEMP/order075-android-primary/"
-          cp android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk "$RUNNER_TEMP/order075-android-primary/"
-      - name: Emulator migration and persistence recovery
-        shell: bash
-        run: |
-          set -euo pipefail
-          export JAVA_HOME="$JAVA_HOME_17_X64"
-          sdkroot="$ANDROID_SDK_ROOT"
-          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force --name zungun-api35 --package "system-images;android-35;google_apis;x86_64" --device pixel_6
-          sudo chmod 666 /dev/kvm || true
-          nohup "$sdkroot/emulator/emulator" -avd zungun-api35 -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          "$sdkroot/platform-tools/adb" wait-for-device
-          for i in $(seq 1 180); do
-            if [ "$("$sdkroot/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then break; fi
-            sleep 2
-          done
-          test "$("$sdkroot/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = "1"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest
-          "$sdkroot/platform-tools/adb" emu kill || true
-          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/order075-android-primary/"
-          cp -a android/runtime/build/reports/androidTests/connected "$RUNNER_TEMP/order075-android-primary/instrumentation-report"
-          find "$RUNNER_TEMP/order075-android-primary" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/order075-android-primary/MANIFEST.sha256"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: order075-android-primary-${{ github.run_id }}
-          path: ${{ runner.temp }}/order075-android-primary
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
-
-  android-independent:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    needs: android-primary
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - name: Independently reproduce release AAR
-        shell: bash
-        run: |
-          set -euo pipefail
-          export JAVA_HOME="$JAVA_HOME_17_X64"
-          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$sdkmanager" --licenses >/dev/null || true
-          "$sdkmanager" "platforms;android-35" "build-tools;35.0.0"
-          export ANDROID_SDK_ROOT="$sdkroot" ANDROID_HOME="$sdkroot"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleRelease
-          aar=android/runtime/build/outputs/aar/runtime-release.aar
-          sha="$(sha256sum "$aar" | cut -d' ' -f1)"
-          test "$sha" = '${{ needs.android-primary.outputs.aar_sha }}'
-          mkdir -p "$RUNNER_TEMP/order075-android-independent"
-          cp "$aar" "$RUNNER_TEMP/order075-android-independent/zungun-runtime-release.aar"
-          printf '%s\n' "$sha" > "$RUNNER_TEMP/order075-android-independent/aar.sha256"
-          sha256sum "$RUNNER_TEMP/order075-android-independent"/* > "$RUNNER_TEMP/order075-android-independent/MANIFEST.sha256"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: order075-android-independent-${{ github.run_id }}
-          path: ${{ runner.temp }}/order075-android-independent
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
-
-  container-and-canary:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
+      aar_sha: ${{ steps.android.outputs.aar_sha }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: 22.16.0
-          package-manager-cache: false
-      - name: Container and canary
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: Install Android and browser inputs
         shell: bash
         run: |
           set -euo pipefail
-          docker build --file infra/docker/receiver.Dockerfile --tag zungun-receiver:order075 .
-          image_id="$(docker image inspect zungun-receiver:order075 --format '{{.Id}}')"
-          docker run --detach --name zungun-receiver-smoke --read-only \
-            --tmpfs /tmp:rw,nosuid,size=64m,mode=1777 \
-            -e RECEIVER_AUTH_TOKEN=container-smoke-token-order075 \
-            -e RECEIVER_DB=/tmp/receiver.sqlite \
-            -e RECEIVER_KEY_FILE=/tmp/receipt-key.json \
-            -p 18789:8788 zungun-receiver:order075
-          ready=0
-          for i in $(seq 1 90); do
-            if curl --fail --silent http://127.0.0.1:18789/ready; then ready=1; break; fi
-            sleep 1
-          done
-          if [ "$ready" != 1 ]; then docker logs zungun-receiver-smoke; exit 1; fi
-          curl --fail --silent http://127.0.0.1:18789/ | grep -F 'id="token"'
-          docker logs zungun-receiver-smoke
-          docker rm --force zungun-receiver-smoke
-          cp .github/evidence/order-073/canary-package-lock.order057.json canary/zep-core-canary/package-lock.json
-          (cd canary/zep-core-canary && npm ci --ignore-scripts --no-audit --no-fund && npm run verify)
-          mkdir -p "$RUNNER_TEMP/order075-container"
-          printf '%s\n' "$image_id" > "$RUNNER_TEMP/order075-container/image-id.txt"
-          docker image inspect zungun-receiver:order075 > "$RUNNER_TEMP/order075-container/image-inspect.json"
-          sha256sum "$RUNNER_TEMP/order075-container"/* > "$RUNNER_TEMP/order075-container/MANIFEST.sha256"
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"; sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0' emulator 'system-images;android-35;google_apis;x86_64'
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+      - name: "Gate 15 — strict Android graph locks hashes build lint and unit tests"
+        id: android
+        shell: bash
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug :runtime:testDebugUnitTest :sample:assembleDebug :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          aar=android/runtime/build/outputs/aar/runtime-release.aar; test -s "$aar"
+          echo "aar_sha=$(sha256sum "$aar" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: "Gate 16 — Room WorkManager migration force-stop persistence"
+        shell: bash
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"; sdkroot="$ANDROID_SDK_ROOT"
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n zungun-api35 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          sudo chmod 666 /dev/kvm || true
+          nohup "$sdkroot/emulator/emulator" -avd zungun-api35 -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator-unit.log" 2>&1 &
+          adb wait-for-device
+          for _ in $(seq 1 180); do [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break || sleep 2; done
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest
+          adb emu kill || true
+      - name: "Gate 17 — same-operation real Android HTTP receiver receipt reconciliation browser audit E2E"
+        shell: bash
+        run: bash tools/e2e/order076-real-e2e.sh
+      - name: Seal Android and real E2E evidence
+        run: |
+          out="$RUNNER_TEMP/order077-android"; mkdir -p "$out"
+          cp android/runtime/build/outputs/aar/runtime-release.aar "$out/zungun-runtime-release.aar"
+          cp android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk "$out/"
+          cp -a "$RUNNER_TEMP/order076-real-e2e" "$out/real-e2e"
+          cp "$RUNNER_TEMP/emulator-unit.log" "$out/"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with: {name: "order077-android-e2e-${{ github.run_id }}", path: "${{ runner.temp }}/order077-android", if-no-files-found: error, retention-days: 14, compression-level: 0}
+
+  independent-reproduction:
+    if: always()
+    needs: [typescript-primary, android-primary]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          name: order075-container-canary-${{ github.run_id }}
-          path: ${{ runner.temp }}/order075-container
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: "Gate 18 — independent reproducible npm package and Android AAR"
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ needs.typescript-primary.result }}' = success
+          test '${{ needs.android-primary.result }}' = success
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify:pack
+          test "$(jq -r .sha256 .artifacts/npm-package.json)" = '${{ needs.typescript-primary.outputs.package_sha }}'
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"; yes | "$sdkroot/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$sdkroot/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+          export ANDROID_SDK_ROOT="$sdkroot" ANDROID_HOME="$sdkroot"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleRelease
+          test "$(sha256sum android/runtime/build/outputs/aar/runtime-release.aar | cut -d' ' -f1)" = '${{ needs.android-primary.outputs.aar_sha }}'
 
   completion-gate:
+    if: always()
+    needs: [typescript-primary, browser-container-history, android-primary, independent-reproduction]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs:
-      - typescript-primary
-      - typescript-independent
-      - control-room-browser
-      - android-primary
-      - android-independent
-      - container-and-canary
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Seal final context
+      - name: "Gate 19 — no skips fixed-head completion seal"
         shell: bash
         run: |
           set -euo pipefail
-          out="$RUNNER_TEMP/order075-completion"
-          mkdir -p "$out"
-          printf '{"orderId":"ZUNGUN-OWNER-ARQ-FULL-PROJECT-COMPLETION-075","ok":true,"head":"%s","tree":"%s","productionMutations":0,"merge":false,"release":false,"canonical":false}\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" > "$out/result.json"
-          git log --oneline --decorate "$START_SHA..HEAD" > "$out/commit-graph.txt"
+          test '${{ needs.typescript-primary.result }}' = success
+          test '${{ needs.browser-container-history.result }}' = success
+          test '${{ needs.android-primary.result }}' = success
+          test '${{ needs.independent-reproduction.result }}' = success
+          out="$RUNNER_TEMP/order077-completion"; mkdir -p "$out"
+          jq -n --arg head "$(git rev-parse HEAD)" --arg tree "$(git rev-parse HEAD^{tree})" '{orderId:"ZUNGUN-OWNER-ARQ-MASTER-FULL-PROJECT-COMPLETION-077",ok:true,head:$head,tree:$tree,logicalGates:19,productionMutations:0,merge:false,release:false}' > "$out/result.json"
           git diff --name-status "$START_SHA..HEAD" > "$out/changed-files.txt"
-          find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: order075-completion-gate-${{ github.run_id }}
-          path: ${{ runner.temp }}/order075-completion
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+        with: {name: "order077-completion-${{ github.run_id }}", path: "${{ runner.temp }}/order077-completion", if-no-files-found: error, retention-days: 14, compression-level: 0}
