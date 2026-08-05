@@ -3,7 +3,9 @@ package com.zungun.runtime.delivery
 import android.content.Context
 import androidx.room.withTransaction
 import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -12,7 +14,6 @@ import com.zungun.runtime.db.OperationEntity
 import com.zungun.runtime.db.ZungunDatabase
 import com.zungun.runtime.model.EnqueueRequest
 import com.zungun.runtime.model.OperationState
-import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 class CriticalOperationRuntime(
@@ -28,6 +29,9 @@ class CriticalOperationRuntime(
         }
         require(request.policy.expiresAtMs > nowMs) {
             "Operation must not be expired when enqueued"
+        }
+        require(request.policy.retryBudget in 0..100) {
+            "retryBudget must be between 0 and 100"
         }
 
         val operationId = StableIdentity.operationId(
@@ -46,12 +50,14 @@ class CriticalOperationRuntime(
             workOrderId = request.workOrderId,
             messageId = request.messageId,
             messageCommitment = request.messageCommitment,
+            replayNonce = "nonce_$operationId",
             payload = request.payload,
             contentType = request.contentType,
             priority = request.policy.priority,
             createdAtMs = request.policy.createdAtMs,
             expiresAtMs = request.policy.expiresAtMs,
             retryBudget = request.policy.retryBudget,
+            maxPayloadBytes = request.policy.maxPayloadBytes,
             attempts = 0,
             cancellationAllowed = request.policy.cancellationAllowed,
             semanticRevalidationRequired = request.policy.semanticRevalidationRequired,
@@ -61,18 +67,27 @@ class CriticalOperationRuntime(
         )
 
         database.withTransaction {
-            database.operations().insert(entity)
-            database.operations().evidence(
-                EvidenceEntity(
-                    operationId = operationId,
-                    source = "DEVICE",
-                    kind = "QUEUED",
-                    occurredAtMs = nowMs,
-                    reference = "local",
-                    payloadJson = "{}",
-                    sha256 = sha256("$operationId|QUEUED|$nowMs"),
-                ),
-            )
+            val inserted = database.operations().insert(entity)
+            if (inserted == -1L) {
+                val existing = database.operations().get(operationId)
+                    ?: error("IDEMPOTENCY_CONFLICT")
+                require(existing.messageCommitment == request.messageCommitment &&
+                    existing.payload.contentEquals(request.payload)) {
+                    "IDEMPOTENCY_CONFLICT"
+                }
+            } else {
+                database.operations().evidence(
+                    EvidenceEntity(
+                        operationId = operationId,
+                        source = "DEVICE",
+                        kind = "QUEUED",
+                        occurredAtMs = nowMs,
+                        reference = "local",
+                        payloadJson = "{}",
+                        sha256 = EvidenceHasher.sha256("$operationId|QUEUED|$nowMs"),
+                    ),
+                )
+            }
         }
         schedule(operationId)
         return operationId
@@ -80,12 +95,9 @@ class CriticalOperationRuntime(
 
     fun schedule(operationId: String) {
         val request = OneTimeWorkRequestBuilder<DeliveryWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInputData(workDataOf("operationId" to operationId))
-            .setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL,
-                10,
-                TimeUnit.SECONDS,
-            )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
             .addTag("zungun:$operationId")
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -95,19 +107,15 @@ class CriticalOperationRuntime(
         )
     }
 
-    suspend fun cancel(operationId: String, nowMs: Long): Boolean =
-        database.operations().cancel(operationId, nowMs) == 1
+    suspend fun cancel(operationId: String, nowMs: Long): Boolean {
+        val cancelled = database.operations().cancel(operationId, nowMs) == 1
+        if (cancelled) WorkManager.getInstance(context).cancelUniqueWork("zungun:$operationId")
+        return cancelled
+    }
 
     suspend fun recoverPending(): Int {
         val pending = database.operations().pending()
         pending.forEach { schedule(it.operationId) }
         return pending.size
-    }
-
-    companion object {
-        private fun sha256(value: String): String = MessageDigest
-            .getInstance("SHA-256")
-            .digest(value.toByteArray())
-            .joinToString(separator = "") { byte -> "%02x".format(byte) }
     }
 }

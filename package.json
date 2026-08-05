@@ -1,6 +1,6 @@
 {
   "name": "zungun",
-  "version": "1.0.0-order075",
+  "version": "1.0.0-order076",
   "private": true,
   "type": "module",
   "description": "Application-level critical-operation system for unstable connectivity with explicit ambiguity and verifiable execution evidence.",
@@ -25,7 +25,9 @@
     "verify:security-evidence": "node tools/security/generate-evidence.mjs",
     "verify:deep": "npm run format:check && npm run lint && npm run typecheck && npm run verify:oracle && npm test && npm run test:resilience && npm run verify:pack && npm run verify:docs && npm run verify:no-placeholders && npm run verify:secrets && npm run verify:security-evidence",
     "start:receiver": "npm run build && node dist/services/receiver/src/server.js",
-    "demo:field-service": "npm run build && node dist/examples/field-service/src/demo.js"
+    "demo:field-service": "npm run build && node dist/examples/field-service/src/demo.js",
+    "verify:order076-baseline": "node tools/quality/order076-baseline-regressions.mjs",
+    "audit:osv": "node tools/security/osv-audit.mjs"
   },
   "engines": {
     "node": ">=22.16.0"

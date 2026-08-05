@@ -1,4 +1,8 @@
-export interface Migration { readonly version: number; readonly name: string; readonly sql: string; }
+export interface Migration {
+  readonly version: number;
+  readonly name: string;
+  readonly sql: string;
+}
 
 export const MIGRATIONS: readonly Migration[] = Object.freeze([
   {
@@ -131,6 +135,44 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
         last_seen_at_ms INTEGER NOT NULL,
         PRIMARY KEY(scope_type, scope_id, device_id)
       );
+    `,
+  },
+  {
+    version: 4,
+    name: 'declared scope manifests and immutable manual resolutions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS scope_manifests (
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        declaration_version INTEGER NOT NULL,
+        expected_devices_json TEXT NOT NULL,
+        expected_operations_json TEXT NOT NULL,
+        expected_operation_count INTEGER,
+        declared_at_ms INTEGER NOT NULL,
+        provenance TEXT NOT NULL,
+        previous_manifest_hash TEXT,
+        manifest_hash TEXT NOT NULL UNIQUE,
+        actor_id TEXT NOT NULL,
+        PRIMARY KEY(scope_type, scope_id, declaration_version)
+      );
+      CREATE INDEX IF NOT EXISTS idx_scope_manifests_latest
+        ON scope_manifests(scope_type, scope_id, declaration_version DESC);
+      CREATE TABLE IF NOT EXISTS manual_resolutions (
+        resolution_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        operation_id TEXT NOT NULL REFERENCES operations(operation_id) ON DELETE CASCADE,
+        revision INTEGER NOT NULL,
+        target_verdict TEXT NOT NULL,
+        rationale TEXT NOT NULL,
+        referenced_fact_ids_json TEXT NOT NULL,
+        previous_proof_hash TEXT NOT NULL,
+        new_proof_hash TEXT NOT NULL UNIQUE,
+        actor_id TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        UNIQUE(operation_id, revision)
+      );
+      CREATE INDEX IF NOT EXISTS idx_manual_resolution_operation
+        ON manual_resolutions(operation_id, revision);
+      CREATE INDEX IF NOT EXISTS idx_auth_audit_time ON auth_audit(observed_at_ms, audit_id);
     `,
   },
 ]);

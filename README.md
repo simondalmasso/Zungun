@@ -12,6 +12,7 @@ Zungun is an application-level critical-operation system for unstable connectivi
 - [Control Room](docs/guides/control-room.md)
 - [Resilience Lab](docs/guides/resilience-lab.md)
 - [Local development](docs/runbooks/local-development.md)
+- [Order 076 verification](docs/runbooks/order-076-verification.md)
 
 ## Boundaries
 

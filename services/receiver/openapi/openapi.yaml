@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Zungun Persistent Receiver API
-  version: 1.0.0-order075
+  version: 1.0.0-order076
   description: Application-level critical-operation receiver. Transport acceptance is not proof of business effect.
 servers:
   - url: http://127.0.0.1:8788
