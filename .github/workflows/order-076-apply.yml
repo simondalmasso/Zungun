@@ -46,9 +46,9 @@ jobs:
           base64 --decode "$RUNNER_TEMP/order076.b64" > "$RUNNER_TEMP/order076.tar.gz"
           printf '%s  %s\n' '2651be375d6ea94efeae058c0164e231892f8894ca1e0fda80541489700f1a68' "$RUNNER_TEMP/order076.tar.gz" | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/order076.tar.gz" -C .
-          git rm -f .github/workflows/order-076-source-export.yml
+          printf '%s  %s\n' '3cee9503921cd7afee0d48774a2cf48938e7eb7ad0568aa96cbf4c24ffdd6e04' '.github/workflows/order-076-bootstrap.yml' | sha256sum --check --status
           git rm -rf .github/order076-payload
-          git rm -f .github/workflows/order-076-apply.yml
+          test -z "$(git diff --name-only HEAD -- .github/workflows)"
           test -z "$(git diff --name-only HEAD -- canary/zep-core-canary/vendor/zep-core candidate/order-072)"
       - name: Verify corrective TypeScript system before commit
         shell: bash
@@ -72,6 +72,6 @@ jobs:
           git config user.email 'simondalmasso44@gmail.com'
           git add -A
           test -n "$(git status --porcelain)"
-          test -z "$(git diff --cached --name-only -- canary/zep-core-canary/vendor/zep-core candidate/order-072)"
+          test -z "$(git diff --cached --name-only -- .github/workflows canary/zep-core-canary/vendor/zep-core candidate/order-072)"
           git commit -m 'fix(order-076): implement evidence-safe corrective system'
           git push origin HEAD:feat/zungun-full-project-v1
