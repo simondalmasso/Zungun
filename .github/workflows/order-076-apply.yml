@@ -29,12 +29,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode .github/order076b-payload/payload.b64 > "$RUNNER_TEMP/order076b-product.tar.gz"
+          cat > "$RUNNER_TEMP/chunks.sha256" <<'EOF'
+          266becbf350c6bf7cf3026d180c39b533bb48b92e3fb5bf10b7264535f671c69  .github/order076b-payload/chunk-00
+          ef709e2b8633c259d86f8487fff94134a8869ac27591994c8b8b49ea279e98ea  .github/order076b-payload/chunk-01
+          7445e77a1440503b74c624439039efac093bb2fe6233d7f39e056c8e99afdba1  .github/order076b-payload/chunk-02
+          178febedcacd58351a3c2138de0d6ffc4bcfff870d8321f94e8dc6b617ccda96  .github/order076b-payload/chunk-03
+          3ddfd559e3e2477f86b975583ab49d46dc242291731cea87f6dc476444e185a5  .github/order076b-payload/chunk-04
+          8f3c5477804ab922c61e4fed515aa064ccaa6590a2c6bda1d11f9915b6df4d36  .github/order076b-payload/chunk-05
+          875f0c8dd3a0fff94bb63913a9e23956e84ad5eddf81edb6fcc494fd48cce1f8  .github/order076b-payload/chunk-06
+          cf459a4a82a2bc7e78f6d98e640780b2fea281a6d406ff265f4fb4a4dba65dd1  .github/order076b-payload/chunk-07
+          fd0c574841a77890b958b8e1fee80bbdbe0aa471c8c76e635c9275d08d861e6c  .github/order076b-payload/chunk-08
+          8b9bcd57245a5fd308a5425960003d2b7f6937acc3ad7dfa350bed20c8a8c06e  .github/order076b-payload/chunk-09
+          EOF
+          sha256sum --check --strict "$RUNNER_TEMP/chunks.sha256"
+          cat .github/order076b-payload/chunk-{00..09} > "$RUNNER_TEMP/order076b-product.b64"
+          base64 --decode "$RUNNER_TEMP/order076b-product.b64" > "$RUNNER_TEMP/order076b-product.tar.gz"
           expected="$(cat .github/order076b-payload/SHA256)"
           actual="$(sha256sum "$RUNNER_TEMP/order076b-product.tar.gz" | cut -d' ' -f1)"
           test "$actual" = "$expected"
           test "$actual" = '14130a8fd71b81ea1e6d4f06b896e571965091ad339dd7f9c01b0c9b8edea14a'
-          tar -tzf "$RUNNER_TEMP/order076b-product.tar.gz" | LC_ALL=C sort > "$RUNNER_TEMP/payload-files.txt"
+          tar -tzf "$RUNNER_TEMP/order076b-product.tar.gz" | sed '/\/$/d' | LC_ALL=C sort > "$RUNNER_TEMP/payload-files.txt"
           cat > "$RUNNER_TEMP/allowed-files.txt" <<'EOF'
           android/external-consumer/build.gradle.kts
           android/external-consumer/src/androidTest/java/com/zungun/consumer/Order076RealReceiverInstrumentedTest.kt
