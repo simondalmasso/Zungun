@@ -1,3 +1,4 @@
+# Explicit corrective-head trigger; retained as audit context.
 name: Order 076 Android bootstrap
 
 "on":
