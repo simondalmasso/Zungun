@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.artifacts/
+.tmp/
+.data/
+*.tgz
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+android/.gradle/
+android/**/build/
+local.properties

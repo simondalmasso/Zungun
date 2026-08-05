@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Zungun Control Room</title>
+  <meta name="description" content="Evidence-first control room for application-level critical operations.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to operations</a>
+  <header class="topbar">
+    <div><span class="eyebrow">ZUNGUN</span><h1>Control Room</h1></div>
+    <div class="connection" role="status"><span id="healthDot" aria-hidden="true"></span><span id="healthText">Checking receiver</span></div>
+  </header>
+  <main id="main">
+    <section class="auth-panel" aria-labelledby="authHeading">
+      <div><h2 id="authHeading">Secure local session</h2><p>The token is kept in session storage and sent only to this receiver origin.</p></div>
+      <form id="authForm"><label for="token">API token</label><div class="inline"><input id="token" name="token" type="password" autocomplete="current-password" minlength="16" required><button type="submit">Connect</button></div></form>
+    </section>
+    <section class="summary" aria-label="Operation summary">
+      <article><span>Observed</span><strong id="observedCount">—</strong></article>
+      <article><span>Terminal</span><strong id="terminalCount">—</strong></article>
+      <article><span>Explicit unknown</span><strong id="unknownCount">—</strong></article>
+      <article><span>Bounded complete</span><strong id="completeState">—</strong></article>
+    </section>
+    <section class="workspace">
+      <div class="list-panel">
+        <div class="section-head"><div><p class="kicker">OPERATIONS</p><h2>Evidence queue</h2></div><button id="refreshButton" type="button">Refresh</button></div>
+        <form id="filters" class="filters">
+          <label>Search<input id="query" name="q" placeholder="Operation or work order"></label>
+          <label>State<select id="state" name="state"><option value="">All states</option><option>RECEIVER_ACCEPTED</option><option>CLAIMED</option><option>UNKNOWN</option><option>COMPLETED</option><option>REJECTED</option><option>EXPIRED</option><option>CANCELLED</option></select></label>
+          <button type="submit">Apply</button>
+        </form>
+        <div class="table-wrap"><table><caption class="sr-only">Critical operations</caption><thead><tr><th>Operation</th><th>Work order</th><th>Transport/receiver</th><th>Business effect</th><th>Updated</th></tr></thead><tbody id="operationRows"></tbody></table></div>
+        <p id="emptyState" class="empty" hidden>No matching operations.</p>
+      </div>
+      <aside class="detail-panel" aria-labelledby="detailHeading">
+        <div class="section-head"><div><p class="kicker">EVIDENCE</p><h2 id="detailHeading">Select an operation</h2></div><button id="exportButton" type="button" disabled>Export JSON</button></div>
+        <div id="detailContent" class="detail-empty">Transport acceptance is not proof of business effect. Select a row to inspect exact evidence.</div>
+      </aside>
+    </section>
+  </main>
+  <footer><strong>Honest boundary:</strong> explicit <code>UNKNOWN</code> is preserved until sufficient evidence exists. Completeness applies only to the declared reporting scope.</footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

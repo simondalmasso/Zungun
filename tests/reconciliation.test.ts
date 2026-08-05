@@ -1,0 +1,13 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createCompletenessCertificate,reconcileFacts,type OperationFact} from '../packages/reconciliation/src/index.js';
+const op='op_recon';let i=0;const fact=(source:OperationFact['source'],kind:OperationFact['kind']):OperationFact=>({factId:`fact_${++i}`,operationId:op,source,kind,occurredAtMs:i,reference:`ref_${i}`,payload:{}});
+test('full effect evidence confirms effect',()=>assert.equal(reconcileFacts(op,[fact('DEVICE','QUEUED'),fact('APPLICATION','EFFECT_APPLIED'),fact('APPLICATION','APPLICATION_ACK'),fact('RECEIVER','SIGNED_RECEIPT')],10).verdict,'EFFECT_CONFIRMED'));
+test('effect without ack remains unknown',()=>{const r=reconcileFacts(op,[fact('APPLICATION','EFFECT_APPLIED')],10);assert.equal(r.verdict,'UNKNOWN');assert.ok(r.anomalies.includes('MISSING_APPLICATION_ACK'));});
+test('ack without receipt remains unknown',()=>{const r=reconcileFacts(op,[fact('APPLICATION','EFFECT_APPLIED'),fact('APPLICATION','APPLICATION_ACK')],10);assert.ok(r.anomalies.includes('MISSING_SIGNED_RECEIPT'));});
+test('contradictory effects require compensation',()=>assert.equal(reconcileFacts(op,[fact('APPLICATION','EFFECT_APPLIED'),fact('ERP','NO_EFFECT')],10).verdict,'COMPENSATION_REQUIRED'));
+test('authoritative no effect is confirmed',()=>assert.equal(reconcileFacts(op,[fact('ERP','NO_EFFECT')],10).verdict,'NO_EFFECT_CONFIRMED'));
+test('rejection is preserved',()=>assert.equal(reconcileFacts(op,[fact('APPLICATION','REJECTED')],10).verdict,'REJECTED'));
+test('receiver acceptance alone is not business proof',()=>{const r=reconcileFacts(op,[fact('RECEIVER','RECEIVER_ACCEPTED')],10);assert.equal(r.verdict,'UNKNOWN');assert.ok(r.anomalies.includes('RECEIVER_ONLY_ACCEPTANCE'));});
+test('external orphan is detected',()=>assert.ok(reconcileFacts(op,[fact('ERP','NO_EFFECT')],10).anomalies.includes('ORPHAN_EXTERNAL_RECORD')));
+test('proof hash is deterministic',()=>{const facts=[fact('DEVICE','QUEUED')];assert.equal(reconcileFacts(op,facts,10).proofHash,reconcileFacts(op,facts,10).proofHash);});
+test('bounded completeness names reporting devices',()=>{const c=createCompletenessCertificate({scopeType:'SHIFT',scopeId:'s1',reportingDeviceIds:['d2','d1'],observedOperations:2,terminalOperations:2,unknownOperations:0,issuedAtMs:10});assert.equal(c.completeWithinDeclaredScope,true);assert.deepEqual(c.reportingDeviceIds,['d1','d2']);});
+test('unknown operation prevents completeness',()=>assert.equal(createCompletenessCertificate({scopeType:'SHIFT',scopeId:'s1',reportingDeviceIds:['d1'],observedOperations:2,terminalOperations:1,unknownOperations:1,issuedAtMs:10}).completeWithinDeclaredScope,false));

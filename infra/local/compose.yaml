@@ -1,0 +1,20 @@
+services:
+  receiver:
+    build:
+      context: ../..
+      dockerfile: infra/docker/receiver.Dockerfile
+    environment:
+      RECEIVER_AUTH_TOKEN: local-development-token-change-before-shared-use
+      RECEIVER_DB: /data/receiver.sqlite
+      RECEIVER_KEY_FILE: /data/receipt-key.json
+    ports:
+      - "8788:8788"
+    volumes:
+      - receiver-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  receiver-data: {}

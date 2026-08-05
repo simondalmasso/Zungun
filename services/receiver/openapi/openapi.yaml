@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: Zungun Persistent Receiver API
+  version: 1.0.0-order075
+  description: Application-level critical-operation receiver. Transport acceptance is not proof of business effect.
+servers:
+  - url: http://127.0.0.1:8788
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        '200': { description: Process health }
+  /ready:
+    get:
+      operationId: readiness
+      responses:
+        '200': { description: Database and key-provider readiness }
+  /api/v1/operations:
+    get:
+      security: [{ bearerAuth: [] }]
+      operationId: listOperations
+      responses:
+        '200': { description: Paginated operation summaries }
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: acceptOperation
+      responses:
+        '202': { description: Receiver acceptance; not business-effect proof }
+        '409': { description: Identity or replay conflict }
+  /api/v1/operations/{operationId}:
+    get:
+      security: [{ bearerAuth: [] }]
+      operationId: getOperation
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Evidence timeline and current state }
+        '404': { description: Operation not found }
+  /api/v1/operations/{operationId}/claim:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: claimOperation
+      responses:
+        '200': { description: Transactional lease with fencing token }
+  /api/v1/operations/{operationId}/effect:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: recordApplicationEffect
+      responses:
+        '200': { description: Application effect and signed receipt when justified }
+  /api/v1/operations/{operationId}/reconcile:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: reconcileOperation
+      responses:
+        '200': { description: Evidence-derived verdict; UNKNOWN is preserved }
+  /api/v1/completeness:
+    get:
+      security: [{ bearerAuth: [] }]
+      operationId: boundedCompleteness
+      responses:
+        '200': { description: Completeness only within declared reporting scope }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
