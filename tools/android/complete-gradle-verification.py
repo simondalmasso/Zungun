@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 NS = "https://schema.gradle.org/dependency-verification"
 ET.register_namespace("", NS)
-Q = lambda name: f"{{{nS}}}{name}"
+Q = lambda name: f"{{{NS}}}{name}"
 ALLOWED_SUFFIXES = {".pom", ".module", ".jar", ".aar"}
 
 
@@ -32,6 +32,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--metadata", required=True, type=Path)
     parser.add_argument("--components", required=True, type=Path)
+    parser.add_argument("--merge-from", type=Path)
     parser.add_argument("--gradle-user-home", required=True, type=Path)
     args = parser.parse_args()
 
@@ -47,11 +48,52 @@ def main() -> None:
     if not requested:
         raise SystemExit("EMPTY_COMPONENT_ALLOWLIST")
 
-    tree = ET.parse(args.metadata)
-    root = tree.getroot()
-    components = root.find(Q("components"))
-    if components is None:
-        raise SystemExit("VERIFICATION_COMPONENTS_MISSING")
+    generated_tree = ET.parse(args.metadata)
+    if args.merge_from is not None:
+        tree = ET.parse(args.merge_from)
+        root = tree.getroot()
+        components = root.find(Q("components"))
+        generated_components = generated_tree.getroot().find(Q("components"))
+        if components is None or generated_components is None:
+            raise SystemExit("VERIFICATION_COMPONENTS_MISSING")
+
+        indexed_target = {
+            (node.attrib["group"], node.attrib["name"], node.attrib["version"]): node
+            for node in components.findall(Q("component"))
+        }
+        for source_component in generated_components.findall(Q("component")):
+            key = (
+                source_component.attrib["group"],
+                source_component.attrib["name"],
+                source_component.attrib["version"],
+            )
+            target_component = indexed_target.get(key)
+            if target_component is None:
+                target_component = ET.SubElement(components, Q("component"), dict(source_component.attrib))
+                indexed_target[key] = target_component
+            target_artifacts = {
+                node.attrib["name"]: node for node in target_component.findall(Q("artifact"))
+            }
+            for source_artifact in source_component.findall(Q("artifact")):
+                target_artifact = target_artifacts.get(source_artifact.attrib["name"])
+                if target_artifact is None:
+                    target_artifact = ET.SubElement(target_component, Q("artifact"), dict(source_artifact.attrib))
+                    target_artifacts[source_artifact.attrib["name"]] = target_artifact
+                existing = {
+                    (node.tag, tuple(sorted(node.attrib.items())))
+                    for node in target_artifact
+                }
+                for source_hash in source_artifact:
+                    identity = (source_hash.tag, tuple(sorted(source_hash.attrib.items())))
+                    if identity not in existing:
+                        ET.SubElement(target_artifact, source_hash.tag, dict(source_hash.attrib))
+                        existing.add(identity)
+    else:
+        tree = generated_tree
+        root = tree.getroot()
+        components = root.find(Q("components"))
+        if components is None:
+            raise SystemExit("VERIFICATION_COMPONENTS_MISSING")
 
     indexed = {
         (node.attrib["group"], node.attrib["name"], node.attrib["version"]): node

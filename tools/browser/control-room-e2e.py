@@ -4,7 +4,7 @@ import os
 import subprocess
 import time
 from urllib.request import urlopen
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 root = Path(__file__).resolve().parents[2]
 env = dict(os.environ)
@@ -148,8 +148,8 @@ try:
 
         page.fill('#token', TOKENS['reader'])
         page.locator('#authForm button[type=submit]').click()
-        page.wait_for_function("document.querySelector('#observedCount').textContent === '26'")
-        page.wait_for_function("!document.querySelector('#nextPage').disabled")
+        expect(page.locator('#observedCount')).to_have_text('26')
+        expect(page.locator('#nextPage')).to_be_enabled()
         # The target is intentionally older than the first 25-row page. Locate the exact
         # operation through the backend-backed query instead of assuming first-page visibility.
         page.fill('#query', primary_operation)
@@ -165,21 +165,22 @@ try:
 
         page.fill('#scopeId', 'shift_browser_076')
         page.locator('#scopeForm button[type=submit]').click()
-        page.wait_for_function("document.querySelector('#completeState').textContent === 'YES'")
+        expect(page.locator('#completeState')).to_have_text('YES')
         assert '"completeWithinDeclaredScope": true' in page.locator('#scopeResult').inner_text()
 
         page.fill('#token', TOKENS['reviewer'])
         page.locator('#authForm button[type=submit]').click()
         page.fill('#query', primary_operation)
+        page.locator('#filters button[type=submit]').click()
         page.wait_for_selector(f'[data-operation="{primary_operation}"]')
         page.locator(f'[data-operation="{primary_operation}"]').click()
         page.wait_for_selector('#reviewForm:not([hidden])')
         page.fill('#reviewNote', 'Evidence reviewed without generating application facts.')
         page.locator('#reviewForm button[type=submit]').click()
-        page.wait_for_function("document.querySelector('#detailContent').innerText.includes('EFFECT_CONFIRMED')")
+        expect(page.locator('#detailContent')).to_contain_text('EFFECT_CONFIRMED')
         page.fill('#resolutionRationale', 'Evidence-bound acknowledgement of the deterministic verdict.')
         page.locator('#resolutionForm button[type=submit]').click()
-        page.wait_for_function("document.querySelector('#detailContent').innerText.includes('new_proof_hash')")
+        expect(page.locator('#detailContent')).to_contain_text('new_proof_hash')
 
         page.fill('#token', TOKENS['admin'])
         page.locator('#authForm button[type=submit]').click()
@@ -187,9 +188,7 @@ try:
         page.wait_for_selector('[data-revoke]')
         initial_key_count = page.locator('[data-revoke]').count()
         page.locator('#rotateKey').click()
-        page.wait_for_function(
-            f"document.querySelectorAll('[data-revoke]').length === {initial_key_count + 1}"
-        )
+        expect(page.locator('[data-revoke]')).to_have_count(initial_key_count + 1)
 
         page.click('#exportButton')
         browser.close()

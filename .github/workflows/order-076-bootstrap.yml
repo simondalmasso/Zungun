@@ -39,14 +39,19 @@ jobs:
         run: |
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
+          previous="$RUNNER_TEMP/verification-metadata.previous.xml"
+          cp android/gradle/verification-metadata.xml "$previous"
+          rm android/gradle/verification-metadata.xml
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             --write-locks --write-verification-metadata sha256 \
             :runtime:dependencies :sample:dependencies :external-consumer:dependencies \
             :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
             :runtime:testDebugUnitTest :sample:assembleDebug \
             :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          test -s android/gradle/verification-metadata.xml
           python tools/android/complete-gradle-verification.py \
             --metadata android/gradle/verification-metadata.xml \
+            --merge-from "$previous" \
             --components android/gradle/verification-extra-components.txt \
             --gradle-user-home "${GRADLE_USER_HOME:-$HOME/.gradle}"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
