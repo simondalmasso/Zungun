@@ -71,6 +71,10 @@ try:
             timeout=30_000,
         )
         page.locator("#token").wait_for(state="visible", timeout=10_000)
+        assert page.get_by_text(
+            "Transport acceptance is not proof of business effect.",
+            exact=False,
+        ).count() >= 1
 
         payload = {
             "protocol": "zungun.operation.v1",
@@ -119,7 +123,8 @@ try:
         assert page.get_by_text("Transport/receiver").count() == 1
         assert page.get_by_text("Business effect").count() >= 1
         assert page.get_by_text(
-            "Transport acceptance is not proof of business effect."
+            "Transport acceptance alone is insufficient.",
+            exact=False,
         ).count() >= 1
         page.click("#exportButton")
         browser.close()
