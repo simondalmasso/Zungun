@@ -1,56 +1,59 @@
-name: Order 076 apply corrective payload
+name: Order 076B apply real E2E payload
 
 "on":
   push:
     branches:
       - feat/zungun-full-project-v1
     paths:
-      - .github/order076-payload/READY
+      - .github/order076b-payload/READY
 
 permissions:
   contents: write
 
 concurrency:
-  group: order-076-apply-${{ github.ref }}
+  group: order-076b-apply-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   apply:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: true
-      - name: Reconstruct and verify payload
+
+      - name: Reconstruct and verify bounded payload
         shell: bash
         run: |
           set -euo pipefail
-          cat \
-            .github/order076-payload/chunk-00a \
-            .github/order076-payload/chunk-00b \
-            .github/order076-payload/chunk-01 \
-            .github/order076-payload/chunk-02 \
-            .github/order076-payload/chunk-03 \
-            .github/order076-payload/chunk-04 \
-            .github/order076-payload/chunk-05 \
-            .github/order076-payload/chunk-06 \
-            .github/order076-payload/chunk-07 \
-            .github/order076-payload/chunk-08 \
-            .github/order076-payload/chunk-09 \
-            .github/order076-payload/chunk-10 \
-            .github/order076-payload/chunk-11 \
-            > "$RUNNER_TEMP/order076.b64"
-          base64 --decode "$RUNNER_TEMP/order076.b64" > "$RUNNER_TEMP/order076.tar.gz"
-          printf '%s  %s\n' '2651be375d6ea94efeae058c0164e231892f8894ca1e0fda80541489700f1a68' "$RUNNER_TEMP/order076.tar.gz" | sha256sum --check --status
-          tar -xzf "$RUNNER_TEMP/order076.tar.gz" -C .
-          printf '%s  %s\n' '3cee9503921cd7afee0d48774a2cf48938e7eb7ad0568aa96cbf4c24ffdd6e04' '.github/workflows/order-076-bootstrap.yml' | sha256sum --check --status
-          git rm -rf .github/order076-payload
+          base64 --decode .github/order076b-payload/payload.b64 > "$RUNNER_TEMP/order076b-product.tar.gz"
+          expected="$(cat .github/order076b-payload/SHA256)"
+          actual="$(sha256sum "$RUNNER_TEMP/order076b-product.tar.gz" | cut -d' ' -f1)"
+          test "$actual" = "$expected"
+          test "$actual" = '14130a8fd71b81ea1e6d4f06b896e571965091ad339dd7f9c01b0c9b8edea14a'
+          tar -tzf "$RUNNER_TEMP/order076b-product.tar.gz" | LC_ALL=C sort > "$RUNNER_TEMP/payload-files.txt"
+          cat > "$RUNNER_TEMP/allowed-files.txt" <<'EOF'
+          android/external-consumer/build.gradle.kts
+          android/external-consumer/src/androidTest/java/com/zungun/consumer/Order076RealReceiverInstrumentedTest.kt
+          android/external-consumer/src/main/AndroidManifest.xml
+          android/external-consumer/src/main/java/com/zungun/consumer/ConsumerApplication.kt
+          tools/browser/order076-same-operation-e2e.py
+          tools/e2e/order076-fault-proxy.mjs
+          tools/e2e/order076-real-e2e.sh
+          tools/security/generate-evidence.mjs
+          EOF
+          LC_ALL=C sort -o "$RUNNER_TEMP/allowed-files.txt" "$RUNNER_TEMP/allowed-files.txt"
+          diff -u "$RUNNER_TEMP/allowed-files.txt" "$RUNNER_TEMP/payload-files.txt"
+          tar -xzf "$RUNNER_TEMP/order076b-product.tar.gz" -C .
+          chmod +x tools/e2e/order076-real-e2e.sh
+          git rm -rf .github/order076b-payload
           test -z "$(git diff --name-only HEAD -- .github/workflows)"
           test -z "$(git diff --name-only HEAD -- canary/zep-core-canary/vendor/zep-core candidate/order-072)"
-      - name: Verify corrective TypeScript system before commit
+
+      - name: Verify TypeScript and security gates
         shell: bash
         run: |
           set -euo pipefail
@@ -61,10 +64,38 @@ jobs:
           npm test
           npm run test:resilience
           npm run demo:field-service
+          npm run verify:pack
           npm run verify:docs
           npm run verify:no-placeholders
           npm run verify:secrets
-      - name: Commit exact corrective state
+
+      - name: Install Android inputs and refresh immutable dependency evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          export ANDROID_SDK_ROOT="$sdkroot" ANDROID_HOME="$sdkroot"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            --write-locks --write-verification-metadata sha256 \
+            :runtime:dependencies :sample:dependencies :external-consumer:dependencies
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
+            :runtime:testDebugUnitTest :sample:assembleDebug \
+            :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          test -s android/runtime/build/outputs/aar/runtime-release.aar
+          test -s android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk
+          test -s android/external-consumer/build/outputs/apk/androidTest/debug/external-consumer-debug-androidTest.apk
+          test -s android/gradle/verification-metadata.xml
+          test "$(find android -type f -name gradle.lockfile | wc -l)" -ge 3
+          npm run verify:security-evidence
+          npm audit --registry=https://registry.npmjs.org --audit-level=high --omit=optional
+
+      - name: Commit bounded corrective state
         shell: bash
         run: |
           set -euo pipefail
@@ -73,5 +104,5 @@ jobs:
           git add -A
           test -n "$(git status --porcelain)"
           test -z "$(git diff --cached --name-only -- .github/workflows canary/zep-core-canary/vendor/zep-core candidate/order-072)"
-          git commit -m 'fix(order-076): implement evidence-safe corrective system'
+          git commit -m 'test(order-076b): add real Android receiver recovery matrix'
           git push origin HEAD:feat/zungun-full-project-v1
