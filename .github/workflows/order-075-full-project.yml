@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: order-075-full-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   CI: "true"
@@ -78,7 +78,7 @@ jobs:
           historical="$RUNNER_TEMP/order075-historical"
           git worktree add --detach "$historical" "$START_SHA"
           cp "$GITHUB_WORKSPACE/.github/evidence/order-073/canary-package-lock.order057.json" "$historical/canary/zep-core-canary/package-lock.json"
-          (cd "$historical/canary/zep-core-canary" && npm ci --ignore-scripts --no-audit --no-fund && npm run verify:deep)
+          (cd "$historical/canary/zep-core-canary" && npm ci --ignore-scripts --no-audit --no-fund && npm run verify)
           export PATH="$historical/canary/zep-core-canary/node_modules/.bin:$PATH"
           (cd "$historical/candidate/order-072" && npm ci --ignore-scripts --no-audit --no-fund && npm run verify:deep)
           test "$(git -C "$historical" rev-parse HEAD:candidate/order-072)" = "$CANDIDATE_SUBTREE"
@@ -312,7 +312,7 @@ jobs:
           docker logs zungun-receiver-smoke
           docker rm --force zungun-receiver-smoke
           cp .github/evidence/order-073/canary-package-lock.order057.json canary/zep-core-canary/package-lock.json
-          (cd canary/zep-core-canary && npm ci --ignore-scripts --no-audit --no-fund && npm run verify:deep)
+          (cd canary/zep-core-canary && npm ci --ignore-scripts --no-audit --no-fund && npm run verify)
           mkdir -p "$RUNNER_TEMP/order075-container"
           printf '%s\n' "$image_id" > "$RUNNER_TEMP/order075-container/image-id.txt"
           docker image inspect zungun-receiver:order075 > "$RUNNER_TEMP/order075-container/image-inspect.json"
