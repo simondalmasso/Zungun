@@ -6,6 +6,7 @@ name: Order 073 remote candidate verification
       - feat/zep-remote-release-candidate-v1
     paths:
       - .github/workflows/order-073-remote-candidate-verification.yml
+      - .github/evidence/order-073/canary-package-lock.order057.json
       - candidate/order-072/**
   workflow_dispatch:
 
@@ -18,9 +19,11 @@ concurrency:
 
 env:
   IMPLEMENTATION_COMMIT: b42bf7bdec0de0e5aa7ff75cf1d2e8fe9e6a7a1a
+  FIRST_EVIDENCE_COMMIT: b87a28c8fe19b54516443aa52350b2440833c5c1
   BASE_SHA: 5c49374d5fa54858108cffe437520b793d0cfeb4
   CANDIDATE_SUBTREE: 108629fc91c1e03454c18b14a6b557c2b62898d4
   WORKFLOW_PATH: .github/workflows/order-073-remote-candidate-verification.yml
+  LOCK_EVIDENCE_PATH: .github/evidence/order-073/canary-package-lock.order057.json
   TARGET_BASE: feat/zep-remote-release-candidate-v1
   EXPECTED_CANARY_LOCK_SHA256: c894790ca37a703f17ed9f190d078c0499578568d4284f4aae6162633eaa47e2
   CI: "true"
@@ -35,13 +38,14 @@ jobs:
     outputs:
       candidate_subtree: ${{ steps.result.outputs.candidate_subtree }}
       package_sha256: ${{ steps.result.outputs.package_sha256 }}
+      lock_sha256: ${{ steps.result.outputs.lock_sha256 }}
       primary_evidence_b64: ${{ steps.result.outputs.primary_evidence_b64 }}
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 3
+          fetch-depth: 4
           persist-credentials: false
 
       - name: Set up pinned Node
@@ -57,37 +61,49 @@ jobs:
           evidence="$RUNNER_TEMP/order073-primary"
           mkdir -p "$evidence/commands"
           head_sha="$(git rev-parse HEAD)"
-          test "$(git rev-parse HEAD^)" = "$IMPLEMENTATION_COMMIT"
+          test "$(git rev-parse HEAD^)" = "$FIRST_EVIDENCE_COMMIT"
+          test "$(git rev-parse "$FIRST_EVIDENCE_COMMIT^")" = "$IMPLEMENTATION_COMMIT"
           test "$(git rev-parse "$IMPLEMENTATION_COMMIT^")" = "$BASE_SHA"
+          test "$(git rev-list --count "$BASE_SHA..HEAD")" = "3"
           test "$(git rev-parse HEAD:candidate/order-072)" = "$CANDIDATE_SUBTREE"
+          test "$(git rev-parse "$FIRST_EVIDENCE_COMMIT:candidate/order-072")" = "$CANDIDATE_SUBTREE"
           test "$(git rev-parse "$IMPLEMENTATION_COMMIT:candidate/order-072")" = "$CANDIDATE_SUBTREE"
-          test "$(git rev-list --count "$BASE_SHA..HEAD")" = "2"
+
           git diff --name-only "$BASE_SHA..$IMPLEMENTATION_COMMIT" | tee "$evidence/implementation-paths.txt"
           test "$(wc -l < "$evidence/implementation-paths.txt")" = "46"
           test -z "$(grep -Ev '^candidate/order-072/' "$evidence/implementation-paths.txt" || true)"
-          git diff --name-only "$IMPLEMENTATION_COMMIT..HEAD" | tee "$evidence/evidence-paths.txt"
-          test "$(cat "$evidence/evidence-paths.txt")" = "$WORKFLOW_PATH"
+
+          git diff --name-only "$IMPLEMENTATION_COMMIT..$FIRST_EVIDENCE_COMMIT" | tee "$evidence/first-evidence-paths.txt"
+          test "$(cat "$evidence/first-evidence-paths.txt")" = "$WORKFLOW_PATH"
+
+          git diff --name-only "$FIRST_EVIDENCE_COMMIT..HEAD" | LC_ALL=C sort | tee "$evidence/repair-paths.txt"
+          printf '%s\n%s\n' "$LOCK_EVIDENCE_PATH" "$WORKFLOW_PATH" | LC_ALL=C sort > "$evidence/expected-repair-paths.txt"
+          diff -u "$evidence/expected-repair-paths.txt" "$evidence/repair-paths.txt"
+
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             test "$(jq -r '.pull_request.base.ref' "$GITHUB_EVENT_PATH")" = "$TARGET_BASE"
             test "$(jq -r '.pull_request.head.sha' "$GITHUB_EVENT_PATH")" = "$head_sha"
           fi
           test -z "$(git status --porcelain)"
-          printf 'HEAD=%s\nPARENT=%s\nIMPLEMENTATION=%s\nBASE=%s\nCANDIDATE_SUBTREE=%s\n' \
-            "$head_sha" "$(git rev-parse HEAD^)" "$IMPLEMENTATION_COMMIT" "$BASE_SHA" "$CANDIDATE_SUBTREE" \
+          printf 'HEAD=%s\nPARENT=%s\nFIRST_EVIDENCE=%s\nIMPLEMENTATION=%s\nBASE=%s\nCANDIDATE_SUBTREE=%s\n' \
+            "$head_sha" "$(git rev-parse HEAD^)" "$FIRST_EVIDENCE_COMMIT" "$IMPLEMENTATION_COMMIT" "$BASE_SHA" "$CANDIDATE_SUBTREE" \
             > "$evidence/context.txt"
 
-      - name: Install exact existing canary toolchain
+      - name: Install immutable historical canary toolchain
         shell: bash
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/order073-primary"
+          committed_lock="$GITHUB_WORKSPACE/$LOCK_EVIDENCE_PATH"
+          committed_sha="$(sha256sum "$committed_lock" | cut -d' ' -f1)"
+          test "$committed_sha" = "$EXPECTED_CANARY_LOCK_SHA256"
+          cp "$committed_lock" canary/zep-core-canary/package-lock.json
+          copied_sha="$(sha256sum canary/zep-core-canary/package-lock.json | cut -d' ' -f1)"
+          test "$copied_sha" = "$EXPECTED_CANARY_LOCK_SHA256"
           cd canary/zep-core-canary
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund 2>&1 | tee "$evidence/commands/canary-lock.log"
-          actual_lock="$(sha256sum package-lock.json | cut -d' ' -f1)"
-          test "$actual_lock" = "$EXPECTED_CANARY_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee "$evidence/commands/canary-npm-ci.log"
-          printf 'NODE=%s\nNPM=%s\nTSC=%s\nCANARY_LOCK_SHA256=%s\n' \
-            "$(node --version)" "$(npm --version)" "$(npx --no-install tsc --version)" "$actual_lock" \
+          printf 'NODE=%s\nNPM=%s\nTSC=%s\nCOMMITTED_LOCK_SHA256=%s\nCOPIED_LOCK_SHA256=%s\n' \
+            "$(node --version)" "$(npm --version)" "$(npx --no-install tsc --version)" "$committed_sha" "$copied_sha" \
             > "$evidence/toolchain.txt"
           echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
 
@@ -126,6 +142,7 @@ jobs:
           run_logged verify-provenance npm run verify:provenance
           run_logged verify-kit npm run verify:kit
           run_logged verify-pack npm run verify:pack
+
           rm -rf .generated/order073-browser
           node dist/candidate/order-072/src/extensions/cli.js control-room --out .generated/order073-browser \
             2>&1 | tee "$evidence/commands/browser-kit-generate.log"
@@ -133,16 +150,18 @@ jobs:
             2>&1 | tee "$evidence/commands/browser-e2e.log"
           grep -F '"passed": 7' "$evidence/commands/browser-e2e.log"
           grep -F '"navigationMode": "set_content_no_network"' "$evidence/commands/browser-e2e.log"
+
           package_file="$(find . -maxdepth 1 -type f -name '*.tgz' -printf '%f\n' | LC_ALL=C sort | tail -n 1)"
           test -n "$package_file"
           package_sha="$(sha256sum "$package_file" | cut -d' ' -f1)"
           candidate_subtree="$(git rev-parse HEAD:candidate/order-072)"
           test "$candidate_subtree" = "$CANDIDATE_SUBTREE"
           cat > "$evidence/result.json" <<JSON
-          {"ok":true,"job":"primary-clean-runner","head":"$(git rev-parse HEAD)","candidateSubtree":"$candidate_subtree","packageSha256":"$package_sha","protectedOracleBlobs":"21/21","rootExports":"49/49_EXACT_AND_0_EXTRA","extensionExports":18,"historicalShadows":0,"differential":"10/10","breakingRegressions":0,"historicalTests":"48/48","historicalFuzz":"4138/4138","extensionTests":"89/89","extensionFuzz":"4202/4202","verifyKit":"19/19","tamper":"10/10_FAIL_CLOSED","browserE2E":"7/7","navigationMode":"set_content_no_network","runtimeDependencies":0,"networkCalls":0,"databaseCalls":0,"unknownProvenanceFiles":0}
+          {"ok":true,"job":"primary-clean-runner","head":"$(git rev-parse HEAD)","candidateSubtree":"$candidate_subtree","packageSha256":"$package_sha","historicalLockSha256":"$EXPECTED_CANARY_LOCK_SHA256","protectedOracleBlobs":"21/21","rootExports":"49/49_EXACT_AND_0_EXTRA","extensionExports":18,"historicalShadows":0,"differential":"10/10","breakingRegressions":0,"historicalTests":"48/48","historicalFuzz":"4138/4138","extensionTests":"89/89","extensionFuzz":"4202/4202","verifyKit":"19/19","tamper":"10/10_FAIL_CLOSED","browserE2E":"7/7","navigationMode":"set_content_no_network","runtimeDependencies":0,"networkCalls":0,"databaseCalls":0,"unknownProvenanceFiles":0}
           JSON
           printf '%s\n' "$package_sha" > "$evidence/package.sha256"
           printf '%s\n' "$candidate_subtree" > "$evidence/candidate-subtree.txt"
+          printf '%s\n' "$EXPECTED_CANARY_LOCK_SHA256" > "$evidence/historical-lock.sha256"
 
       - name: Seal primary evidence and expose bounded outputs
         id: result
@@ -157,10 +176,11 @@ jobs:
             -czf "$RUNNER_TEMP/order073-primary.tar.gz" -C "$RUNNER_TEMP" order073-primary
           candidate_subtree="$(cat "$evidence/candidate-subtree.txt")"
           package_sha="$(cat "$evidence/package.sha256")"
+          lock_sha="$(cat "$evidence/historical-lock.sha256")"
           evidence_b64="$(base64 -w0 "$RUNNER_TEMP/order073-primary.tar.gz")"
           test "${#evidence_b64}" -lt 900000
-          printf 'candidate_subtree=%s\npackage_sha256=%s\nprimary_evidence_b64=%s\n' \
-            "$candidate_subtree" "$package_sha" "$evidence_b64" >> "$GITHUB_OUTPUT"
+          printf 'candidate_subtree=%s\npackage_sha256=%s\nlock_sha256=%s\nprimary_evidence_b64=%s\n' \
+            "$candidate_subtree" "$package_sha" "$lock_sha" "$evidence_b64" >> "$GITHUB_OUTPUT"
 
   independent-clean-checkout:
     name: independent-clean-checkout
@@ -172,7 +192,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 3
+          fetch-depth: 4
           persist-credentials: false
 
       - name: Set up pinned Node
@@ -181,25 +201,36 @@ jobs:
           node-version: 22.16.0
           package-manager-cache: false
 
-      - name: Revalidate history and install exact toolchain
+      - name: Revalidate history and install immutable toolchain
         shell: bash
         run: |
           set -euo pipefail
           evidence="$RUNNER_TEMP/order073-reproduce"
           mkdir -p "$evidence/commands"
-          test "$(git rev-parse HEAD^)" = "$IMPLEMENTATION_COMMIT"
+          test "$(git rev-parse HEAD^)" = "$FIRST_EVIDENCE_COMMIT"
+          test "$(git rev-parse "$FIRST_EVIDENCE_COMMIT^")" = "$IMPLEMENTATION_COMMIT"
           test "$(git rev-parse "$IMPLEMENTATION_COMMIT^")" = "$BASE_SHA"
+          test "$(git rev-list --count "$BASE_SHA..HEAD")" = "3"
           test "$(git rev-parse HEAD:candidate/order-072)" = "$CANDIDATE_SUBTREE"
-          test "$(git diff --name-only "$IMPLEMENTATION_COMMIT..HEAD")" = "$WORKFLOW_PATH"
+          test "$(git rev-parse "$IMPLEMENTATION_COMMIT:candidate/order-072")" = "$CANDIDATE_SUBTREE"
+
           git diff --name-only "$BASE_SHA..$IMPLEMENTATION_COMMIT" | tee "$evidence/implementation-paths.txt"
-          git diff --name-only "$IMPLEMENTATION_COMMIT..HEAD" | tee "$evidence/evidence-paths.txt"
+          test "$(wc -l < "$evidence/implementation-paths.txt")" = "46"
+          test -z "$(grep -Ev '^candidate/order-072/' "$evidence/implementation-paths.txt" || true)"
+          git diff --name-only "$FIRST_EVIDENCE_COMMIT..HEAD" | LC_ALL=C sort | tee "$evidence/repair-paths.txt"
+          printf '%s\n%s\n' "$LOCK_EVIDENCE_PATH" "$WORKFLOW_PATH" | LC_ALL=C sort > "$evidence/expected-repair-paths.txt"
+          diff -u "$evidence/expected-repair-paths.txt" "$evidence/repair-paths.txt"
+
+          committed_lock="$GITHUB_WORKSPACE/$LOCK_EVIDENCE_PATH"
+          committed_sha="$(sha256sum "$committed_lock" | cut -d' ' -f1)"
+          test "$committed_sha" = "$EXPECTED_CANARY_LOCK_SHA256"
+          cp "$committed_lock" canary/zep-core-canary/package-lock.json
+          copied_sha="$(sha256sum canary/zep-core-canary/package-lock.json | cut -d' ' -f1)"
+          test "$copied_sha" = "$EXPECTED_CANARY_LOCK_SHA256"
           cd canary/zep-core-canary
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund 2>&1 | tee "$evidence/commands/canary-lock.log"
-          actual_lock="$(sha256sum package-lock.json | cut -d' ' -f1)"
-          test "$actual_lock" = "$EXPECTED_CANARY_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee "$evidence/commands/canary-npm-ci.log"
-          printf 'NODE=%s\nNPM=%s\nTSC=%s\nCANARY_LOCK_SHA256=%s\n' \
-            "$(node --version)" "$(npm --version)" "$(npx --no-install tsc --version)" "$actual_lock" \
+          printf 'NODE=%s\nNPM=%s\nTSC=%s\nCOMMITTED_LOCK_SHA256=%s\nCOPIED_LOCK_SHA256=%s\n' \
+            "$(node --version)" "$(npm --version)" "$(npx --no-install tsc --version)" "$committed_sha" "$copied_sha" \
             > "$evidence/toolchain.txt"
           echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
 
@@ -225,19 +256,22 @@ jobs:
           run_logged verify-provenance npm run verify:provenance
           run_logged verify-kit npm run verify:kit
           run_logged verify-pack npm run verify:pack
+
           package_file="$(find . -maxdepth 1 -type f -name '*.tgz' -printf '%f\n' | LC_ALL=C sort | tail -n 1)"
           test -n "$package_file"
           package_sha="$(sha256sum "$package_file" | cut -d' ' -f1)"
           candidate_subtree="$(git rev-parse HEAD:candidate/order-072)"
           test "$candidate_subtree" = '${{ needs.primary-clean-runner.outputs.candidate_subtree }}'
           test "$package_sha" = '${{ needs.primary-clean-runner.outputs.package_sha256 }}'
+          test "$EXPECTED_CANARY_LOCK_SHA256" = '${{ needs.primary-clean-runner.outputs.lock_sha256 }}'
           cat > "$evidence/result.json" <<JSON
-          {"ok":true,"job":"independent-clean-checkout","head":"$(git rev-parse HEAD)","candidateSubtree":"$candidate_subtree","packageSha256":"$package_sha","matchesPrimary":true,"protectedOracleBlobs":"21/21","rootExports":"49/49_EXACT_AND_0_EXTRA","extensionExports":18,"historicalShadows":0,"differential":"10/10","breakingRegressions":0,"historicalTests":"48/48","historicalFuzz":"4138/4138","extensionTests":"89/89","extensionFuzz":"4202/4202","verifyKit":"19/19","tamper":"10/10_FAIL_CLOSED","runtimeDependencies":0,"networkCalls":0,"databaseCalls":0,"unknownProvenanceFiles":0}
+          {"ok":true,"job":"independent-clean-checkout","head":"$(git rev-parse HEAD)","candidateSubtree":"$candidate_subtree","packageSha256":"$package_sha","historicalLockSha256":"$EXPECTED_CANARY_LOCK_SHA256","matchesPrimary":true,"protectedOracleBlobs":"21/21","rootExports":"49/49_EXACT_AND_0_EXTRA","extensionExports":18,"historicalShadows":0,"differential":"10/10","breakingRegressions":0,"historicalTests":"48/48","historicalFuzz":"4138/4138","extensionTests":"89/89","extensionFuzz":"4202/4202","verifyKit":"19/19","tamper":"10/10_FAIL_CLOSED","runtimeDependencies":0,"networkCalls":0,"databaseCalls":0,"unknownProvenanceFiles":0}
           JSON
           printf '%s\n' "$package_sha" > "$evidence/package.sha256"
           printf '%s\n' "$candidate_subtree" > "$evidence/candidate-subtree.txt"
+          printf '%s\n' "$EXPECTED_CANARY_LOCK_SHA256" > "$evidence/historical-lock.sha256"
 
-      - name: Assemble and upload the single evidence artifact
+      - name: Assemble the single bounded evidence artifact
         shell: bash
         run: |
           set -euo pipefail
@@ -245,6 +279,7 @@ jobs:
           rm -rf canary/zep-core-canary/node_modules canary/zep-core-canary/package-lock.json canary/zep-core-canary/vendor/zep-core/dist
           test -z "$(git status --porcelain)"
           find "$reproduce" -type f ! -name SHA256SUMS.txt -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$reproduce/SHA256SUMS.txt"
+
           final="$RUNNER_TEMP/order073-final"
           mkdir -p "$final/primary" "$final/reproduce"
           printf '%s' '${{ needs.primary-clean-runner.outputs.primary_evidence_b64 }}' | base64 -d > "$RUNNER_TEMP/order073-primary.tar.gz"
@@ -252,14 +287,14 @@ jobs:
           cp -a "$RUNNER_TEMP/order073-primary/." "$final/primary/"
           cp -a "$reproduce/." "$final/reproduce/"
           cat > "$final/result.json" <<JSON
-          {"ok":true,"orderId":"ZUNGUN-AUD-ARQ-REMOTE-INDEPENDENT-VERIFICATION-073","head":"$(git rev-parse HEAD)","candidateSubtreeJob1":"${{ needs.primary-clean-runner.outputs.candidate_subtree }}","candidateSubtreeJob2":"$(cat "$reproduce/candidate-subtree.txt")","packageSha256Job1":"${{ needs.primary-clean-runner.outputs.package_sha256 }}","packageSha256Job2":"$(cat "$reproduce/package.sha256")","hashesMatch":true,"jobs":"2/2_PASS","merge":false,"deploy":false,"release":false,"canonical":false}
+          {"ok":true,"orderId":"ZUNGUN-AUD-ARQ-REMOTE-INDEPENDENT-VERIFICATION-073R","head":"$(git rev-parse HEAD)","historicalLockSha256":"$EXPECTED_CANARY_LOCK_SHA256","candidateSubtreeJob1":"${{ needs.primary-clean-runner.outputs.candidate_subtree }}","candidateSubtreeJob2":"$(cat "$reproduce/candidate-subtree.txt")","packageSha256Job1":"${{ needs.primary-clean-runner.outputs.package_sha256 }}","packageSha256Job2":"$(cat "$reproduce/package.sha256")","hashesMatch":true,"jobs":"2/2_PASS","merge":false,"deploy":false,"release":false,"canonical":false}
           JSON
           find "$final" -type f ! -name SHA256SUMS.txt -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$final/SHA256SUMS.txt"
 
-      - name: Upload bounded Order 073 evidence
+      - name: Upload bounded Order 073R evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: zungun-order073-remote-ci-${{ github.run_id }}
+          name: zungun-order073r-remote-ci-${{ github.run_id }}
           path: ${{ runner.temp }}/order073-final
           if-no-files-found: error
           retention-days: 14
