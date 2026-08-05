@@ -14,7 +14,7 @@ function mime(path:string):string { return ({'.html':'text/html; charset=utf-8',
 
 export function createReceiverServer(options:{databasePath:string;keyPath:string;apiToken:string;receiverId?:string;staticDir?:string}) {
   const database=new ReceiverDatabase(options.databasePath); const provider=new LocalFileReceiptKeyProvider(options.keyPath); const receiver=new PersistentReceiver(database,provider,options.receiverId); const auth=new TokenAuthorizer(options.apiToken);
-  const staticDir=options.staticDir ?? resolve(fileURLToPath(new URL('../../../../apps/control-room/public/',import.meta.url)));
+  const staticDir=options.staticDir ?? resolve(fileURLToPath(new URL('../../../apps/control-room/public/',import.meta.url)));
   const server=createServer(async(request: IncomingMessage,response: ServerResponse)=>{ try {
     const url=new URL(request.url ?? '/',`http://${request.headers.host ?? 'localhost'}`); const parts=pathParts(url.pathname);
     if(url.pathname==='/health')return send(response,200,{status:'ok'});
@@ -28,7 +28,7 @@ export function createReceiverServer(options:{databasePath:string;keyPath:string
     if(parts[0]==='api'&&parts[1]==='v1'&&parts[2]==='operations'&&parts[3]&&parts[4]==='reconcile'&&request.method==='POST'){const b=await bodyJson(request) as any;return send(response,200,receiver.reconcile(parts[3],String(b.actorId),String(b.note??''),Number(b.nowMs??Date.now())));}
     if(parts[0]==='api'&&parts[1]==='v1'&&parts[2]==='operations'&&parts[3]&&parts[4]==='cancel'&&request.method==='POST'){receiver.cancel(parts[3],Date.now());return send(response,204,'');}
     if(request.method==='GET'&&url.pathname==='/api/v1/completeness'){return send(response,200,receiver.completeness((url.searchParams.get('scopeType')??'SHIFT') as any,url.searchParams.get('scopeId')??'',Date.now()));}
-    const requested=url.pathname==='/'?'index.html':url.pathname.slice(1); const safe=resolve(staticDir,requested); if(!safe.startsWith(resolve(staticDir))||!existsSync(safe))return send(response,404,{error:'NOT_FOUND'}); return send(response,200,readFileSync(safe),mime(safe));
+    const requested=url.pathname==='/'?'index.html':url.pathname.slice(1); const safe=resolve(staticDir,requested); if(!safe.startsWith(resolve(staticDir))||!existsSync(safe))return send(response,404,{error:'NOT_FOUND'}); return send(response,200,readFileSync(safe,'utf8'),mime(safe));
   } catch(error){const message=error instanceof Error?error.message:'INTERNAL_ERROR';const status=message==='UNAUTHORIZED'?401:message==='OPERATION_NOT_FOUND'?404:['DUPLICATE_CONFLICT','REPLAY_DETECTED','APPLICATION_CONFLICT','LEASE_HELD'].includes(message)?409:message==='PAYLOAD_TOO_LARGE'?413:400;return send(response,status,{error:message});} });
   return {server,receiver,database,close:()=>new Promise<void>((resolveClose,reject)=>server.close((e:any)=>{database.close();e?reject(e):resolveClose();}))};
 }
