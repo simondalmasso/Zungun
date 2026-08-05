@@ -8,7 +8,7 @@ name: Order 076 Android bootstrap
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: order-076-bootstrap-${{ github.ref }}
@@ -23,7 +23,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
       - name: Install Android SDK inputs
         shell: bash
         run: |
@@ -75,3 +75,16 @@ jobs:
           if-no-files-found: error
           retention-days: 5
           compression-level: 0
+      - name: Publish resolved dependency evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Simon Dalmasso'
+          git config user.email 'simondalmasso44@gmail.com'
+          git add android/runtime/gradle.lockfile android/sample/gradle.lockfile \
+            android/external-consumer/gradle.lockfile android/gradle/verification-metadata.xml
+          test -z "$(git diff --cached --name-only -- canary/zep-core-canary/vendor/zep-core candidate/order-072 .github/workflows)"
+          if ! git diff --cached --quiet; then
+            git commit -m 'build(order-076): lock resolved Android dependencies'
+            git push origin HEAD:feat/zungun-full-project-v1
+          fi
