@@ -1,0 +1,76 @@
+name: Order 076 Android bootstrap
+
+"on":
+  push:
+    branches:
+      - feat/zungun-full-project-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: order-076-bootstrap-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Android SDK inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+      - name: Compile and test Android corrective implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
+            :runtime:testDebugUnitTest :sample:assembleDebug
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :external-consumer:assembleDebug
+      - name: Generate resolved dependency locks and verification metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            --write-locks --write-verification-metadata sha256 \
+            :runtime:dependencies :sample:dependencies :external-consumer:dependencies
+          find android -type f \( -name 'gradle.lockfile' -o -path '*/gradle/verification-metadata.xml' \) -print | LC_ALL=C sort
+          test -s android/gradle/verification-metadata.xml
+          test "$(find android -type f -name gradle.lockfile | wc -l)" -ge 3
+      - name: Archive bootstrap evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/order076-bootstrap"
+          mkdir -p "$out/locks"
+          while IFS= read -r file; do
+            mkdir -p "$out/locks/$(dirname "$file")"
+            cp "$file" "$out/locks/$file"
+          done < <(find android -type f \( -name 'gradle.lockfile' -o -path '*/gradle/verification-metadata.xml' \) | LC_ALL=C sort)
+          cp android/runtime/build/outputs/aar/runtime-release.aar "$out/zungun-runtime-release.aar"
+          cp android/sample/build/outputs/apk/debug/sample-debug.apk "$out/sample-debug.apk"
+          cp android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk "$out/external-consumer-debug.apk"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order076-bootstrap-${{ github.run_id }}
+          path: ${{ runner.temp }}/order076-bootstrap
+          if-no-files-found: error
+          retention-days: 5
+          compression-level: 0
