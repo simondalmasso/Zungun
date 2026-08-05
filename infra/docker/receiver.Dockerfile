@@ -11,7 +11,7 @@ COPY tools/build ./tools/build
 RUN npm ci --ignore-scripts --no-audit --no-fund && npm run build
 
 FROM node:22.16.0-bookworm-slim
-ENV NODE_ENV=production RECEIVER_HOST=0.0.0.0 RECEIVER_PORT=8788 RECEIVER_DB=/data/receiver.sqlite
+ENV NODE_ENV=production RECEIVER_HOST=0.0.0.0 RECEIVER_PORT=8788 RECEIVER_DB=/data/receiver.sqlite ZUNGUN_DATA_DIR=/data
 WORKDIR /app
 RUN useradd --system --uid 10001 --create-home zungun && mkdir -p /data && chown zungun:zungun /data
 COPY --from=build --chown=zungun:zungun /workspace/dist ./dist
