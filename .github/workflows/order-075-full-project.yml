@@ -129,14 +129,44 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npm run build
           python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
-      - name: "Gate 15 — strict Android graph locks hashes build lint and unit tests"
+      - name: "Gate 15a — clean Android outputs"
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :runtime:clean :sample:clean :external-consumer:clean
+      - name: "Gate 15b — build producer AAR and verify SHA-256"
         id: android
         shell: bash
         run: |
-          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug :runtime:testDebugUnitTest :sample:assembleDebug :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
-          aar=android/runtime/build/outputs/aar/runtime-release.aar; test -s "$aar"
-          echo "aar_sha=$(sha256sum "$aar" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :runtime:assembleRelease
+          aar=android/runtime/build/outputs/aar/runtime-release.aar
+          test -s "$aar"
+          sha256sum "$aar" | tee "$RUNNER_TEMP/runtime-release.aar.sha256"
+          echo "aar_sha=$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")" >> "$GITHUB_OUTPUT"
+      - name: "Gate 15c — compile consumer from declared producer artifact"
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+      - name: "Gate 15d — runtime lint unit sample and lock integrity"
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :runtime:assembleDebug :runtime:lintDebug :runtime:testDebugUnitTest :sample:assembleDebug
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+          test -s android/gradle/verification-metadata.xml
+          test "$(find android -type f -name gradle.lockfile | wc -l)" -ge 3
       - name: "Gate 16 — Room WorkManager migration force-stop persistence"
         shell: bash
         run: |
@@ -155,6 +185,7 @@ jobs:
         run: |
           out="$RUNNER_TEMP/order077-android"; mkdir -p "$out"
           cp android/runtime/build/outputs/aar/runtime-release.aar "$out/zungun-runtime-release.aar"
+          cp "$RUNNER_TEMP/runtime-release.aar.sha256" "$out/zungun-runtime-release.aar.sha256"
           cp android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk "$out/"
           cp -a "$RUNNER_TEMP/order076-real-e2e" "$out/real-e2e"
           cp "$RUNNER_TEMP/emulator-unit.log" "$out/"

@@ -22,3 +22,15 @@ dependencies {
     androidTestImplementation("androidx.work:work-testing:2.10.0")
 }
 kapt { correctErrorTypes = true }
+
+val releaseAarArtifact = configurations.create("releaseAarArtifact") {
+    isCanBeConsumed = true
+    isCanBeResolved = false
+}
+
+artifacts {
+    add(releaseAarArtifact.name, layout.buildDirectory.file("outputs/aar/runtime-release.aar")) {
+        builtBy(tasks.named("assembleRelease"))
+        type = "aar"
+    }
+}

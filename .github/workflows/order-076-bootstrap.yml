@@ -34,30 +34,89 @@ jobs:
           yes | "$sdkmanager" --licenses >/dev/null || true
           "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
-      - name: Generate resolved dependency locks and verification metadata
+      - name: Snapshot and reset verification metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous="$RUNNER_TEMP/verification-metadata.previous.xml"
+          cp android/gradle/verification-metadata.xml "$previous"
+          rm android/gradle/verification-metadata.xml
+          printf 'PREVIOUS_VERIFICATION=%s\n' "$previous" >> "$GITHUB_ENV"
+      - name: Resolve dependency graph and generate locks
         shell: bash
         run: |
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
-          previous="$RUNNER_TEMP/verification-metadata.previous.xml"
-          cp android/gradle/verification-metadata.xml "$previous"
-          rm android/gradle/verification-metadata.xml
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             --write-locks --write-verification-metadata sha256 \
-            :runtime:dependencies :sample:dependencies :external-consumer:dependencies \
-            :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
-            :runtime:testDebugUnitTest :sample:assembleDebug \
+            :runtime:dependencies :sample:dependencies :external-consumer:dependencies
+      - name: Clean Android build outputs before production
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            --write-locks --write-verification-metadata sha256 \
+            :runtime:clean :sample:clean :external-consumer:clean
+      - name: Build producer AAR and verify SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            --write-locks --write-verification-metadata sha256 \
+            :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
+            :runtime:testDebugUnitTest :sample:assembleDebug
+          aar=android/runtime/build/outputs/aar/runtime-release.aar
+          test -s "$aar"
+          sha256sum "$aar" | tee "$RUNNER_TEMP/runtime-release.aar.sha256"
+      - name: Compile external consumer from declared producer artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            --write-locks --write-verification-metadata sha256 \
             :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+      - name: Complete exact dependency verification metadata
+        shell: bash
+        run: |
+          set -euo pipefail
           test -s android/gradle/verification-metadata.xml
           python tools/android/complete-gradle-verification.py \
             --metadata android/gradle/verification-metadata.xml \
-            --merge-from "$previous" \
+            --merge-from "$PREVIOUS_VERIFICATION" \
             --components android/gradle/verification-extra-components.txt \
             --gradle-user-home "${GRADLE_USER_HOME:-$HOME/.gradle}"
+      - name: Strict clean before verification replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
-            :runtime:clean :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
-            :runtime:testDebugUnitTest :sample:assembleDebug \
+            :runtime:clean :sample:clean :external-consumer:clean
+      - name: Strict producer AAR replay and SHA-256 verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
+            :runtime:testDebugUnitTest :sample:assembleDebug
+          aar=android/runtime/build/outputs/aar/runtime-release.aar
+          test -s "$aar"
+          sha256sum "$aar" | tee "$RUNNER_TEMP/runtime-release.aar.sha256"
+      - name: Strict external consumer replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
           find android -type f \( -name 'gradle.lockfile' -o -path '*/gradle/verification-metadata.xml' \) -print | LC_ALL=C sort
           test -s android/gradle/verification-metadata.xml
           test "$(find android -type f -name gradle.lockfile | wc -l)" -ge 3
@@ -72,6 +131,7 @@ jobs:
             cp "$file" "$out/locks/$file"
           done < <(find android -type f \( -name 'gradle.lockfile' -o -path '*/gradle/verification-metadata.xml' \) | LC_ALL=C sort)
           cp android/runtime/build/outputs/aar/runtime-release.aar "$out/zungun-runtime-release.aar"
+          cp "$RUNNER_TEMP/runtime-release.aar.sha256" "$out/zungun-runtime-release.aar.sha256"
           cp android/sample/build/outputs/apk/debug/sample-debug.apk "$out/sample-debug.apk"
           cp android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk "$out/external-consumer-debug.apk"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
