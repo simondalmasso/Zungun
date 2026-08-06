@@ -30,7 +30,7 @@ val releaseAarArtifact = configurations.create("releaseAarArtifact") {
 
 artifacts {
     add(releaseAarArtifact.name, layout.buildDirectory.file("outputs/aar/runtime-release.aar")) {
-        builtBy(tasks.named("assembleRelease"))
+        builtBy("assembleRelease")
         type = "aar"
     }
 }
