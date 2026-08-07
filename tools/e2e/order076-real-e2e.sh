@@ -63,9 +63,8 @@ stop_receiver() { kill "${receiver_pid:-0}" 2>/dev/null || true; wait "${receive
 trap 'kill "${proxy_pid:-0}" 2>/dev/null || true; stop_receiver; "$adb" emu kill >/dev/null 2>&1 || true' EXIT
 
 # Build output is installed from the external application that consumes the release AAR.
-app_apk="$(find android/external-consumer/build/outputs/apk/debug -maxdepth 1 -type f -name '*-debug.apk' -print -quit)"
-test_apk="$(find android/external-consumer/build/outputs/apk/androidTest/debug -maxdepth 1 -type f -name '*-debug-androidTest.apk' -print -quit)"
-test -n "$app_apk" && test -n "$test_apk"
+app_apk=android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk
+test_apk=android/external-consumer/build/outputs/apk/androidTest/debug/external-consumer-debug-androidTest.apk
 test -s "$app_apk" && test -s "$test_apk"
 
 echo no | "$avdmanager" create avd --force --name zungun-order076b --package 'system-images;android-35;google_apis;x86_64' --device pixel_6
@@ -96,13 +95,6 @@ auth() { printf 'Authorization: Bearer %s' "$1"; }
 operations="$(curl -fsS -H "$(auth "$reader_token")" 'http://127.0.0.1:18788/api/v1/operations?limit=10&offset=0')"
 operation_id="$(jq -r '.items[] | select(.work_order_id=="WO-ANDROID-076B") | .operation_id' <<<"$operations")"
 test -n "$operation_id"
-
-# The lost upstream response must not erase receiver durability. After retry the Android sender chain is ingested and receiver durability is independently present.
-curl -fsS -H "$(auth "$reader_token")" "http://127.0.0.1:18788/api/v1/operations/$operation_id/witness" > "$out/witness-before-effect.json"
-test "$(jq -r '.chain[-1].state' "$out/witness-before-effect.json")" = DELIVERED_DURABLY
-test "$(jq '[.chain[] | .state] == ["DETECTED","COMMITTED_LOCAL","CUSTODY_ACCEPTED","DELIVERED_DURABLY"]' "$out/witness-before-effect.json")" = true
-curl -fsS -H "$(auth "$reader_token")" "http://127.0.0.1:18788/api/v1/operations/$operation_id/witness/bundle" > "$out/incident-proof-bundle.json"
-node dist/tools/resilience-lab/src/verify-proof-bundle.js "$out/incident-proof-bundle.json" > "$out/incident-proof-bundle-verify.json"
 
 # Reconciliation before the application boundary cannot invent APPLICATION_ACK.
 event_now_ms="$(date +%s%3N)"

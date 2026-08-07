@@ -175,25 +175,4 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
       CREATE INDEX IF NOT EXISTS idx_auth_audit_time ON auth_audit(observed_at_ms, audit_id);
     `,
   },
-  {
-    version: 5,
-    name: 'witness durable evidence chains',
-    sql: `
-      CREATE TABLE IF NOT EXISTS witness_evidence (
-        evidence_id TEXT PRIMARY KEY,
-        incident_id TEXT NOT NULL,
-        operation_id TEXT NOT NULL REFERENCES operations(operation_id) ON DELETE CASCADE,
-        chain_position INTEGER NOT NULL,
-        state TEXT NOT NULL,
-        evidence_json TEXT NOT NULL,
-        evidence_sha256 TEXT NOT NULL,
-        previous_hash TEXT,
-        persisted_at_ms INTEGER NOT NULL,
-        UNIQUE(incident_id, chain_position),
-        UNIQUE(incident_id, evidence_sha256)
-      );
-      CREATE INDEX IF NOT EXISTS idx_witness_incident_position
-        ON witness_evidence(incident_id, chain_position);
-    `,
-  },
 ]);

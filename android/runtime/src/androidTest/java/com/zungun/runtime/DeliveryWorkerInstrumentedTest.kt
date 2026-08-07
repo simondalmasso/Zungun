@@ -42,11 +42,7 @@ class DeliveryWorkerInstrumentedTest {
     @Test
     fun ambiguousTransportPersistsAttemptAndUnknownState() = runBlocking {
         val operationId = enqueue()
-        var transmittedWitness = emptyList<String>()
-        install(ReceiverTransportClient { _, _, _, witness ->
-            transmittedWitness = witness
-            TransportResult.AmbiguousFailure("SOCKET_TIMEOUT")
-        })
+        install(ReceiverTransportClient { _, _, _ -> TransportResult.AmbiguousFailure("SOCKET_TIMEOUT") })
         val result = worker(operationId).doWork()
         assertEquals(ListenableWorker.Result.retry()::class, result::class)
         val database = ZungunDatabase.open(context, databaseName)
@@ -54,9 +50,6 @@ class DeliveryWorkerInstrumentedTest {
             assertEquals(OperationState.UNKNOWN.name, database.operations().get(operationId)?.state)
             assertEquals(1, database.operations().attemptsFor(operationId).size)
             assertEquals("UNKNOWN", database.operations().attemptsFor(operationId).single().status)
-            val witness = database.operations().witnessFor(operationId)
-            assertEquals(listOf("DETECTED", "COMMITTED_LOCAL", "CUSTODY_ACCEPTED"), witness.map { it.state })
-            assertEquals(witness.map { it.evidenceJson }, transmittedWitness)
         } finally {
             database.close()
         }
@@ -74,9 +67,7 @@ class DeliveryWorkerInstrumentedTest {
             payloadSha256 = "a".repeat(64),
             applicationOutcome = "EFFECT_APPLIED",
         )
-        var transmittedWitness = emptyList<String>()
-        install(ReceiverTransportClient { _, _, _, witness ->
-            transmittedWitness = witness
+        install(ReceiverTransportClient { _, _, _ ->
             TransportResult.Accepted(
                 duplicate = true,
                 receiverState = "COMPLETED",
@@ -93,8 +84,6 @@ class DeliveryWorkerInstrumentedTest {
             assertNotNull(database.operations().receiptFor(operationId))
             val kinds = database.operations().evidenceFor(operationId).map { it.kind }
             assertTrue(kinds.containsAll(listOf("TRANSPORT_ATTEMPT", "RECEIVER_ACCEPTED", "APPLICATION_ACK", "SIGNED_RECEIPT")))
-            assertEquals(listOf("DETECTED", "COMMITTED_LOCAL", "CUSTODY_ACCEPTED"), database.operations().witnessFor(operationId).map { it.state })
-            assertEquals(3, transmittedWitness.size)
         } finally {
             database.close()
         }

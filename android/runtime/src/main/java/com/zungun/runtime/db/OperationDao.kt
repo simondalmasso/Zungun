@@ -65,10 +65,4 @@ interface OperationDao {
 
     @Query("SELECT * FROM evidence WHERE operationId=:id ORDER BY occurredAtMs,id")
     suspend fun evidenceFor(id: String): List<EvidenceEntity>
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun witnessEvidence(value: WitnessEvidenceEntity): Long
-
-    @Query("SELECT * FROM witness_evidence WHERE operationId=:id ORDER BY chainPosition")
-    suspend fun witnessFor(id: String): List<WitnessEvidenceEntity>
 }

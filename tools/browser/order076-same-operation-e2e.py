@@ -31,7 +31,7 @@ with sync_playwright() as playwright:
     page.locator(f'[data-operation="{operation_id}"]').click()
     page.wait_for_selector('.timeline')
     detail = page.locator('#detailContent').inner_text()
-    for expected in ['TRANSPORT_ATTEMPT', 'APPLICATION_ACK', 'SIGNED_RECEIPT', 'EFFECT_APPLIED', 'DETECTED', 'COMMITTED_LOCAL', 'CUSTODY_ACCEPTED', 'DELIVERED_DURABLY']:
+    for expected in ['TRANSPORT_ATTEMPT', 'APPLICATION_ACK', 'SIGNED_RECEIPT', 'EFFECT_APPLIED']:
         assert expected in detail
     assert 'fencing_token' in detail
 
@@ -68,6 +68,4 @@ print(json.dumps({
     'reconciliation': True,
     'boundedCompleteness': True,
     'backendPagination': True,
-    'witnessChain': True,
-    'receiverDurability': True,
 }))

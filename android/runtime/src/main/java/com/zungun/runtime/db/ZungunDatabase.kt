@@ -13,9 +13,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         EvidenceEntity::class,
         ReceiptEntity::class,
         TransportAttemptEntity::class,
-        WitnessEvidenceEntity::class,
     ],
-    version = 4,
+    version = 3,
     exportSchema = true,
 )
 abstract class ZungunDatabase : RoomDatabase() {
@@ -54,32 +53,9 @@ abstract class ZungunDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS witness_evidence (
-                      evidenceId TEXT NOT NULL PRIMARY KEY,
-                      operationId TEXT NOT NULL,
-                      chainPosition INTEGER NOT NULL,
-                      state TEXT NOT NULL,
-                      evidenceJson TEXT NOT NULL,
-                      evidenceSha256 TEXT NOT NULL,
-                      previousHash TEXT,
-                      monotonicMs INTEGER NOT NULL,
-                      createdAtMs INTEGER NOT NULL,
-                      FOREIGN KEY(operationId) REFERENCES operations(operationId) ON UPDATE NO ACTION ON DELETE CASCADE
-                    )
-                    """.trimIndent(),
-                )
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_witness_evidence_operationId ON witness_evidence(operationId)")
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_witness_evidence_operationId_chainPosition ON witness_evidence(operationId,chainPosition)")
-            }
-        }
-
         fun open(context: Context, name: String = "zungun-critical-operations.db") =
             Room.databaseBuilder(context, ZungunDatabase::class.java, name)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

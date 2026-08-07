@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createReceiverServer } from '../services/receiver/src/server.js';
 import { makeEnvelope } from './helpers.js';
-import { appendWitnessEvidence, verifyIncidentProofBundle, type WitnessEvidence } from '../packages/protocol-core/src/witness.js';
 
 const TOKENS = Object.freeze({
   ingest: 'server-ingest-token-order076',
@@ -48,7 +47,7 @@ test('health and readiness perform real checks while APIs require authentication
   assert.equal((await fetch(`${origin}/health`)).status, 200);
   const ready = await (await fetch(`${origin}/ready`)).json() as any;
   assert.equal(ready.database.queryOk, true);
-  assert.equal(ready.database.migrationCount, 5);
+  assert.equal(ready.database.migrationCount, 4);
   assert.match(ready.activeKeyId, /^key_/);
   assert.equal((await fetch(`${origin}/api/v1/operations`)).status, 401);
 }));
@@ -153,41 +152,4 @@ test('oversized request and traversal attempts fail closed', async () => withSer
   });
   assert.equal(oversized.status, 413);
   assert.equal((await fetch(`${origin}/..%2F..%2Fetc%2Fpasswd`)).status, 404);
-}));
-
-
-test('Witness HTTP routes enforce separate least-privilege roles and return receiver durability', async () => withServer(async (origin) => {
-  const now = Date.now();
-  const envelope = makeEnvelope({
-    operationId: 'op_server_witness_080',
-    idempotencyKey: 'idem_server_witness_080',
-    replayNonce: 'nonce_server_witness_080',
-    messageId: 'msg_server_witness_080',
-    workOrderId: 'WO-WITNESS-080',
-    policy: { ...makeEnvelope().policy, createdAtMs: now - 1_000, expiresAtMs: now + 3_600_000 },
-  });
-  assert.equal((await fetch(`${origin}/api/v1/operations`, { method:'POST', headers:headers(TOKENS.ingest), body:JSON.stringify(envelope) })).status, 202);
-  const chain: WitnessEvidence[]=[];
-  const add=(input: Parameters<typeof appendWitnessEvidence>[1])=>chain.push(appendWitnessEvidence(chain,input));
-  add({incidentId:envelope.operationId,evidenceId:'http-detected',state:'DETECTED',evidenceClass:'OBSERVED_FACT',emitterId:'sensor:http',authorizationScope:'witness:source',observedAtMs:now,monotonicMs:1,provenance:'server-test',reasonCode:'HTTP_DETECTED',claims:{boundaryRole:'SENSOR_OR_SOURCE',sourceId:'sensor:http'}});
-  add({incidentId:envelope.operationId,evidenceId:'http-local',state:'COMMITTED_LOCAL',evidenceClass:'MACHINE_ASSERTION',emitterId:'device:http',authorizationScope:'witness:local',observedAtMs:now+1,monotonicMs:2,provenance:'server-test',reasonCode:'LOCAL_DURABLE_COMMIT',claims:{boundaryRole:'ZUNGUN_WITNESS',localCommitRef:'room:http'}});
-  add({incidentId:envelope.operationId,evidenceId:'http-custody',state:'CUSTODY_ACCEPTED',evidenceClass:'MACHINE_ASSERTION',emitterId:'transport:http',authorizationScope:'witness:transport',observedAtMs:now+2,monotonicMs:3,provenance:'server-test',reasonCode:'HTTP_CUSTODY',claims:{boundaryRole:'TRANSPORT',transportKind:'HTTP_WEBHOOK',routeId:'route:http',custodyRef:'http:accepted'}});
-  assert.equal((await fetch(`${origin}/api/v1/operations/${envelope.operationId}/witness/ingest`, {method:'POST',headers:headers(TOKENS.reader),body:JSON.stringify({chain,nowMs:now+3})})).status,403);
-  const ingested=await fetch(`${origin}/api/v1/operations/${envelope.operationId}/witness/ingest`, {method:'POST',headers:headers(TOKENS.ingest),body:JSON.stringify({chain,nowMs:now+3})});
-  assert.equal(ingested.status,202);
-  const ingestedBody=await ingested.json() as any;
-  assert.equal(ingestedBody.chain.at(-1).state,'DELIVERED_DURABLY');
-  const read=await fetch(`${origin}/api/v1/operations/${envelope.operationId}/witness`, {headers:headers(TOKENS.reader)});
-  assert.equal(read.status,200);
-  const readBody=await read.json() as any;
-  assert.equal(readBody.chain.length,4);
-  const ownership={incidentId:envelope.operationId,evidenceId:'http-owned',state:'OWNED_BY_RESPONDER',evidenceClass:'HUMAN_ATTESTATION',emitterId:'responder:http',authorizationScope:'witness:attest',observedAtMs:now+4,monotonicMs:5,provenance:'server-test',reasonCode:'RESPONDER_OWNED',claims:{boundaryRole:'RESPONDER',responderId:'worker',ownershipRef:'ack:http'}};
-  assert.equal((await fetch(`${origin}/api/v1/operations/${envelope.operationId}/witness/attest`, {method:'POST',headers:headers(TOKENS.admin),body:JSON.stringify({evidence:ownership,nowMs:now+4})})).status,403);
-  assert.equal((await fetch(`${origin}/api/v1/operations/${envelope.operationId}/witness/attest`, {method:'POST',headers:headers(TOKENS.worker),body:JSON.stringify({evidence:ownership,nowMs:now+4})})).status,201);
-  const reconciliation=await fetch(`${origin}/api/v1/operations/${envelope.operationId}/witness/reconcile`, {method:'POST',headers:headers(TOKENS.reviewer),body:JSON.stringify({senderChain:chain})});
-  assert.equal(reconciliation.status,200);
-  assert.equal((await reconciliation.json() as any).code,'RECEIVER_DURABLE_EVIDENCE_RECOVERED');
-  const bundleResponse=await fetch(`${origin}/api/v1/operations/${envelope.operationId}/witness/bundle`, {headers:headers(TOKENS.reader)});
-  assert.equal(bundleResponse.status,200);
-  assert.equal(verifyIncidentProofBundle(await bundleResponse.json() as any).ok,true);
 }));
