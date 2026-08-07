@@ -94,11 +94,20 @@ for _ in $(seq 1 30); do curl -sS http://127.0.0.1:18789/ready >/dev/null 2>&1 &
 instrument assertLostResponseUnknown
 
 auth() { printf 'Authorization: Bearer %s' "$1"; }
-for _ in $(seq 1 30); do [ -s "$state/drop-observed" ] && break; sleep 1; done
-test -s "$state/drop-observed"
-operations="$(curl -fsS -H "$(auth "$reader_token")" 'http://127.0.0.1:18788/api/v1/operations?q=WO-ANDROID-076B&limit=10&offset=0')"
-test "$(jq '[.items[] | select(.work_order_id=="WO-ANDROID-076B")] | length' <<<"$operations")" = 1
-operation_id="$(jq -er '.items[] | select(.work_order_id=="WO-ANDROID-076B") | .operation_id | select(type=="string" and length>0)' <<<"$operations")"
+for _ in $(seq 1 30); do [ -s "$state/drop-observed" ] && [ -s "$state/last-operation-response.json" ] && break; sleep 1; done
+if [ ! -s "$state/drop-observed" ] || [ ! -s "$state/last-operation-response.json" ]; then
+  echo 'Gate17 drop evidence missing' >&2
+  cat "$out/proxy.log" >&2 || true
+  cat "$out/receiver.log" >&2 || true
+  ls -la "$state" >&2 || true
+  exit 1
+fi
+operation_id="$(jq -er '.operationId | select(type=="string" and length>0)' "$state/last-operation-response.json")"
+curl -fsS -H "$(auth "$reader_token")" "http://127.0.0.1:18788/api/v1/operations/$operation_id" > "$out/dropped-operation-detail.json"
+test "$(jq -r .operation.operation_id "$out/dropped-operation-detail.json")" = "$operation_id"
+test "$(jq -r .operation.work_order_id "$out/dropped-operation-detail.json")" = 'WO-ANDROID-076B'
+test "$(jq -r .operation.state "$out/dropped-operation-detail.json")" = 'RECEIVER_ACCEPTED'
+test "$(jq -r '.receipt == null' "$out/dropped-operation-detail.json")" = true
 
 event_now_ms="$(date +%s%3N)"
 curl -fsS -H "$(auth "$reviewer_token")" -H 'content-type: application/json' \
