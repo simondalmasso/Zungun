@@ -6,12 +6,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.ListenableWorker
 import androidx.work.workDataOf
 import androidx.work.testing.TestListenableWorkerBuilder
+import com.zungun.runtime.db.OperationEntity
 import com.zungun.runtime.db.ZungunDatabase
-import com.zungun.runtime.delivery.CriticalOperationRuntime
 import com.zungun.runtime.delivery.DeliveryWorker
 import com.zungun.runtime.delivery.SemanticRevalidator
-import com.zungun.runtime.model.EnqueueRequest
-import com.zungun.runtime.model.OperationPolicy
 import com.zungun.runtime.model.OperationState
 import com.zungun.runtime.network.CredentialProvider
 import com.zungun.runtime.network.DeliveryDependencyProvider
@@ -41,7 +39,7 @@ class DeliveryWorkerInstrumentedTest {
 
     @Test
     fun ambiguousTransportPersistsAttemptAndUnknownState() = runBlocking {
-        val operationId = enqueue()
+        val operationId = seed()
         install(ReceiverTransportClient { _, _, _ -> TransportResult.AmbiguousFailure("SOCKET_TIMEOUT") })
         val result = worker(operationId).doWork()
         assertEquals(ListenableWorker.Result.retry()::class, result::class)
@@ -57,7 +55,7 @@ class DeliveryWorkerInstrumentedTest {
 
     @Test
     fun verifiedReceiptCompletesOperationAndPersistsEvidence() = runBlocking {
-        val operationId = enqueue()
+        val operationId = seed()
         val receipt = VerifiedReceipt(
             receiptId = "receipt_test",
             keyId = "key_test",
@@ -89,26 +87,64 @@ class DeliveryWorkerInstrumentedTest {
         }
     }
 
-    private suspend fun enqueue(): String {
+    @Test
+    fun deliveringOperationIsNotReclaimedOrSentAgain() = runBlocking {
+        val operationId = seed(OperationState.DELIVERING)
+        var calls = 0
+        install(ReceiverTransportClient { _, _, _ ->
+            calls += 1
+            TransportResult.AmbiguousFailure("SHOULD_NOT_SEND")
+        })
+        val result = worker(operationId).doWork()
+        assertEquals(ListenableWorker.Result.retry()::class, result::class)
+        assertEquals(0, calls)
+        val database = ZungunDatabase.open(context, databaseName)
+        try {
+            assertEquals(OperationState.DELIVERING.name, database.operations().get(operationId)?.state)
+            assertTrue(database.operations().attemptsFor(operationId).isEmpty())
+        } finally {
+            database.close()
+        }
+    }
+
+    private suspend fun seed(state: OperationState = OperationState.QUEUED): String {
         context.deleteDatabase(databaseName)
         val now = System.currentTimeMillis()
+        val operationId = "op_worker_${state.name.lowercase()}_$now"
         val database = ZungunDatabase.open(context, databaseName)
-        return CriticalOperationRuntime(context, database).enqueue(
-            EnqueueRequest(
-                tenantId = "tenant",
-                deviceId = "device",
-                localSequence = 1,
-                scopeType = "SHIFT",
-                scopeId = "shift",
-                workOrderId = "WO-1",
-                messageId = "msg-1",
-                messageCommitment = "sha256:message",
-                payload = "{}".toByteArray(),
-                contentType = "application/json",
-                policy = OperationPolicy(2, now, now + 3_600_000, 5, true, true, 16_384),
-            ),
-            now,
-        ).also { database.close() }
+        try {
+            val inserted = database.operations().insert(
+                OperationEntity(
+                    operationId = operationId,
+                    idempotencyKey = "idem_$operationId",
+                    tenantId = "tenant",
+                    deviceId = "device",
+                    scopeType = "SHIFT",
+                    scopeId = "shift",
+                    workOrderId = "WO-1",
+                    messageId = "msg-1",
+                    messageCommitment = "sha256:message",
+                    replayNonce = "nonce_$operationId",
+                    payload = "{}".toByteArray(),
+                    contentType = "application/json",
+                    priority = 2,
+                    createdAtMs = now,
+                    expiresAtMs = now + 3_600_000,
+                    retryBudget = 5,
+                    maxPayloadBytes = 16_384,
+                    attempts = if (state == OperationState.DELIVERING) 1 else 0,
+                    cancellationAllowed = true,
+                    semanticRevalidationRequired = true,
+                    state = state.name,
+                    lastError = null,
+                    updatedAtMs = now,
+                ),
+            )
+            check(inserted != -1L)
+            return operationId
+        } finally {
+            database.close()
+        }
     }
 
     private fun install(client: ReceiverTransportClient) {
