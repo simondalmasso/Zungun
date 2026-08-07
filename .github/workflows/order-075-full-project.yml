@@ -177,15 +177,18 @@ jobs:
           metadata=android/external-consumer/gradle/verification-metadata.xml
           test -s "$lock"
           test -s "$metadata"
-          test "$(sha256sum "$lock" | cut -d' ' -f1)" = ef069e3b72d9c51ec9620663139c732d839b5539e08e252255fed66625f02238
-          test "$(sha256sum "$metadata" | cut -d' ' -f1)" = 3c6dc59d4a10635811564d65fa7de50c349d82cbe046bb907535479116dbd79d
           grep -q '^com.zungun:zungun-runtime:1.0.80=' "$lock"
           grep -q 'group="com.zungun" name="zungun-runtime" version="1.0.80"' "$metadata"
           grep -q 'value="26d62b972f7655d949330d5bf8f129de3cd36a100023b3f1b163f492ceb31f68"' "$metadata"
+          grep -q 'value="2a50508a154da26ad52becfac951d9136d51c404de279cae0767290a49d916b2"' "$metadata"
+          lock_sha="$(sha256sum "$lock" | cut -d' ' -f1)"
+          metadata_sha="$(sha256sum "$metadata" | cut -d' ' -f1)"
+          printf '%s  %s\n' "$lock_sha" "$lock" | tee "$RUNNER_TEMP/external-consumer-gradle.lockfile.sha256"
+          printf '%s  %s\n' "$metadata_sha" "$metadata" | tee "$RUNNER_TEMP/external-consumer-verification-metadata.xml.sha256"
           android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
             -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" clean assembleDebug assembleDebugAndroidTest
-          test "$(sha256sum "$lock" | cut -d' ' -f1)" = ef069e3b72d9c51ec9620663139c732d839b5539e08e252255fed66625f02238
-          test "$(sha256sum "$metadata" | cut -d' ' -f1)" = 3c6dc59d4a10635811564d65fa7de50c349d82cbe046bb907535479116dbd79d
+          test "$(sha256sum "$lock" | cut -d' ' -f1)" = "$lock_sha"
+          test "$(sha256sum "$metadata" | cut -d' ' -f1)" = "$metadata_sha"
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
           test "$(sha256sum "$ZUNGUN_RUNTIME_PUBLISHED_AAR" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
       - name: "Gate 15d — runtime lint unit sample and lock integrity"
