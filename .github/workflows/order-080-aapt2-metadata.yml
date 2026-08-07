@@ -1,0 +1,64 @@
+name: Order 080 AAPT2 verification capture
+
+"on":
+  push:
+    branches: [feat/zungun-full-project-v1]
+    paths: [.github/workflows/order-080-aapt2-metadata.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Android SDK inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+      - name: Generate exact assembleRelease verification metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            --write-verification-metadata sha256 :runtime:assembleRelease
+          test -s android/gradle/verification-metadata.xml
+          grep -q '<verify-metadata>true</verify-metadata>' android/gradle/verification-metadata.xml
+          grep -q 'name="aapt2" version="8.8.2-12006047"' android/gradle/verification-metadata.xml
+      - name: Strict replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:clean :runtime:assembleRelease
+          test -s android/runtime/build/outputs/aar/runtime-release.aar
+      - name: Archive metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/order080-aapt2-metadata"
+          mkdir -p "$out"
+          cp android/gradle/verification-metadata.xml "$out/verification-metadata.xml"
+          sha256sum "$out/verification-metadata.xml" > "$out/verification-metadata.xml.sha256"
+          sha256sum android/runtime/build/outputs/aar/runtime-release.aar > "$out/runtime-release.aar.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order080-aapt2-metadata-${{ github.run_id }}
+          path: ${{ runner.temp }}/order080-aapt2-metadata
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
