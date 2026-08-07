@@ -15,4 +15,8 @@ if [ ! -x "$home/bin/gradle" ]; then
   mv "$cache/gradle-$version.tmp/gradle-$version" "$home"
   rmdir "$cache/gradle-$version.tmp"
 fi
+aapt2="${ZUNGUN_AAPT2_OVERRIDE:-${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools/35.0.0/aapt2}"
+if [ -n "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}" ] && [ -x "$aapt2" ]; then
+  exec "$home/bin/gradle" -Pandroid.aapt2FromMavenOverride="$aapt2" "$@"
+fi
 exec "$home/bin/gradle" "$@"
