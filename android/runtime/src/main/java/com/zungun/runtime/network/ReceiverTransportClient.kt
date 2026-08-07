@@ -41,10 +41,27 @@ data class VerifiedReceipt(
 )
 
 fun interface ReceiverTransportClient {
-    suspend fun deliver(operation: OperationEntity, configuration: ReceiverConfiguration, nowMs: Long, witnessChainJson: List<String> = emptyList()): TransportResult
+    suspend fun deliver(
+        operation: OperationEntity,
+        configuration: ReceiverConfiguration,
+        nowMs: Long,
+    ): TransportResult
+
+    suspend fun deliver(
+        operation: OperationEntity,
+        configuration: ReceiverConfiguration,
+        nowMs: Long,
+        witnessChainJson: List<String>,
+    ): TransportResult = deliver(operation, configuration, nowMs)
 }
 
 class HttpReceiverTransportClient : ReceiverTransportClient {
+    override suspend fun deliver(
+        operation: OperationEntity,
+        configuration: ReceiverConfiguration,
+        nowMs: Long,
+    ): TransportResult = deliver(operation, configuration, nowMs, emptyList())
+
     override suspend fun deliver(
         operation: OperationEntity,
         configuration: ReceiverConfiguration,
