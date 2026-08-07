@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+  title: Zungun Doctor Fixture
+  version: 1.0.0
+paths:
+  /work-orders/{id}/close:
+    post:
+      operationId: closeWorkOrder
+      responses:
+        '202':
+          description: accepted
+  /telemetry:
+    post:
+      operationId: appendTelemetry
+      x-zungun-retry-contract: SAFE_IDEMPOTENT
+      x-zungun-idempotency-required: true
+      responses:
+        '202':
+          description: accepted

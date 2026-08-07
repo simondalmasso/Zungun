@@ -22,6 +22,7 @@
     "packages/**/*.ts",
     "services/**/*.ts",
     "tools/resilience-lab/**/*.ts",
+    "tools/link-doctor/**/*.ts",
     "examples/**/*.ts",
     "tests/**/*.ts"
   ],

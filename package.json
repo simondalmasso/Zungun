@@ -27,7 +27,18 @@
     "start:receiver": "npm run build && node dist/services/receiver/src/server.js",
     "demo:field-service": "npm run build && node dist/examples/field-service/src/demo.js",
     "verify:order076-baseline": "node tools/quality/order076-baseline-regressions.mjs",
-    "audit:osv": "node tools/security/osv-audit.mjs"
+    "audit:osv": "node tools/security/osv-audit.mjs",
+    "test:witness": "npm run build && node --test dist/tests/witness.test.js dist/tests/witness-receiver.test.js dist/tests/witness-verifier-cli.test.js dist/tests/server-api.test.js",
+    "verify:witness-bundle": "npm run build && node --test dist/tests/witness-verifier-cli.test.js",
+    "generate:witness-fixture": "npm run build && node dist/tools/resilience-lab/src/emit-proof-fixture.js",
+    "test:link": "npm run build && node --test dist/tests/link-*.test.js",
+    "test:link-security": "npm run build && node --test dist/tests/link-security-negative.test.js dist/tests/link-proxy.test.js",
+    "test:link-blackout": "npm run build && node --test dist/tests/link-blackout.test.js",
+    "doctor:link": "npm run build && node dist/tools/link-doctor/src/cli.js",
+    "generate:link-proof": "npm run build && node dist/tools/resilience-lab/src/emit-link-proof-fixture.js",
+    "demo:link": "npm run build && node dist/examples/link-quickstart/src/demo.js",
+    "verify:link-vectors": "npm run build && node tools/link-vectors/generate.mjs .tmp/link-planner-v1.vectors && cmp .tmp/link-planner-v1.vectors testdata/link-planner-v1.vectors",
+    "test:link-resilience": "npm run build && node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js"
   },
   "engines": {
     "node": ">=22.16.0"

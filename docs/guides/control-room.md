@@ -1,16 +1,7 @@
 # Control Room
 
-Control Room is a backend-connected operational surface, not a static dashboard.
+Control Room is a backend-connected operational surface. It shows server-paginated operations, ambiguity/reconciliation queues, exact transport/receiver/business-effect state, evidence, attempts, receipts, declared-scope completeness, key lifecycle, and evidence-bound review history.
 
-It provides:
+Operation detail also fetches the persisted Witness chain. Every item displays its state and trust boundary. `UNKNOWN`, `CONFLICT`, and `EXPIRED_WITHOUT_RESOLUTION` are shown as not proved, never as successful resolution. A legacy operation with no Witness evidence is labeled as such.
 
-- server-paginated operations and global totals;
-- separate ambiguity and reconciliation queues;
-- exact transport, receiver and business-effect states;
-- attempt history, evidence timeline, signed receipt and review/resolution history;
-- declared-scope completeness with missing devices and operations;
-- reviewer actions that call role-protected reconciliation and manual-resolution APIs;
-- signing-key history, rotation and revocation controls for authorized administrators;
-- JSON evidence export.
-
-The UI treats HTTP `403` as an authenticated principal lacking the required role. It never computes global completeness from the currently visible page.
+Evidence export returns a deterministic Incident Proof Bundle when a Witness chain exists. Legacy exports explicitly state that they are not Incident Proof Bundles.

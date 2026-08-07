@@ -102,3 +102,26 @@ data class TransportAttemptEntity(
     val responseSha256: String?,
     val errorCode: String?,
 )
+
+
+@Entity(
+    tableName = "witness_evidence",
+    foreignKeys = [ForeignKey(
+        entity = OperationEntity::class,
+        parentColumns = ["operationId"],
+        childColumns = ["operationId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("operationId"), Index(value = ["operationId", "chainPosition"], unique = true)],
+)
+data class WitnessEvidenceEntity(
+    @PrimaryKey val evidenceId: String,
+    val operationId: String,
+    val chainPosition: Int,
+    val state: String,
+    val evidenceJson: String,
+    val evidenceSha256: String,
+    val previousHash: String?,
+    val monotonicMs: Long,
+    val createdAtMs: Long,
+)

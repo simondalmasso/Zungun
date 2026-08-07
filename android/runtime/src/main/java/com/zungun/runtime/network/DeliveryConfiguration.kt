@@ -3,15 +3,12 @@ package com.zungun.runtime.network
 import android.content.Context
 import com.zungun.runtime.db.ZungunDatabase
 import com.zungun.runtime.delivery.SemanticRevalidator
+import com.zungun.runtime.link.DeferredTransferAdapter
+import com.zungun.runtime.link.LinkPrefetchAdapter
 import com.zungun.runtime.receipt.VerificationKey
 
-fun interface CredentialProvider {
-    suspend fun bearerToken(): String
-}
-
-fun interface VerificationKeyResolver {
-    suspend fun resolve(keyId: String): VerificationKey?
-}
+fun interface CredentialProvider { suspend fun bearerToken(): String }
+fun interface VerificationKeyResolver { suspend fun resolve(keyId: String): VerificationKey? }
 
 data class ReceiverConfiguration(
     val endpointUrl: String,
@@ -28,19 +25,14 @@ interface DeliveryDependencyProvider {
     fun receiverConfiguration(context: Context): ReceiverConfiguration
     fun semanticRevalidator(context: Context): SemanticRevalidator
     fun transportClient(context: Context): ReceiverTransportClient = HttpReceiverTransportClient()
+    fun reconciliationClient(context: Context): ReceiverReconciliationClient = HttpReceiverReconciliationClient()
+    fun deferredTransferAdapter(context: Context): DeferredTransferAdapter? = null
+    fun prefetchAdapter(context: Context): LinkPrefetchAdapter? = null
 }
 
 object DeliveryRuntimeRegistry {
     @Volatile private var provider: DeliveryDependencyProvider? = null
-
-    fun install(value: DeliveryDependencyProvider) {
-        provider = value
-    }
-
-    fun clear() {
-        provider = null
-    }
-
-    fun require(): DeliveryDependencyProvider = provider
-        ?: error("ZUNGUN_DELIVERY_PROVIDER_NOT_CONFIGURED")
+    fun install(value: DeliveryDependencyProvider) { provider = value }
+    fun clear() { provider = null }
+    fun require(): DeliveryDependencyProvider = provider ?: error("ZUNGUN_DELIVERY_PROVIDER_NOT_CONFIGURED")
 }
