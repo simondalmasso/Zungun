@@ -81,13 +81,19 @@ class Order076RealReceiverInstrumentedTest {
     @Test
     fun assertLostResponseUnknown() = runBlocking {
         assertTrue(ConsumerApplication.installFromPreferences(context))
+        val attemptsBeforeProxyDelivery = snapshot()?.attempts ?: error("operation missing before proxy delivery")
         CriticalOperationRuntime(context).recoverPending()
         waitFor("response lost after receiver persistence remains UNKNOWN", 120_000) {
-            snapshot()?.let { it.state == OperationState.UNKNOWN.name && it.attempts >= 2 } == true
+            snapshot()?.let {
+                it.state == OperationState.UNKNOWN.name && it.attempts > attemptsBeforeProxyDelivery
+            } == true
         }
         val database = ZungunDatabase.open(context, DATABASE_NAME)
         try {
+            val operation = database.operations().get(OPERATION_ID) ?: error("operation missing after proxy delivery")
             val attempts = database.operations().attemptsFor(OPERATION_ID)
+            assertTrue(operation.attempts > attemptsBeforeProxyDelivery)
+            assertEquals(OperationState.UNKNOWN.name, operation.state)
             assertTrue(attempts.count { it.status == "UNKNOWN" } >= 2)
             assertEquals(null, database.operations().receiptFor(OPERATION_ID))
         } finally {
