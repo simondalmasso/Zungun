@@ -208,8 +208,14 @@ jobs:
           echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n zungun-api35 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
           sudo chmod 666 /dev/kvm || true
           nohup "$sdkroot/emulator/emulator" -avd zungun-api35 -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator-unit.log" 2>&1 &
-          adb wait-for-device
-          for _ in $(seq 1 180); do [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break || sleep 2; done
+          trap 'cat "$RUNNER_TEMP/emulator-unit.log" || true' ERR
+          timeout 180s adb wait-for-device
+          booted=0
+          for _ in $(seq 1 180); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then booted=1; break; fi
+            sleep 2
+          done
+          test "$booted" = 1
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest
           adb emu kill || true
       - name: "Gate 17 — same-operation real Android HTTP receiver receipt reconciliation browser audit E2E"
