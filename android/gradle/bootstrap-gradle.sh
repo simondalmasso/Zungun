@@ -30,9 +30,13 @@ if [ -f "$supplement" ]; then
   trap restore_metadata EXIT INT TERM
   (cd "$repo_root" && git apply --check "$supplement" && git apply "$supplement")
 fi
-aapt2="${ZUNGUN_AAPT2_OVERRIDE:-${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools/35.0.0/aapt2}"
+sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+if [ -n "${GITHUB_PATH:-}" ] && [ -n "$sdkroot" ] && [ -d "$sdkroot/platform-tools" ]; then
+  printf '%s\n' "$sdkroot/platform-tools" >> "$GITHUB_PATH"
+fi
+aapt2="${ZUNGUN_AAPT2_OVERRIDE:-$sdkroot/build-tools/35.0.0/aapt2}"
 args=()
-if [ -n "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}" ] && [ -x "$aapt2" ]; then
+if [ -n "$sdkroot" ] && [ -x "$aapt2" ]; then
   args+=("-Pandroid.aapt2FromMavenOverride=$aapt2")
 fi
 set +e
