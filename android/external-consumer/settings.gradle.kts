@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "zungun-external-consumer"
+rootProject.name = "external-consumer"
