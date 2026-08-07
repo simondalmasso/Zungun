@@ -40,7 +40,7 @@ class Order076RealReceiverInstrumentedTest {
 
     @Test
     fun configureAndEnqueueOffline() = runBlocking {
-        WorkManager.getInstance(context).cancelAllWork().get()
+        WorkManager.getInstance(context).cancelAllWork().result.get()
         context.deleteDatabase(DATABASE_NAME)
         ConsumerApplication.configure(context, endpoint, token, receiverId)
         val operationId = CriticalOperationRuntime(context).enqueue(request(), CREATED_AT_MS)
@@ -48,7 +48,7 @@ class Order076RealReceiverInstrumentedTest {
         waitFor("offline attempt persisted as UNKNOWN", 90_000) {
             snapshot()?.let { it.state == OperationState.UNKNOWN.name && it.attempts >= 1 } == true
         }
-        val value = snapshot() ?: fail("operation not persisted")
+        val value = snapshot() ?: error("operation not persisted")
         assertEquals(OperationState.UNKNOWN.name, value.state)
         assertTrue(value.attempts >= 1)
         println("ORDER076_OPERATION_ID=$operationId")
@@ -57,7 +57,7 @@ class Order076RealReceiverInstrumentedTest {
     @Test
     fun assertProcessRecovery() = runBlocking {
         assertTrue(ConsumerApplication.installFromPreferences(context))
-        val before = snapshot() ?: fail("operation missing after force-stop")
+        val before = snapshot() ?: error("operation missing after force-stop")
         assertFalse(before.state in TERMINAL_STATES)
         val recovered = CriticalOperationRuntime(context).recoverPending()
         assertTrue(recovered >= 1)
@@ -70,7 +70,7 @@ class Order076RealReceiverInstrumentedTest {
     @Test
     fun assertRebootRecovery() = runBlocking {
         assertTrue(ConsumerApplication.installFromPreferences(context))
-        val value = snapshot() ?: fail("operation missing after emulator reboot")
+        val value = snapshot() ?: error("operation missing after emulator reboot")
         assertFalse(value.state in TERMINAL_STATES)
         assertTrue(value.attempts >= 1)
         waitFor("boot recovery scheduled durable operation", 45_000) {
@@ -111,7 +111,7 @@ class Order076RealReceiverInstrumentedTest {
         }
         val database = ZungunDatabase.open(context, DATABASE_NAME)
         try {
-            val operation = database.operations().get(OPERATION_ID) ?: fail("operation missing")
+            val operation = database.operations().get(OPERATION_ID) ?: error("operation missing")
             assertEquals(OperationState.COMPLETED.name, operation.state)
             val receipt = database.operations().receiptFor(OPERATION_ID)
             assertNotNull(receipt)
@@ -127,7 +127,7 @@ class Order076RealReceiverInstrumentedTest {
 
     @Test
     fun verifyNegativeReceiptMatrix() = runBlocking {
-        val original = snapshot() ?: fail("primary operation missing")
+        val original = snapshot() ?: error("primary operation missing")
         val client = HttpReceiverTransportClient()
         val missing = client.deliver(original, configuration("missing"), System.currentTimeMillis())
         assertTrue(missing is TransportResult.Accepted && missing.receipt == null)
