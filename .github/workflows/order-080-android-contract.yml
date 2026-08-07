@@ -48,6 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleRelease
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:publishReleasePublicationToOrder080Repository
           repo="$GITHUB_WORKSPACE/android/runtime/build/order080-repo"
           aar="$repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar"
