@@ -1,13 +1,33 @@
-plugins { id("com.android.library"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.kapt") }
+plugins {
+    id("com.android.library")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.kapt")
+    id("maven-publish")
+}
+
 android {
     namespace = "com.zungun.runtime"
     compileSdk = 35
-    defaultConfig { minSdk = 26; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"; consumerProguardFiles("consumer-rules.pro") }
-    buildTypes { release { isMinifyEnabled = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") } }
-    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    defaultConfig {
+        minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles("consumer-rules.pro")
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isIncludeAndroidResources = true }
+    publishing { singleVariant("release") }
 }
+
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.room:room-runtime:2.6.1")
@@ -21,16 +41,22 @@ dependencies {
     androidTestImplementation("androidx.room:room-testing:2.6.1")
     androidTestImplementation("androidx.work:work-testing:2.10.0")
 }
+
 kapt { correctErrorTypes = true }
 
-val releaseAarArtifact = configurations.create("releaseAarArtifact") {
-    isCanBeConsumed = true
-    isCanBeResolved = false
-}
-
-artifacts {
-    add(releaseAarArtifact.name, layout.buildDirectory.file("outputs/aar/runtime-release.aar")) {
-        builtBy("assembleRelease")
-        type = "aar"
+publishing {
+    publications {
+        create<org.gradle.api.publish.maven.MavenPublication>("release") {
+            groupId = "com.zungun"
+            artifactId = "zungun-runtime"
+            version = "1.0.80"
+            afterEvaluate { from(components["release"]) }
+        }
+    }
+    repositories {
+        maven {
+            name = "order080"
+            url = uri(layout.buildDirectory.dir("order080-repo"))
+        }
     }
 }
