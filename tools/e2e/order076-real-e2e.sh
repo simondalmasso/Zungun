@@ -65,7 +65,6 @@ start_receiver() {
 stop_receiver() { kill "${receiver_pid:-0}" 2>/dev/null || true; wait "${receiver_pid:-0}" 2>/dev/null || true; }
 trap 'kill "${proxy_pid:-0}" 2>/dev/null || true; stop_receiver; "$adb" emu kill >/dev/null 2>&1 || true' EXIT
 
-# Build output is installed from the external application that consumes the release AAR.
 app_apk=android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk
 test_apk=android/external-consumer/build/outputs/apk/androidTest/debug/external-consumer-debug-androidTest.apk
 test -s "$app_apk" && test -s "$test_apk"
@@ -79,7 +78,6 @@ wait_boot
 "$adb" install -r "$app_apk"
 "$adb" install -r "$test_apk"
 
-# No listener exists on 18789: the first real WorkManager/HTTP attempt fails before receiver persistence.
 instrument configureAndEnqueueOffline
 "$adb" shell am force-stop com.zungun.consumer
 instrument assertProcessRecovery
@@ -87,7 +85,6 @@ instrument assertProcessRecovery
 wait_boot
 instrument assertRebootRecovery
 
-# Start the real persistent receiver and a real proxy that drops responses after upstream persistence.
 start_receiver
 echo drop > "$state/mode"
 PROXY_PORT=18789 UPSTREAM_URL=http://127.0.0.1:18788 PROXY_STATE_DIR="$state" PROXY_MODE_FILE="$state/mode" \
@@ -97,11 +94,11 @@ for _ in $(seq 1 30); do curl -sS http://127.0.0.1:18789/ready >/dev/null 2>&1 &
 instrument assertLostResponseUnknown
 
 auth() { printf 'Authorization: Bearer %s' "$1"; }
+test -s "$state/last-operation-response.json"
+operation_id="$(jq -er '.operationId | select(type=="string" and length>0)' "$state/last-operation-response.json")"
 operations="$(curl -fsS -H "$(auth "$reader_token")" 'http://127.0.0.1:18788/api/v1/operations?limit=10&offset=0')"
-operation_id="$(jq -r '.items[] | select(.work_order_id=="WO-ANDROID-076B") | .operation_id' <<<"$operations")"
-test -n "$operation_id"
+test "$(jq --arg op "$operation_id" '[.items[] | select(.operation_id==$op)] | length' <<<"$operations")" = 1
 
-# Reconciliation before the application boundary cannot invent APPLICATION_ACK.
 event_now_ms="$(date +%s%3N)"
 curl -fsS -H "$(auth "$reviewer_token")" -H 'content-type: application/json' \
   -d "$(jq -cn --argjson now "$event_now_ms" '{note:"pre-effect evidence review",nowMs:$now}')" \
@@ -109,13 +106,11 @@ curl -fsS -H "$(auth "$reviewer_token")" -H 'content-type: application/json' \
 curl -fsS -H "$(auth "$reader_token")" "http://127.0.0.1:18788/api/v1/operations/$operation_id" > "$out/pre-effect-detail.json"
 test "$(jq '[.evidence[] | select(.source=="RECONCILER" and .kind=="APPLICATION_ACK")] | length' "$out/pre-effect-detail.json")" = 0
 
-# Declare the bounded positive scope and an explicit silent-device negative scope.
 curl -fsS -H "$(auth "$admin_token")" -H 'content-type: application/json' -d "$(jq -cn --arg op "$operation_id" '{scopeType:"SHIFT",scopeId:"shift_android_076b",declarationVersion:1,expectedReportingDeviceIds:["device_android_076b"],expectedOperationIds:[$op],expectedOperationCount:1,declaredAtMs:1780000000000,provenance:"order076b-host-manifest",previousManifestHash:null}')" http://127.0.0.1:18788/api/v1/scopes/declarations > "$out/scope-positive.json"
 curl -fsS -H "$(auth "$admin_token")" -H 'content-type: application/json' -d '{"scopeType":"SHIFT","scopeId":"shift_silent_076b","declarationVersion":1,"expectedReportingDeviceIds":["silent-device"],"expectedOperationIds":["missing-op"],"expectedOperationCount":1,"declaredAtMs":1780000000000,"provenance":"order076b-silent-device","previousManifestHash":null}' http://127.0.0.1:18788/api/v1/scopes/declarations > "$out/scope-negative.json"
 curl -fsS -H "$(auth "$reader_token")" 'http://127.0.0.1:18788/api/v1/completeness?scopeType=SHIFT&scopeId=shift_silent_076b' > "$out/completeness-negative.json"
 test "$(jq -r .completeWithinDeclaredScope "$out/completeness-negative.json")" = false
 
-# Role boundaries must deny cross-role access.
 expect_status() {
   local expected="$1" token="$2" method="$3" url="$4" body="${5:-}" actual
   if [ -n "$body" ]; then
@@ -131,7 +126,6 @@ expect_status 403 "$reviewer_token" POST 'http://127.0.0.1:18788/api/v1/scopes/d
 expect_status 403 "$admin_token" POST 'http://127.0.0.1:18788/api/v1/operations' '{}'
 expect_status 401 'invalid-token-order076b' GET 'http://127.0.0.1:18788/api/v1/operations'
 
-# Exercise lease/fencing rejection, then a justified application effect and signed receipt.
 claim1_now="$(date +%s%3N)"
 claim1="$(curl -fsS -H "$(auth "$worker_token")" -H 'content-type: application/json' -d "$(jq -cn --argjson now "$claim1_now" '{ownerId:"worker-order076b",nowMs:$now,leaseMs:30000}')" "http://127.0.0.1:18788/api/v1/operations/$operation_id/claim")"
 claim2_now="$((claim1_now + 1))"
@@ -144,21 +138,18 @@ curl -fsS -H "$(auth "$worker_token")" -H 'content-type: application/json' -d "$
 test "$(jq -r .state "$out/effect.json")" = COMPLETED
 test "$(jq -r '.receipt.payload.operationId' "$out/effect.json")" = "$operation_id"
 
-# Crash/restart preserves the same DB, dedup ledger, evidence and key history.
 stop_receiver
 start_receiver
 curl -fsS -H "$(auth "$reader_token")" "http://127.0.0.1:18788/api/v1/operations/$operation_id" > "$out/post-restart-detail.json"
 test "$(jq -r .operation.state "$out/post-restart-detail.json")" = COMPLETED
 test "$(jq -r .receipt.payload.operationId "$out/post-restart-detail.json")" = "$operation_id"
 
-# Allow the same Android operation to retry through the proxy and receive the persisted receipt.
 echo pass > "$state/mode"
 instrument awaitTerminalReceipt
 for _ in $(seq 1 60); do [ -s "$state/final-response.json" ] && break; sleep 1; done
 test -s "$state/final-response.json"
 instrument verifyNegativeReceiptMatrix
 
-# Rotate and revoke the historical signing key, restart, and prove persisted lifecycle state.
 keys_before="$(curl -fsS -H "$(auth "$reader_token")" http://127.0.0.1:18788/api/v1/keys)"
 old_key="$(jq -r '.items[] | select(.revokedAtMs==null) | .keyId' <<<"$keys_before" | head -1)"
 key_rotate_now="$(date +%s%3N)"
@@ -169,7 +160,6 @@ start_receiver
 curl -fsS -H "$(auth "$reader_token")" http://127.0.0.1:18788/api/v1/keys > "$out/keys-after-restart.json"
 test "$(jq --arg key "$old_key" '[.items[] | select(.keyId==$key and .revokedAtMs!=null)] | length' "$out/keys-after-restart.json")" = 1
 
-# Add pagination pressure without changing the main scope.
 for index in $(seq 1 30); do
   now=$((1780000100000 + index))
   curl -fsS -H "$(auth "$app_token")" -H 'content-type: application/json' -d "$(jq -cn --arg id "op_page_076b_$index" --arg nonce "nonce_page_076b_$index" --arg msg "msg_page_076b_$index" --argjson now "$now" '{protocol:"zungun.operation.v1",wireVersion:1,operationId:$id,idempotencyKey:("idem_"+$id),tenantId:"tenant_order076b",scopeType:"SHIFT",scopeId:"shift_pages_076b",workOrderId:("WO-PAGE-"+$id),messageId:$msg,messageCommitment:("sha256:"+$id),payloadBase64:"e30=",contentType:"application/json",policy:{priority:1,createdAtMs:$now,expiresAtMs:1900000000000,retryBudget:2,cancellationAllowed:false,semanticRevalidationRequired:false,maxPayloadBytes:16384},replayNonce:$nonce,extensions:{deviceId:"page-device",clientVersion:"host-order076b"}}')" http://127.0.0.1:18788/api/v1/operations >/dev/null
