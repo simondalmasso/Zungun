@@ -41,7 +41,12 @@ class Order076RealReceiverInstrumentedTest {
     @Test
     fun configureAndEnqueueOffline() = runBlocking {
         WorkManager.getInstance(context).cancelAllWork().result.get()
-        context.deleteDatabase(DATABASE_NAME)
+        val cleanDatabase = ZungunDatabase.open(context, DATABASE_NAME)
+        try {
+            cleanDatabase.clearAllTables()
+        } finally {
+            cleanDatabase.close()
+        }
         ConsumerApplication.configure(context, endpoint, token, receiverId)
         val operationId = CriticalOperationRuntime(context).enqueue(request(), CREATED_AT_MS)
         assertEquals(OPERATION_ID, operationId)
