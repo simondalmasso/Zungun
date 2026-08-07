@@ -31,7 +31,20 @@ if [ -f "$supplement" ]; then
   (cd "$repo_root" && git apply --check "$supplement" && git apply "$supplement")
 fi
 sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
-if [ -n "${GITHUB_PATH:-}" ] && [ -n "$sdkroot" ] && [ -d "$sdkroot/platform-tools" ]; then
+if [ -n "${GITHUB_PATH:-}" ] && [ -n "$sdkroot" ] && [ -x "$sdkroot/platform-tools/adb" ]; then
+  wrapper_dir="${RUNNER_TEMP:-$cache}/zungun-platform-tools-bin"
+  mkdir -p "$wrapper_dir"
+  cat > "$wrapper_dir/adb" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+real_adb="$sdkroot/platform-tools/adb"
+if [ "\${1:-}" = "wait-for-device" ]; then
+  exec timeout 180 "\$real_adb" "\$@"
+fi
+exec "\$real_adb" "\$@"
+EOF
+  chmod +x "$wrapper_dir/adb"
+  printf '%s\n' "$wrapper_dir" >> "$GITHUB_PATH"
   printf '%s\n' "$sdkroot/platform-tools" >> "$GITHUB_PATH"
 fi
 aapt2="${ZUNGUN_AAPT2_OVERRIDE:-$sdkroot/build-tools/35.0.0/aapt2}"
