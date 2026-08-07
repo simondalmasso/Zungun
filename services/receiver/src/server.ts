@@ -317,6 +317,7 @@ export function createReceiverServer(options: ReceiverServerOptions) {
               'REPLAY_DETECTED',
               'APPLICATION_CONFLICT',
               'LEASE_HELD',
+              'LEASE_LOST',
               'STALE_PROOF_HASH',
               'STALE_MANIFEST_HASH',
               'DECLARATION_VERSION_CONFLICT',
