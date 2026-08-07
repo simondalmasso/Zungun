@@ -63,6 +63,28 @@ function mutateNegative(mode, path, response) {
   return response;
 }
 
+async function durableReadback(operationId, headers) {
+  const response = await upstreamCall(
+    'GET',
+    `/api/v1/operations/${encodeURIComponent(operationId)}`,
+    headers,
+    Buffer.alloc(0),
+  );
+  if (response.status !== 200) return { ok: false, response };
+  try {
+    const detail = JSON.parse(response.body.toString('utf8'));
+    return {
+      ok: detail?.operation?.operation_id === operationId &&
+        detail?.operation?.state === 'RECEIVER_ACCEPTED' &&
+        detail?.receipt == null,
+      response,
+      detail,
+    };
+  } catch {
+    return { ok: false, response };
+  }
+}
+
 const server = createServer(async (req, res) => {
   try {
     const incoming = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
@@ -80,9 +102,18 @@ const server = createServer(async (req, res) => {
         const accepted = response.status >= 200 && response.status < 300 &&
           typeof parsed.operationId === 'string' && parsed.operationId.length > 0;
         if (accepted) {
-          writeFileSync(resolve(stateDir, 'drop-observed'), `${parsed.operationId}\t${Date.now()}\n`, { flag: 'a' });
-          req.socket.destroy();
-          return;
+          const durable = await durableReadback(parsed.operationId, req.headers);
+          if (durable.ok) {
+            writeFileSync(resolve(stateDir, 'drop-observed'), `${parsed.operationId}\t${Date.now()}\n`, { flag: 'a' });
+            writeFileSync(resolve(stateDir, 'drop-readback.json'), JSON.stringify(durable.detail));
+            req.socket.destroy();
+            return;
+          }
+          writeFileSync(resolve(stateDir, 'drop-precondition-failed.json'), JSON.stringify({
+            operationId: parsed.operationId,
+            status: durable.response?.status ?? null,
+            body: durable.response?.body?.toString('utf8') ?? null,
+          }));
         }
       }
     }
