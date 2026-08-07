@@ -94,20 +94,27 @@ for _ in $(seq 1 30); do curl -sS http://127.0.0.1:18789/ready >/dev/null 2>&1 &
 instrument assertLostResponseUnknown
 
 auth() { printf 'Authorization: Bearer %s' "$1"; }
-for _ in $(seq 1 30); do [ -s "$state/drop-observed" ] && [ -s "$state/last-operation-response.json" ] && break; sleep 1; done
-if [ ! -s "$state/drop-observed" ] || [ ! -s "$state/last-operation-response.json" ]; then
-  echo 'Gate17 drop evidence missing' >&2
+for _ in $(seq 1 30); do [ -s "$state/drop-observed" ] && break; sleep 1; done
+if [ ! -s "$state/drop-observed" ]; then
+  echo 'Gate17 accepted-drop evidence missing' >&2
   cat "$out/proxy.log" >&2 || true
   cat "$out/receiver.log" >&2 || true
   ls -la "$state" >&2 || true
   exit 1
 fi
-operation_id="$(jq -er '.operationId | select(type=="string" and length>0)' "$state/last-operation-response.json")"
+operation_id="$(tail -n 1 "$state/drop-observed" | cut -f1)"
+if ! [[ "$operation_id" =~ ^op_[A-Za-z0-9._:+/-]+$ ]]; then
+  echo "Gate17 invalid dropped operation identity: $operation_id" >&2
+  cat "$state/drop-observed" >&2 || true
+  exit 1
+fi
 curl -fsS -H "$(auth "$reader_token")" "http://127.0.0.1:18788/api/v1/operations/$operation_id" > "$out/dropped-operation-detail.json"
-test "$(jq -r .operation.operation_id "$out/dropped-operation-detail.json")" = "$operation_id"
-test "$(jq -r .operation.work_order_id "$out/dropped-operation-detail.json")" = 'WO-ANDROID-076B'
-test "$(jq -r .operation.state "$out/dropped-operation-detail.json")" = 'RECEIVER_ACCEPTED'
-test "$(jq -r '.receipt == null' "$out/dropped-operation-detail.json")" = true
+if ! jq -e --arg op "$operation_id" '.operation.operation_id==$op and .operation.work_order_id=="WO-ANDROID-076B" and .operation.state=="RECEIVER_ACCEPTED" and .receipt==null' "$out/dropped-operation-detail.json" >/dev/null; then
+  echo 'Gate17 durable dropped-operation binding mismatch' >&2
+  cat "$state/drop-observed" >&2 || true
+  cat "$out/dropped-operation-detail.json" >&2 || true
+  exit 1
+fi
 
 event_now_ms="$(date +%s%3N)"
 curl -fsS -H "$(auth "$reviewer_token")" -H 'content-type: application/json' \
