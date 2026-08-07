@@ -1,0 +1,369 @@
+diff --git a/services/receiver/openapi/openapi.yaml b/services/receiver/openapi/openapi.yaml
+index 2b613b2..87d5c60 100644
+--- a/services/receiver/openapi/openapi.yaml
++++ b/services/receiver/openapi/openapi.yaml
+@@ -1,7 +1,7 @@
+ openapi: 3.1.0
+ info:
+   title: Zungun Persistent Receiver API
+-  version: 1.0.0-order076
++  version: 1.1.0-order080
+   description: Application-level critical-operation receiver. Transport acceptance is not proof of business effect.
+ servers:
+   - url: http://127.0.0.1:8788
+@@ -32,30 +32,100 @@ paths:
+     get:
+       security: [{ bearerAuth: [] }]
+       operationId: getOperation
+-      parameters:
+-        - in: path
+-          name: operationId
+-          required: true
+-          schema: { type: string }
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+       responses:
+         '200': { description: Evidence timeline and current state }
+         '404': { description: Operation not found }
++  /api/v1/operations/{operationId}/witness:
++    get:
++      security: [{ bearerAuth: [] }]
++      operationId: getWitnessChain
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
++      responses:
++        '200': { description: Verified persisted Witness chain; empty means no Witness proof is stored }
++        '403': { description: Principal lacks witness:read }
++  /api/v1/operations/{operationId}/witness/ingest:
++    post:
++      security: [{ bearerAuth: [] }]
++      operationId: ingestWitnessSenderChain
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema:
++              type: object
++              required: [chain]
++              properties:
++                chain: { type: array, minItems: 1, items: { $ref: '#/components/schemas/WitnessEvidence' } }
++                nowMs: { type: integer }
++      responses:
++        '202': { description: Sender chain persisted and receiver DELIVERED_DURABLY appended transactionally }
++        '403': { description: Principal lacks witness:ingest }
++        '409': { description: Divergent or invalid Witness history }
++  /api/v1/operations/{operationId}/witness/attest:
++    post:
++      security: [{ bearerAuth: [] }]
++      operationId: appendWitnessAttestation
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema:
++              type: object
++              required: [evidence]
++              properties:
++                evidence: { $ref: '#/components/schemas/WitnessEvidenceInput' }
++                nowMs: { type: integer }
++      responses:
++        '201': { description: Authorized post-durability Witness transition appended }
++        '403': { description: Principal lacks witness:attest }
++        '409': { description: Invalid transition or missing durable receiver proof }
++  /api/v1/operations/{operationId}/witness/reconcile:
++    post:
++      security: [{ bearerAuth: [] }]
++      operationId: reconcileWitnessHistories
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema:
++              type: object
++              required: [senderChain]
++              properties:
++                senderChain: { type: array, items: { $ref: '#/components/schemas/WitnessEvidence' } }
++      responses:
++        '200': { description: RECONCILED, UNKNOWN or CONFLICT without optimistic inference }
++        '403': { description: Principal lacks witness:reconcile }
++  /api/v1/operations/{operationId}/witness/bundle:
++    get:
++      security: [{ bearerAuth: [] }]
++      operationId: getIncidentProofBundle
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
++      responses:
++        '200': { description: Deterministic zungun-proof-bundle/1 object for offline verification }
++        '403': { description: Principal lacks witness:read }
+   /api/v1/operations/{operationId}/claim:
+     post:
+       security: [{ bearerAuth: [] }]
+       operationId: claimOperation
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+       responses:
+         '200': { description: Transactional lease with fencing token }
+   /api/v1/operations/{operationId}/effect:
+     post:
+       security: [{ bearerAuth: [] }]
+       operationId: recordApplicationEffect
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+       responses:
+         '200': { description: Application effect and signed receipt when justified }
+   /api/v1/operations/{operationId}/reconcile:
+     post:
+       security: [{ bearerAuth: [] }]
+       operationId: reconcileOperation
++      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+       responses:
+         '200': { description: Evidence-derived verdict; UNKNOWN is preserved }
+   /api/v1/completeness:
+@@ -65,6 +135,41 @@ paths:
+       responses:
+         '200': { description: Completeness only within declared reporting scope }
+ components:
++  parameters:
++    OperationId:
++      in: path
++      name: operationId
++      required: true
++      schema: { type: string }
++  schemas:
++    WitnessEvidenceInput:
++      type: object
++      required: [incidentId, evidenceId, state, evidenceClass, emitterId, authorizationScope, observedAtMs, monotonicMs, provenance, reasonCode, claims]
++      properties:
++        incidentId: { type: string }
++        evidenceId: { type: string }
++        state:
++          type: string
++          enum: [DETECTED, COMMITTED_LOCAL, CUSTODY_ACCEPTED, DELIVERED_DURABLY, OWNED_BY_RESPONDER, ACTION_STARTED, CONDITION_RECHECKED, RESOLVED, RECONCILED, UNKNOWN, CONFLICT, EXPIRED_WITHOUT_RESOLUTION]
++        evidenceClass: { type: string, enum: [OBSERVED_FACT, MACHINE_ASSERTION, HUMAN_ATTESTATION, DERIVED_CONCLUSION] }
++        emitterId: { type: string }
++        authorizationScope: { type: string }
++        observedAtMs: { type: integer }
++        monotonicMs: { type: integer }
++        provenance: { type: string }
++        reasonCode: { type: string }
++        claims: { type: object, additionalProperties: true }
++    WitnessEvidence:
++      allOf:
++        - $ref: '#/components/schemas/WitnessEvidenceInput'
++        - type: object
++          required: [schemaVersion, previousState, previousHash, chainPosition, evidenceHash]
++          properties:
++            schemaVersion: { type: string, const: zungun-witness/1 }
++            previousState: { type: [string, 'null'] }
++            previousHash: { type: [string, 'null'] }
++            chainPosition: { type: integer, minimum: 0 }
++            evidenceHash: { type: string, pattern: '^sha256:' }
+   securitySchemes:
+     bearerAuth:
+       type: http
+diff --git a/services/receiver/src/auth.ts b/services/receiver/src/auth.ts
+index cc9e167..a74990c 100644
+--- a/services/receiver/src/auth.ts
++++ b/services/receiver/src/auth.ts
+@@ -14,146 +14,84 @@ export type Permission =
+   | 'completeness:declare'
+   | 'keys:read'
+   | 'keys:manage'
+-  | 'audit:read';
++  | 'audit:read'
++  | 'witness:ingest'
++  | 'witness:read'
++  | 'witness:attest'
++  | 'witness:reconcile';
+ 
+ const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = Object.freeze({
+-  ingest: Object.freeze(['operations:ingest'] as const),
++  ingest: Object.freeze(['operations:ingest', 'witness:ingest'] as const),
+   reader: Object.freeze([
+-    'operations:read',
+-    'reconciliation:read',
+-    'completeness:read',
+-    'keys:read',
++    'operations:read', 'reconciliation:read', 'completeness:read', 'keys:read', 'witness:read',
+   ] as const),
+   worker: Object.freeze([
+-    'operations:read',
+-    'operations:claim',
+-    'operations:effect',
+-    'operations:cancel',
+-    'keys:read',
++    'operations:read', 'operations:claim', 'operations:effect', 'operations:cancel', 'keys:read',
++    'witness:read', 'witness:attest',
+   ] as const),
+   reviewer: Object.freeze([
+-    'operations:read',
+-    'reconciliation:read',
+-    'reconciliation:resolve',
+-    'completeness:read',
++    'operations:read', 'reconciliation:read', 'reconciliation:resolve', 'completeness:read',
++    'witness:read', 'witness:attest', 'witness:reconcile',
+   ] as const),
+   admin: Object.freeze([
+-    'operations:read',
+-    'reconciliation:read',
+-    'completeness:read',
+-    'completeness:declare',
+-    'keys:read',
+-    'keys:manage',
+-    'audit:read',
++    'operations:read', 'reconciliation:read', 'completeness:read', 'completeness:declare',
++    'keys:read', 'keys:manage', 'audit:read', 'witness:read', 'witness:reconcile',
+   ] as const),
+ });
+ 
+-export interface PrincipalDefinition {
+-  readonly subject: string;
+-  readonly token: string;
+-  readonly roles: readonly Role[];
+-}
+-
+-export interface AuthContext {
+-  readonly subject: string;
+-  readonly roles: readonly Role[];
+-  readonly permissions: readonly Permission[];
+-}
+-
+-export interface IdentityProvider {
+-  authenticate(request: IncomingMessage): AuthContext;
+-  require(request: IncomingMessage, permission: Permission): AuthContext;
+-}
++export interface PrincipalDefinition { readonly subject: string; readonly token: string; readonly roles: readonly Role[]; }
++export interface AuthContext { readonly subject: string; readonly roles: readonly Role[]; readonly permissions: readonly Permission[]; }
++export interface IdentityProvider { authenticate(request: IncomingMessage): AuthContext; require(request: IncomingMessage, permission: Permission): AuthContext; }
+ 
+ function safeTokenEqual(supplied: string, expected: string): boolean {
+-  const a = Buffer.from(supplied);
+-  const b = Buffer.from(expected);
++  const a = Buffer.from(supplied); const b = Buffer.from(expected);
+   return a.length === b.length && timingSafeEqual(a, b);
+ }
+-
+ function permissionSet(roles: readonly Role[]): readonly Permission[] {
+   return Object.freeze([...new Set(roles.flatMap((role) => ROLE_PERMISSIONS[role]))].sort());
+ }
+-
+ function validatePrincipal(principal: PrincipalDefinition): Readonly<PrincipalDefinition> {
+   if (!/^[A-Za-z0-9._:@/-]{1,128}$/.test(principal.subject)) throw new Error('invalid principal subject');
+   if (principal.token.length < 16) throw new Error('API token must contain at least 16 characters');
+-  if (principal.roles.length < 1 || principal.roles.some((role) => !(role in ROLE_PERMISSIONS))) {
+-    throw new Error('principal must contain recognized roles');
+-  }
+-  return Object.freeze({
+-    subject: principal.subject,
+-    token: principal.token,
+-    roles: Object.freeze([...new Set(principal.roles)]),
+-  });
++  if (principal.roles.length < 1 || principal.roles.some((role) => !(role in ROLE_PERMISSIONS))) throw new Error('principal must contain recognized roles');
++  return Object.freeze({ subject: principal.subject, token: principal.token, roles: Object.freeze([...new Set(principal.roles)]) });
+ }
+ 
+ export class StaticPrincipalAuthorizer implements IdentityProvider {
+   private readonly principals: readonly Readonly<PrincipalDefinition>[];
+-
+   constructor(principals: readonly PrincipalDefinition[]) {
+     if (principals.length < 1) throw new Error('at least one principal is required');
+     this.principals = Object.freeze(principals.map(validatePrincipal));
+-    if (new Set(this.principals.map((principal) => principal.subject)).size !== this.principals.length) {
+-      throw new Error('principal subjects must be unique');
+-    }
+-    if (new Set(this.principals.map((principal) => principal.token)).size !== this.principals.length) {
+-      throw new Error('principal tokens must be unique');
+-    }
++    if (new Set(this.principals.map((p) => p.subject)).size !== this.principals.length) throw new Error('principal subjects must be unique');
++    if (new Set(this.principals.map((p) => p.token)).size !== this.principals.length) throw new Error('principal tokens must be unique');
+   }
+-
+   authenticate(request: IncomingMessage): AuthContext {
+     const header = String(request.headers.authorization ?? '');
+     const supplied = header.startsWith('Bearer ') ? header.slice(7) : '';
+     const principal = this.principals.find((candidate) => safeTokenEqual(supplied, candidate.token));
+     if (!principal) throw new Error('UNAUTHORIZED');
+-    return Object.freeze({
+-      subject: principal.subject,
+-      roles: principal.roles,
+-      permissions: permissionSet(principal.roles),
+-    });
++    return Object.freeze({ subject: principal.subject, roles: principal.roles, permissions: permissionSet(principal.roles) });
+   }
+-
+   require(request: IncomingMessage, permission: Permission): AuthContext {
+     const context = this.authenticate(request);
+     if (!context.permissions.includes(permission)) throw new Error('FORBIDDEN');
+     return context;
+   }
+ }
+-
+-/**
+- * Backward-compatible single-principal adapter for local tests. It is deliberately
+- * least-privilege by default: callers must opt into roles rather than receiving admin.
+- */
+ export class TokenAuthorizer extends StaticPrincipalAuthorizer {
+-  constructor(token: string, roles: readonly Role[] = ['ingest']) {
+-    super([{ subject: 'local-principal', token, roles }]);
+-  }
+-
+-  authorize(request: IncomingMessage, permission?: Permission): AuthContext {
+-    return permission ? this.require(request, permission) : this.authenticate(request);
+-  }
++  constructor(token: string, roles: readonly Role[] = ['ingest']) { super([{ subject: 'local-principal', token, roles }]); }
++  authorize(request: IncomingMessage, permission?: Permission): AuthContext { return permission ? this.require(request, permission) : this.authenticate(request); }
+ }
+-
+ export function parsePrincipalConfiguration(value: string): readonly PrincipalDefinition[] {
+   const raw = JSON.parse(value) as unknown;
+   if (!Array.isArray(raw)) throw new Error('principal configuration must be an array');
+   return Object.freeze(raw.map((entry) => {
+-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+-      throw new Error('invalid principal configuration');
+-    }
++    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw new Error('invalid principal configuration');
+     const candidate = entry as Record<string, unknown>;
+-    if (typeof candidate.subject !== 'string' || typeof candidate.token !== 'string' || !Array.isArray(candidate.roles)) {
+-      throw new Error('invalid principal configuration');
+-    }
+-    return {
+-      subject: candidate.subject,
+-      token: candidate.token,
+-      roles: candidate.roles.map(String) as Role[],
+-    };
++    if (typeof candidate.subject !== 'string' || typeof candidate.token !== 'string' || !Array.isArray(candidate.roles)) throw new Error('invalid principal configuration');
++    return { subject: candidate.subject, token: candidate.token, roles: candidate.roles.map(String) as Role[] };
+   }));
+ }
+-
+ export function developmentPrincipals(tokenPrefix = 'local-development'): readonly PrincipalDefinition[] {
+   return Object.freeze([
+     { subject: 'local-ingest', token: `${tokenPrefix}-ingest-token`, roles: ['ingest'] },
+diff --git a/services/receiver/src/migrations.ts b/services/receiver/src/migrations.ts
+index 5fb52d7..6ff7398 100644
+--- a/services/receiver/src/migrations.ts
++++ b/services/receiver/src/migrations.ts
+@@ -175,4 +175,25 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
+       CREATE INDEX IF NOT EXISTS idx_auth_audit_time ON auth_audit(observed_at_ms, audit_id);
+     `,
+   },
++  {
++    version: 5,
++    name: 'witness durable evidence chains',
++    sql: `
++      CREATE TABLE IF NOT EXISTS witness_evidence (
++        evidence_id TEXT PRIMARY KEY,
++        incident_id TEXT NOT NULL,
++        operation_id TEXT NOT NULL REFERENCES operations(operation_id) ON DELETE CASCADE,
++        chain_position INTEGER NOT NULL,
++        state TEXT NOT NULL,
++        evidence_json TEXT NOT NULL,
++        evidence_sha256 TEXT NOT NULL,
++        previous_hash TEXT,
++        persisted_at_ms INTEGER NOT NULL,
++        UNIQUE(incident_id, chain_position),
++        UNIQUE(incident_id, evidence_sha256)
++      );
++      CREATE INDEX IF NOT EXISTS idx_witness_incident_position
++        ON witness_evidence(incident_id, chain_position);
++    `,
++  },
+ ]);

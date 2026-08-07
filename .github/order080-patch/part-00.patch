@@ -1,0 +1,264 @@
+diff --git a/README.md b/README.md
+index b4a87bb..d6ed94c 100644
+--- a/README.md
++++ b/README.md
+@@ -1,19 +1,24 @@
+ # Zungun
+ 
+-Zungun is an application-level critical-operation system for unstable connectivity. It preserves explicit ambiguity, distinguishes transport acceptance from business effect, issues verifiable receipts only when justified, and reports completeness only within a declared reporting scope.
++Zungun is an independent evidence and continuity layer for critical operational events under unstable connectivity. It preserves explicit ambiguity, separates transport acceptance from receiver durability and business effect, and records only the evidence a responsible boundary is allowed to assert.
++
++Working category: **Operational Evidence Continuity**. Bring your own sensor, transport and control room; Zungun verifies the evidence that crosses those boundaries. It does not infer physical-world truth from network delivery.
+ 
+ ## Components
+ 
+ - [Protocol core](docs/architecture/protocol.md)
++- [Witness evidence continuity](docs/architecture/witness.md)
++- [Threat model](docs/architecture/threat-model.md)
+ - [Android runtime](docs/guides/android-runtime.md)
+ - [Persistent receiver](docs/guides/receiver.md)
+ - [Receipt security](docs/architecture/security.md)
+ - [Reconciliation](docs/architecture/reconciliation.md)
+ - [Control Room](docs/guides/control-room.md)
+-- [Resilience Lab](docs/guides/resilience-lab.md)
++- [Resilience Lab and Blackout Drill](docs/guides/resilience-lab.md)
++- [Incident Proof Bundle](docs/reference/incident-proof-bundle.md)
+ - [Local development](docs/runbooks/local-development.md)
+-- [Order 076 verification](docs/runbooks/order-076-verification.md)
++- [Order 080 verification](docs/runbooks/order-080-verification.md)
+ 
+ ## Boundaries
+ 
+-Zungun does not claim universal exactly-once execution, operator or standards-body endorsement, satellite-network semantics, or business-effect proof from transport acceptance alone. `UNKNOWN` is a valid outcome until sufficient evidence exists.
++Zungun does not claim universal exactly-once execution, operator or standards-body endorsement, satellite-network truth, sensor truth, responder physical action, or business-effect proof from transport acceptance alone. `UNKNOWN`, `CONFLICT`, and `EXPIRED_WITHOUT_RESOLUTION` are explicit non-success outcomes. Completeness is meaningful only inside a persisted declared reporting scope.
+diff --git a/android/external-consumer/src/androidTest/java/com/zungun/consumer/Order076RealReceiverInstrumentedTest.kt b/android/external-consumer/src/androidTest/java/com/zungun/consumer/Order076RealReceiverInstrumentedTest.kt
+index 8caab53..37d2ff9 100644
+--- a/android/external-consumer/src/androidTest/java/com/zungun/consumer/Order076RealReceiverInstrumentedTest.kt
++++ b/android/external-consumer/src/androidTest/java/com/zungun/consumer/Order076RealReceiverInstrumentedTest.kt
+@@ -120,6 +120,9 @@ class Order076RealReceiverInstrumentedTest {
+             val kinds = database.operations().evidenceFor(OPERATION_ID).map { it.kind }
+             assertTrue(kinds.containsAll(listOf("RECEIVER_ACCEPTED", "APPLICATION_ACK", "SIGNED_RECEIPT")))
+             assertTrue(database.operations().attemptsFor(OPERATION_ID).size >= 3)
++            val witness = database.operations().witnessFor(OPERATION_ID)
++            assertEquals(listOf("DETECTED", "COMMITTED_LOCAL", "CUSTODY_ACCEPTED"), witness.map { it.state })
++            assertEquals(listOf(0, 1, 2), witness.map { it.chainPosition })
+         } finally {
+             database.close()
+         }
+@@ -129,7 +132,7 @@ class Order076RealReceiverInstrumentedTest {
+     fun verifyNegativeReceiptMatrix() = runBlocking {
+         val original = snapshot() ?: error("primary operation missing")
+         val client = HttpReceiverTransportClient()
+-        val missing = client.deliver(original, configuration("missing"), System.currentTimeMillis())
++        val missing = client.deliver(original, configuration("missing"), System.currentTimeMillis(), emptyList())
+         assertTrue(missing is TransportResult.Accepted && missing.receipt == null)
+ 
+         assertRejected("tampered", original)
+@@ -145,7 +148,7 @@ class Order076RealReceiverInstrumentedTest {
+ 
+     private suspend fun assertRejected(mode: String, operation: OperationEntity) {
+         val result = runCatching {
+-            HttpReceiverTransportClient().deliver(operation, configuration(mode), System.currentTimeMillis())
++            HttpReceiverTransportClient().deliver(operation, configuration(mode), System.currentTimeMillis(), emptyList())
+         }
+         assertTrue("$mode receipt must fail closed", result.isFailure)
+     }
+diff --git a/android/runtime/src/androidTest/java/com/zungun/runtime/DatabaseMigrationTest.kt b/android/runtime/src/androidTest/java/com/zungun/runtime/DatabaseMigrationTest.kt
+index dab2189..1bd3d36 100644
+--- a/android/runtime/src/androidTest/java/com/zungun/runtime/DatabaseMigrationTest.kt
++++ b/android/runtime/src/androidTest/java/com/zungun/runtime/DatabaseMigrationTest.kt
+@@ -12,9 +12,9 @@ import org.junit.runner.RunWith
+ @RunWith(AndroidJUnit4::class)
+ class DatabaseMigrationTest {
+     @Test
+-    fun migration1To3AddsOperationalDeliveryState() {
++    fun migration1To4AddsOperationalDeliveryAndWitnessState() {
+         val context = InstrumentationRegistry.getInstrumentation().targetContext
+-        val path = context.getDatabasePath("migration-order076.sqlite")
++        val path = context.getDatabasePath("migration-order080.sqlite")
+         path.delete()
+         path.parentFile?.mkdirs()
+         val raw = SQLiteDatabase.openOrCreateDatabase(path, null)
+@@ -47,6 +47,7 @@ class DatabaseMigrationTest {
+         val database = FrameworkSQLiteDatabase(raw)
+         ZungunDatabase.MIGRATION_1_2.migrate(database)
+         ZungunDatabase.MIGRATION_2_3.migrate(database)
++        ZungunDatabase.MIGRATION_3_4.migrate(database)
+         val columns = raw.rawQuery("PRAGMA table_info(operations)", null).use { cursor ->
+             buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
+         }
+@@ -55,6 +56,12 @@ class DatabaseMigrationTest {
+             buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+         }
+         assertTrue(tables.contains("transport_attempts"))
++        assertTrue(tables.contains("witness_evidence"))
++        val indexes = raw.rawQuery("PRAGMA index_list(witness_evidence)", null).use { cursor ->
++            buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
++        }
++        assertTrue(indexes.contains("index_witness_evidence_operationId"))
++        assertTrue(indexes.contains("index_witness_evidence_operationId_chainPosition"))
+         raw.close()
+         path.delete()
+     }
+diff --git a/android/runtime/src/androidTest/java/com/zungun/runtime/DeliveryWorkerInstrumentedTest.kt b/android/runtime/src/androidTest/java/com/zungun/runtime/DeliveryWorkerInstrumentedTest.kt
+index 7dd3304..3c9660a 100644
+--- a/android/runtime/src/androidTest/java/com/zungun/runtime/DeliveryWorkerInstrumentedTest.kt
++++ b/android/runtime/src/androidTest/java/com/zungun/runtime/DeliveryWorkerInstrumentedTest.kt
+@@ -42,7 +42,11 @@ class DeliveryWorkerInstrumentedTest {
+     @Test
+     fun ambiguousTransportPersistsAttemptAndUnknownState() = runBlocking {
+         val operationId = enqueue()
+-        install(ReceiverTransportClient { _, _, _ -> TransportResult.AmbiguousFailure("SOCKET_TIMEOUT") })
++        var transmittedWitness = emptyList<String>()
++        install(ReceiverTransportClient { _, _, _, witness ->
++            transmittedWitness = witness
++            TransportResult.AmbiguousFailure("SOCKET_TIMEOUT")
++        })
+         val result = worker(operationId).doWork()
+         assertEquals(ListenableWorker.Result.retry()::class, result::class)
+         val database = ZungunDatabase.open(context, databaseName)
+@@ -50,6 +54,9 @@ class DeliveryWorkerInstrumentedTest {
+             assertEquals(OperationState.UNKNOWN.name, database.operations().get(operationId)?.state)
+             assertEquals(1, database.operations().attemptsFor(operationId).size)
+             assertEquals("UNKNOWN", database.operations().attemptsFor(operationId).single().status)
++            val witness = database.operations().witnessFor(operationId)
++            assertEquals(listOf("DETECTED", "COMMITTED_LOCAL", "CUSTODY_ACCEPTED"), witness.map { it.state })
++            assertEquals(witness.map { it.evidenceJson }, transmittedWitness)
+         } finally {
+             database.close()
+         }
+@@ -67,7 +74,9 @@ class DeliveryWorkerInstrumentedTest {
+             payloadSha256 = "a".repeat(64),
+             applicationOutcome = "EFFECT_APPLIED",
+         )
+-        install(ReceiverTransportClient { _, _, _ ->
++        var transmittedWitness = emptyList<String>()
++        install(ReceiverTransportClient { _, _, _, witness ->
++            transmittedWitness = witness
+             TransportResult.Accepted(
+                 duplicate = true,
+                 receiverState = "COMPLETED",
+@@ -84,6 +93,8 @@ class DeliveryWorkerInstrumentedTest {
+             assertNotNull(database.operations().receiptFor(operationId))
+             val kinds = database.operations().evidenceFor(operationId).map { it.kind }
+             assertTrue(kinds.containsAll(listOf("TRANSPORT_ATTEMPT", "RECEIVER_ACCEPTED", "APPLICATION_ACK", "SIGNED_RECEIPT")))
++            assertEquals(listOf("DETECTED", "COMMITTED_LOCAL", "CUSTODY_ACCEPTED"), database.operations().witnessFor(operationId).map { it.state })
++            assertEquals(3, transmittedWitness.size)
+         } finally {
+             database.close()
+         }
+diff --git a/android/runtime/src/androidTest/java/com/zungun/runtime/PersistenceRecoveryInstrumentedTest.kt b/android/runtime/src/androidTest/java/com/zungun/runtime/PersistenceRecoveryInstrumentedTest.kt
+index 50efc37..e559a07 100644
+--- a/android/runtime/src/androidTest/java/com/zungun/runtime/PersistenceRecoveryInstrumentedTest.kt
++++ b/android/runtime/src/androidTest/java/com/zungun/runtime/PersistenceRecoveryInstrumentedTest.kt
+@@ -1,5 +1,5 @@
+ package com.zungun.runtime
+-import androidx.room.Room
++
+ import androidx.test.core.app.ApplicationProvider
+ import androidx.test.ext.junit.runners.AndroidJUnit4
+ import androidx.work.Configuration
+@@ -7,12 +7,54 @@ import androidx.work.testing.SynchronousExecutor
+ import androidx.work.testing.WorkManagerTestInitHelper
+ import com.zungun.runtime.db.ZungunDatabase
+ import com.zungun.runtime.delivery.CriticalOperationRuntime
+-import com.zungun.runtime.model.*
++import com.zungun.runtime.model.EnqueueRequest
++import com.zungun.runtime.model.OperationPolicy
+ import kotlinx.coroutines.runBlocking
+-import org.junit.Assert.*
++import org.json.JSONObject
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertNotNull
++import org.junit.Assert.assertTrue
+ import org.junit.Test
+ import org.junit.runner.RunWith
++
+ @RunWith(AndroidJUnit4::class)
+ class PersistenceRecoveryInstrumentedTest {
+- @Test fun offlineEnqueueSurvivesRuntimeRecreationAndRecovery()=runBlocking{val context=ApplicationProvider.getApplicationContext<android.content.Context>();WorkManagerTestInitHelper.initializeTestWorkManager(context,Configuration.Builder().setExecutor(SynchronousExecutor()).build());val name="process-recovery-order075.sqlite";context.deleteDatabase(name);var db=ZungunDatabase.open(context,name);var runtime=CriticalOperationRuntime(context,db);val now=System.currentTimeMillis();val id=runtime.enqueue(EnqueueRequest("tenant","device",1,"SHIFT","shift","WO-1","msg-1","sha256:message","{}".toByteArray(),"application/json",OperationPolicy(2,now,now+3600000,5,true,true,16384)),now);assertNotNull(db.operations().get(id));db.close();db=ZungunDatabase.open(context,name);runtime=CriticalOperationRuntime(context,db);assertEquals(id,db.operations().get(id)?.operationId);assertEquals(1,runtime.recoverPending());db.close();context.deleteDatabase(name)}
++    @Test
++    fun offlineEnqueueSurvivesRuntimeRecreationAndRecoveryWithWitnessHistory() = runBlocking {
++        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
++        WorkManagerTestInitHelper.initializeTestWorkManager(
++            context,
++            Configuration.Builder().setExecutor(SynchronousExecutor()).build(),
++        )
++        val name = "process-recovery-order080.sqlite"
++        context.deleteDatabase(name)
++        var db = ZungunDatabase.open(context, name)
++        var runtime = CriticalOperationRuntime(context, db)
++        val now = System.currentTimeMillis()
++        val id = runtime.enqueue(
++            EnqueueRequest(
++                "tenant", "device", 1, "SHIFT", "shift", "WO-1", "msg-1",
++                "sha256:message", "{}".toByteArray(), "application/json",
++                OperationPolicy(2, now, now + 3_600_000, 5, true, true, 16_384),
++            ),
++            now,
++        )
++        assertNotNull(db.operations().get(id))
++        val before = db.operations().witnessFor(id)
++        assertEquals(listOf("DETECTED", "COMMITTED_LOCAL"), before.map { it.state })
++        assertEquals(listOf(0, 1), before.map { it.chainPosition })
++        assertEquals(null, before.first().previousHash)
++        assertEquals(before.first().evidenceSha256, before.last().previousHash)
++        assertTrue(before.all { JSONObject(it.evidenceJson).getString("incidentId") == id })
++        db.close()
++
++        db = ZungunDatabase.open(context, name)
++        runtime = CriticalOperationRuntime(context, db)
++        assertEquals(id, db.operations().get(id)?.operationId)
++        val after = db.operations().witnessFor(id)
++        assertEquals(before.map { it.evidenceSha256 }, after.map { it.evidenceSha256 })
++        assertEquals(1, runtime.recoverPending())
++        db.close()
++        context.deleteDatabase(name)
++    }
+ }
+diff --git a/android/runtime/src/main/java/com/zungun/runtime/db/Entities.kt b/android/runtime/src/main/java/com/zungun/runtime/db/Entities.kt
+index 0aa3047..38dd29d 100644
+--- a/android/runtime/src/main/java/com/zungun/runtime/db/Entities.kt
++++ b/android/runtime/src/main/java/com/zungun/runtime/db/Entities.kt
+@@ -102,3 +102,26 @@ data class TransportAttemptEntity(
+     val responseSha256: String?,
+     val errorCode: String?,
+ )
++
++
++@Entity(
++    tableName = "witness_evidence",
++    foreignKeys = [ForeignKey(
++        entity = OperationEntity::class,
++        parentColumns = ["operationId"],
++        childColumns = ["operationId"],
++        onDelete = ForeignKey.CASCADE,
++    )],
++    indices = [Index("operationId"), Index(value = ["operationId", "chainPosition"], unique = true)],
++)
++data class WitnessEvidenceEntity(
++    @PrimaryKey val evidenceId: String,
++    val operationId: String,
++    val chainPosition: Int,
++    val state: String,
++    val evidenceJson: String,
++    val evidenceSha256: String,
++    val previousHash: String?,
++    val monotonicMs: Long,
++    val createdAtMs: Long,
++)
+diff --git a/android/runtime/src/main/java/com/zungun/runtime/db/OperationDao.kt b/android/runtime/src/main/java/com/zungun/runtime/db/OperationDao.kt
+index b62d2d3..5793441 100644
+--- a/android/runtime/src/main/java/com/zungun/runtime/db/OperationDao.kt
++++ b/android/runtime/src/main/java/com/zungun/runtime/db/OperationDao.kt
+@@ -65,4 +65,10 @@ interface OperationDao {
+ 
+     @Query("SELECT * FROM evidence WHERE operationId=:id ORDER BY occurredAtMs,id")
+     suspend fun evidenceFor(id: String): List<EvidenceEntity>
++
++    @Insert(onConflict = OnConflictStrategy.IGNORE)
++    suspend fun witnessEvidence(value: WitnessEvidenceEntity): Long
++
++    @Query("SELECT * FROM witness_evidence WHERE operationId=:id ORDER BY chainPosition")
++    suspend fun witnessFor(id: String): List<WitnessEvidenceEntity>
+ }

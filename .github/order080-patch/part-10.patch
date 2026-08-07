@@ -1,0 +1,74 @@
+diff --git a/tools/resilience-lab/src/emit-proof-fixture.ts b/tools/resilience-lab/src/emit-proof-fixture.ts
+new file mode 100644
+index 0000000..a698122
+--- /dev/null
++++ b/tools/resilience-lab/src/emit-proof-fixture.ts
+@@ -0,0 +1,7 @@
++import { mkdirSync, writeFileSync } from 'node:fs';
++import { appendWitnessEvidence, buildIncidentProofBundle, type WitnessEvidence } from '../../../packages/protocol-core/src/witness.js';
++const id='fixture_order080'; const c:WitnessEvidence[]=[]; const add=(x:Parameters<typeof appendWitnessEvidence>[1])=>c.push(appendWitnessEvidence(c,x));
++add({incidentId:id,evidenceId:'fixture-detected',state:'DETECTED',evidenceClass:'OBSERVED_FACT',emitterId:'sensor:fixture',authorizationScope:'witness:source',observedAtMs:1000,monotonicMs:1,provenance:'fixture',reasonCode:'FIXTURE_DETECTED',claims:{boundaryRole:'SENSOR_OR_SOURCE',sourceId:'sensor:fixture'}});
++add({incidentId:id,evidenceId:'fixture-committed',state:'COMMITTED_LOCAL',evidenceClass:'MACHINE_ASSERTION',emitterId:'device:fixture',authorizationScope:'witness:local',observedAtMs:1001,monotonicMs:2,provenance:'fixture',reasonCode:'LOCAL_DURABLE_COMMIT',claims:{boundaryRole:'ZUNGUN_WITNESS',localCommitRef:'fixture:local'}});
++add({incidentId:id,evidenceId:'fixture-custody',state:'CUSTODY_ACCEPTED',evidenceClass:'MACHINE_ASSERTION',emitterId:'transport:fixture',authorizationScope:'witness:transport',observedAtMs:1002,monotonicMs:3,provenance:'fixture',reasonCode:'TRANSPORT_CUSTODY',claims:{boundaryRole:'TRANSPORT',transportKind:'STORE_FORWARD',routeId:'fixture:route',custodyRef:'fixture:custody'}});
++const bundle=buildIncidentProofBundle(c); mkdirSync('.artifacts/witness',{recursive:true}); writeFileSync('.artifacts/witness/incident-proof-bundle.json',`${JSON.stringify(bundle,null,2)}\n`); console.log(JSON.stringify({ok:true,manifestSha256:bundle.manifestSha256}));
+diff --git a/tools/resilience-lab/src/run.ts b/tools/resilience-lab/src/run.ts
+index 9bbe4ed..5d3d639 100644
+--- a/tools/resilience-lab/src/run.ts
++++ b/tools/resilience-lab/src/run.ts
+@@ -15,6 +15,7 @@ import { ReceiverDatabase, evidenceHash } from '../../../services/receiver/src/d
+ import { PersistentReceiver } from '../../../services/receiver/src/receiver.js';
+ import { BASE_TIME, makeEnvelope } from '../../../tests/helpers.js';
+ import { deterministicScenarios, type ResilienceScenario } from './scenarios.js';
++import { runIntegratedBlackoutDrill } from './blackout-drill.js';
+ 
+ export interface ScenarioResult {
+   readonly name: string;
+@@ -290,6 +291,7 @@ function runScenario(scenario: ResilienceScenario): ScenarioResult {
+ }
+ 
+ const results = deterministicScenarios().map(runScenario);
++const blackoutDrill = runIntegratedBlackoutDrill();
+ const passed = results.filter((result) => result.passed).length;
+ const report = {
+   schema: 'zungun.resilience-report.v2',
+@@ -300,6 +302,7 @@ const report = {
+   exactOutcomeMatching: true,
+   normalizationApplied: false,
+   results,
++  blackoutDrill,
+ };
+ const bytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
+ mkdirSync('.artifacts/resilience', { recursive: true });
+@@ -310,7 +313,9 @@ console.log(JSON.stringify({
+   scenarioCount: results.length,
+   passed,
+   failed: results.length - passed,
++  blackoutDrillPassed: blackoutDrill.passed,
++  blackoutDrillFailed: blackoutDrill.failed,
+   normalizationApplied: false,
+   seeds: results.map((result) => result.seed),
+ }));
+-if (passed !== results.length) process.exitCode = 1;
++if (passed !== results.length || blackoutDrill.failed !== 0) process.exitCode = 1;
+diff --git a/tools/resilience-lab/src/verify-proof-bundle.ts b/tools/resilience-lab/src/verify-proof-bundle.ts
+new file mode 100644
+index 0000000..b157b0e
+--- /dev/null
++++ b/tools/resilience-lab/src/verify-proof-bundle.ts
+@@ -0,0 +1,16 @@
++import { readFileSync } from 'node:fs';
++import { verifyIncidentProofBundle, type IncidentProofBundle } from '../../../packages/protocol-core/src/witness.js';
++
++export function verifyProofBundleFile(path: string) {
++  const parsed = JSON.parse(readFileSync(path,'utf8')) as IncidentProofBundle;
++  return verifyIncidentProofBundle(parsed);
++}
++
++if (process.argv[1]?.endsWith('verify-proof-bundle.js')) {
++  const path=process.argv[2];
++  if (!path) { console.error('usage: verify-proof-bundle <bundle.json>'); process.exitCode=2; }
++  else {
++    try { const result=verifyProofBundleFile(path); console.log(JSON.stringify(result)); }
++    catch (error) { console.error(JSON.stringify({ok:false,error:error instanceof Error?error.message:String(error)})); process.exitCode=1; }
++  }
++}
