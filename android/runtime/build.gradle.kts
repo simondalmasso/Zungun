@@ -50,7 +50,7 @@ publishing {
             artifactId = "zungun-runtime"
             version = "1.0.80"
             artifact(layout.buildDirectory.file("outputs/aar/runtime-release.aar")) {
-                builtBy(tasks.named("assembleRelease"))
+                builtBy("assembleRelease")
             }
             pom.withXml {
                 val dependenciesNode = asNode().appendNode("dependencies")
