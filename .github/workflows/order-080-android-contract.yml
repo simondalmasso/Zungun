@@ -13,7 +13,7 @@ name: Order 080 standalone Android contract
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: order-080-android-contract-${{ github.ref }}
@@ -28,7 +28,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
       - name: Install Android SDK inputs
         shell: bash
         run: |
@@ -88,6 +88,29 @@ jobs:
           printf 'ZUNGUN_CONSUMER_APK=%s\n' "$apk" >> "$GITHUB_ENV"
           test -s android/external-consumer/gradle.lockfile
           test -s android/external-consumer/gradle/verification-metadata.xml
+      - name: Persist captured consumer integrity state
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock=android/external-consumer/gradle.lockfile
+          metadata=android/external-consumer/gradle/verification-metadata.xml
+          test -s "$lock"
+          test -s "$metadata"
+          grep -q '^com.zungun:zungun-runtime:1.0.80=' "$lock"
+          grep -q 'group="com.zungun" name="zungun-runtime" version="1.0.80"' "$metadata"
+          aar_sha="$(cut -d' ' -f1 "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256")"
+          grep -q "value=\"$aar_sha\"" "$metadata"
+          if git diff --quiet -- "$lock" "$metadata"; then
+            exit 0
+          fi
+          git fetch origin feat/zungun-full-project-v1
+          test "$(git rev-parse origin/feat/zungun-full-project-v1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$lock" "$metadata"
+          git diff --cached --check
+          git commit -m 'build(android): pin standalone consumer integrity state'
+          git push origin HEAD:feat/zungun-full-project-v1
       - name: Archive Gate 29 and 30 evidence
         shell: bash
         run: |
