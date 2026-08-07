@@ -150,6 +150,7 @@ class Order076RealReceiverInstrumentedTest {
         assertRejected("mismatch", original.copy(
             operationId = "op_android_076b_binding_mismatch",
             idempotencyKey = "idem_android_076b_binding_mismatch",
+            scopeId = "shift_negative_receipt_binding_076b",
             replayNonce = "nonce_android_076b_binding_mismatch",
         ))
     }
