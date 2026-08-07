@@ -157,15 +157,35 @@ jobs:
           test "$(sha256sum "$published" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
           printf 'ZUNGUN_RUNTIME_REPO=%s\nZUNGUN_RUNTIME_PUBLISHED_AAR=%s\n' "$repo" "$published" >> "$GITHUB_ENV"
           echo "aar_sha=$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")" >> "$GITHUB_OUTPUT"
-      - name: "Gate 15c — compile consumer from declared producer artifact"
+      - name: "Gate 15c — clean-bootstrap and strict-replay standalone consumer"
         shell: bash
         run: |
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
           test "$(sha256sum "$ZUNGUN_RUNTIME_PUBLISHED_AAR" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
+          test -f android/external-consumer/settings.gradle.kts
+          ! grep -R -F 'project(:runtime)' android/external-consumer android/settings.gradle.kts
+          rm -f android/external-consumer/gradle.lockfile
+          rm -f android/external-consumer/gradle/verification-metadata.xml
+          mkdir -p android/external-consumer/gradle
+          android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
+            -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" \
+            --write-locks --write-verification-metadata sha256 \
+            assembleDebug assembleDebugAndroidTest
+          lock=android/external-consumer/gradle.lockfile
+          metadata=android/external-consumer/gradle/verification-metadata.xml
+          test -s "$lock"
+          test -s "$metadata"
+          test "$(sha256sum "$lock" | cut -d' ' -f1)" = ef069e3b72d9c51ec9620663139c732d839b5539e08e252255fed66625f02238
+          test "$(sha256sum "$metadata" | cut -d' ' -f1)" = 3c6dc59d4a10635811564d65fa7de50c349d82cbe046bb907535479116dbd79d
+          grep -q '^com.zungun:zungun-runtime:1.0.80=' "$lock"
+          grep -q 'group="com.zungun" name="zungun-runtime" version="1.0.80"' "$metadata"
+          grep -q 'value="26d62b972f7655d949330d5bf8f129de3cd36a100023b3f1b163f492ceb31f68"' "$metadata"
           android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
             -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" clean assembleDebug assembleDebugAndroidTest
+          test "$(sha256sum "$lock" | cut -d' ' -f1)" = ef069e3b72d9c51ec9620663139c732d839b5539e08e252255fed66625f02238
+          test "$(sha256sum "$metadata" | cut -d' ' -f1)" = 3c6dc59d4a10635811564d65fa7de50c349d82cbe046bb907535479116dbd79d
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
           test "$(sha256sum "$ZUNGUN_RUNTIME_PUBLISHED_AAR" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
       - name: "Gate 15d — runtime lint unit sample and lock integrity"
@@ -197,7 +217,11 @@ jobs:
           out="$RUNNER_TEMP/order077-android"; mkdir -p "$out"
           cp android/runtime/build/outputs/aar/runtime-release.aar "$out/zungun-runtime-release.aar"
           cp "$RUNNER_TEMP/runtime-release.aar.sha256" "$out/zungun-runtime-release.aar.sha256"
-          cp android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk "$out/"
+          apk="$(find android/external-consumer/build/outputs/apk/debug -maxdepth 1 -type f -name '*-debug.apk' -print -quit)"
+          test -n "$apk"
+          cp "$apk" "$out/external-consumer-debug.apk"
+          cp android/external-consumer/gradle.lockfile "$out/external-consumer-gradle.lockfile"
+          cp android/external-consumer/gradle/verification-metadata.xml "$out/external-consumer-verification-metadata.xml"
           cp -a "$RUNNER_TEMP/order076-real-e2e" "$out/real-e2e"
           cp "$RUNNER_TEMP/emulator-unit.log" "$out/"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
