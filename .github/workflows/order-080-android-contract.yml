@@ -6,6 +6,8 @@ name: Order 080 standalone Android contract
     paths:
       - android/runtime/**
       - android/settings.gradle.kts
+      - android/gradle/bootstrap-gradle.sh
+      - android/gradle/verification-metadata.xml
       - android/external-consumer/**
       - .github/workflows/order-080-android-contract.yml
   workflow_dispatch:
