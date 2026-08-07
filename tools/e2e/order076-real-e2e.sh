@@ -94,10 +94,11 @@ for _ in $(seq 1 30); do curl -sS http://127.0.0.1:18789/ready >/dev/null 2>&1 &
 instrument assertLostResponseUnknown
 
 auth() { printf 'Authorization: Bearer %s' "$1"; }
-test -s "$state/last-operation-response.json"
-operation_id="$(jq -er '.operationId | select(type=="string" and length>0)' "$state/last-operation-response.json")"
-operations="$(curl -fsS -H "$(auth "$reader_token")" 'http://127.0.0.1:18788/api/v1/operations?limit=10&offset=0')"
-test "$(jq --arg op "$operation_id" '[.items[] | select(.operation_id==$op)] | length' <<<"$operations")" = 1
+for _ in $(seq 1 30); do [ -s "$state/drop-observed" ] && break; sleep 1; done
+test -s "$state/drop-observed"
+operations="$(curl -fsS -H "$(auth "$reader_token")" 'http://127.0.0.1:18788/api/v1/operations?q=WO-ANDROID-076B&limit=10&offset=0')"
+test "$(jq '[.items[] | select(.work_order_id=="WO-ANDROID-076B")] | length' <<<"$operations")" = 1
+operation_id="$(jq -er '.items[] | select(.work_order_id=="WO-ANDROID-076B") | .operation_id | select(type=="string" and length>0)' <<<"$operations")"
 
 event_now_ms="$(date +%s%3N)"
 curl -fsS -H "$(auth "$reviewer_token")" -H 'content-type: application/json' \
