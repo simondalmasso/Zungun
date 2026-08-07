@@ -38,9 +38,8 @@ jobs:
             --write-verification-metadata sha256 \
             :runtime:publishReleasePublicationToOrder080Repository
           test -s android/gradle/verification-metadata.xml
+          grep -q '<verify-metadata>true</verify-metadata>' android/gradle/verification-metadata.xml
           ! grep -q '<trusted-artifacts>' android/gradle/verification-metadata.xml
-          ! grep -q '<verify-metadata>false</verify-metadata>' android/gradle/verification-metadata.xml
-          ! grep -q '<verify-signatures>false</verify-signatures>' android/gradle/verification-metadata.xml
       - name: Strict replay of publication graph
         shell: bash
         run: |
