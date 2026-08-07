@@ -29,6 +29,7 @@ class DeliveryWorker(
             val initial = dao.get(operationId) ?: return Result.failure()
             val now = System.currentTimeMillis()
             if (initial.state in TERMINAL_STATES) return Result.success()
+            if (initial.state !in CLAIMABLE_STATES) return Result.retry()
             if (initial.expiresAtMs <= now) {
                 dao.forceState(operationId, OperationState.EXPIRED.name, "TTL_EXPIRED", now, initial.attempts)
                 return Result.failure(workDataOf("error" to "TTL_EXPIRED"))
@@ -64,7 +65,7 @@ class DeliveryWorker(
             val attemptId = "transport_${UUID.randomUUID()}"
             val transitioned = database.withTransaction {
                 val current = dao.get(operationId) ?: return@withTransaction false
-                if (current.state in TERMINAL_STATES) return@withTransaction false
+                if (current.state !in CLAIMABLE_STATES) return@withTransaction false
                 val changed = dao.transition(
                     operationId,
                     current.state,
@@ -236,6 +237,11 @@ class DeliveryWorker(
     )
 
     companion object {
+        private val CLAIMABLE_STATES = setOf(
+            OperationState.QUEUED.name,
+            OperationState.ELIGIBLE.name,
+            OperationState.UNKNOWN.name,
+        )
         private val TERMINAL_STATES = setOf(
             OperationState.COMPLETED.name,
             OperationState.REJECTED.name,
