@@ -135,7 +135,7 @@ jobs:
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
-            :runtime:clean :sample:clean :external-consumer:clean
+            :runtime:clean :sample:clean
       - name: "Gate 15b — build producer AAR and verify SHA-256"
         id: android
         shell: bash
@@ -147,6 +147,15 @@ jobs:
           aar=android/runtime/build/outputs/aar/runtime-release.aar
           test -s "$aar"
           sha256sum "$aar" | tee "$RUNNER_TEMP/runtime-release.aar.sha256"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :runtime:publishReleasePublicationToOrder080Repository
+          repo="$GITHUB_WORKSPACE/android/runtime/build/order080-repo"
+          published="$repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar"
+          pom="$repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.pom"
+          test -s "$published"
+          test -s "$pom"
+          test "$(sha256sum "$published" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
+          printf 'ZUNGUN_RUNTIME_REPO=%s\nZUNGUN_RUNTIME_PUBLISHED_AAR=%s\n' "$repo" "$published" >> "$GITHUB_ENV"
           echo "aar_sha=$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")" >> "$GITHUB_OUTPUT"
       - name: "Gate 15c — compile consumer from declared producer artifact"
         shell: bash
@@ -154,9 +163,11 @@ jobs:
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
-            :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          test "$(sha256sum "$ZUNGUN_RUNTIME_PUBLISHED_AAR" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
+          android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
+            -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" clean assembleDebug assembleDebugAndroidTest
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+          test "$(sha256sum "$ZUNGUN_RUNTIME_PUBLISHED_AAR" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
       - name: "Gate 15d — runtime lint unit sample and lock integrity"
         shell: bash
         run: |
