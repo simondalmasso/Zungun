@@ -25,7 +25,6 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isIncludeAndroidResources = true }
-    publishing { singleVariant("release") }
 }
 
 dependencies {
@@ -50,7 +49,23 @@ publishing {
             groupId = "com.zungun"
             artifactId = "zungun-runtime"
             version = "1.0.80"
-            afterEvaluate { from(components["release"]) }
+            artifact(layout.buildDirectory.file("outputs/aar/runtime-release.aar")) {
+                builtBy(tasks.named("assembleRelease"))
+            }
+            pom.withXml {
+                val dependenciesNode = asNode().appendNode("dependencies")
+                fun runtimeDependency(groupId: String, artifactId: String, version: String) {
+                    val dependency = dependenciesNode.appendNode("dependency")
+                    dependency.appendNode("groupId", groupId)
+                    dependency.appendNode("artifactId", artifactId)
+                    dependency.appendNode("version", version)
+                    dependency.appendNode("scope", "runtime")
+                }
+                runtimeDependency("androidx.core", "core-ktx", "1.15.0")
+                runtimeDependency("androidx.room", "room-runtime", "2.6.1")
+                runtimeDependency("androidx.room", "room-ktx", "2.6.1")
+                runtimeDependency("androidx.work", "work-runtime-ktx", "2.10.0")
+            }
         }
     }
     repositories {
