@@ -88,6 +88,10 @@ class DeliveryWorker(
                     ),
                 )
                 dao.evidence(evidence(operationId, "TRANSPORT_ATTEMPT", now, attemptId, "attempt=$attemptNumber"))
+                val witness = dao.witnessFor(operationId)
+                if (witness.lastOrNull()?.state == "COMMITTED_LOCAL") {
+                    dao.witnessEvidence(WitnessChain.custody(operationId, current.deviceId, now, witness.last()))
+                }
                 true
             }
             if (!transitioned) return Result.retry()
@@ -97,6 +101,7 @@ class DeliveryWorker(
                 current,
                 dependencies.receiverConfiguration(applicationContext),
                 System.currentTimeMillis(),
+                dao.witnessFor(operationId).map { it.evidenceJson },
             )
             val completedAtMs = System.currentTimeMillis()
             return database.withTransaction {

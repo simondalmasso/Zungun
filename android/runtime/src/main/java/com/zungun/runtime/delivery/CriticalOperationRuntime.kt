@@ -87,6 +87,9 @@ class CriticalOperationRuntime(
                         sha256 = EvidenceHasher.sha256("$operationId|QUEUED|$nowMs"),
                     ),
                 )
+                WitnessChain.initial(operationId, request.deviceId, nowMs).forEach {
+                    database.operations().witnessEvidence(it)
+                }
             }
         }
         schedule(operationId)

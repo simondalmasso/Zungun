@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { ReceiverDatabase } from './database.js';
+import { WitnessReceiver } from './witness.js';
+import type { WitnessEvidence } from '../../../packages/protocol-core/src/witness.js';
 import {
   PersistentReceiver,
   type EffectInput,
@@ -164,6 +166,7 @@ export function createReceiverServer(options: ReceiverServerOptions) {
   const database = new ReceiverDatabase(options.databasePath);
   const provider = new LocalFileReceiptKeyProvider(options.keyPath);
   const receiver = new PersistentReceiver(database, provider, options.receiverId);
+  const witness = new WitnessReceiver(database, options.receiverId);
   const identity = options.identityProvider ?? new StaticPrincipalAuthorizer(options.principals ?? []);
   const staticDir = resolve(
     options.staticDir ?? fileURLToPath(new URL('../../../apps/control-room/public/', import.meta.url)),
@@ -243,6 +246,39 @@ export function createReceiverServer(options: ReceiverServerOptions) {
         return send(response, 200, receiver.revokeKey(parts[3], integer(body.nowMs, 'now_ms', Date.now())));
       }
       if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'operations' && parts[3] &&
+          parts[4] === 'witness' && request.method === 'GET' && parts.length === 5) {
+        authorize('witness:read', 'witness.read', parts[3]);
+        return send(response, 200, { operationId: parts[3], chain: witness.chain(parts[3]) });
+      }
+      if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'operations' && parts[3] &&
+          parts[4] === 'witness' && parts[5] === 'ingest' && request.method === 'POST') {
+        authorize('witness:ingest', 'witness.ingest', parts[3]);
+        const body = object(await bodyJson(request));
+        return send(response, 202, { operationId: parts[3], chain: witness.ingestSender(
+          parts[3], body.chain, integer(body.nowMs, 'now_ms', Date.now()),
+        ) });
+      }
+      if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'operations' && parts[3] &&
+          parts[4] === 'witness' && parts[5] === 'attest' && request.method === 'POST') {
+        const auth = authorize('witness:attest', 'witness.attest', parts[3]);
+        const body = object(await bodyJson(request));
+        return send(response, 201, witness.attest(
+          parts[3], body.evidence, auth.subject, integer(body.nowMs, 'now_ms', Date.now()),
+        ));
+      }
+      if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'operations' && parts[3] &&
+          parts[4] === 'witness' && parts[5] === 'reconcile' && request.method === 'POST') {
+        authorize('witness:reconcile', 'witness.reconcile', parts[3]);
+        const body = object(await bodyJson(request));
+        return send(response, 200, witness.reconcile(parts[3], body.senderChain));
+      }
+      if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'operations' && parts[3] &&
+          parts[4] === 'witness' && parts[5] === 'bundle' && request.method === 'GET') {
+        authorize('witness:read', 'witness.bundle', parts[3]);
+        return send(response, 200, witness.bundle(parts[3]));
+      }
+
+      if (parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'operations' && parts[3] &&
           request.method === 'GET' && parts.length === 4) {
         authorize('operations:read', 'operation.read', parts[3]);
         return send(response, 200, receiver.getOperation(parts[3]));
@@ -320,7 +356,7 @@ export function createReceiverServer(options: ReceiverServerOptions) {
               'STALE_PROOF_HASH',
               'STALE_MANIFEST_HASH',
               'DECLARATION_VERSION_CONFLICT',
-            ].includes(message)
+            ].includes(message) || message.startsWith('WITNESS_')
               ? 409
               : message === 'PAYLOAD_TOO_LARGE'
                 ? 413
@@ -332,6 +368,7 @@ export function createReceiverServer(options: ReceiverServerOptions) {
   return {
     server,
     receiver,
+    witness,
     database,
     close: () => new Promise<void>((resolveClose, reject) => {
       server.close((error: any) => {

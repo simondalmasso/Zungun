@@ -41,7 +41,7 @@ data class VerifiedReceipt(
 )
 
 fun interface ReceiverTransportClient {
-    suspend fun deliver(operation: OperationEntity, configuration: ReceiverConfiguration, nowMs: Long): TransportResult
+    suspend fun deliver(operation: OperationEntity, configuration: ReceiverConfiguration, nowMs: Long, witnessChainJson: List<String> = emptyList()): TransportResult
 }
 
 class HttpReceiverTransportClient : ReceiverTransportClient {
@@ -49,6 +49,7 @@ class HttpReceiverTransportClient : ReceiverTransportClient {
         operation: OperationEntity,
         configuration: ReceiverConfiguration,
         nowMs: Long,
+        witnessChainJson: List<String>,
     ): TransportResult {
         validateEndpoint(configuration)
         val token = configuration.credentialProvider.bearerToken()
@@ -64,6 +65,27 @@ class HttpReceiverTransportClient : ReceiverTransportClient {
             )
             val responseHash = sha256(response.body)
             if (response.status == 202) {
+                if (witnessChainJson.isNotEmpty()) {
+                    val witnessChain = JSONArray()
+                    witnessChainJson.forEach { witnessChain.put(JSONObject(it)) }
+                    val witnessResponse = request(
+                        url = "${configuration.endpointUrl.trimEnd('/')}/api/v1/operations/${operation.operationId}/witness/ingest",
+                        method = "POST",
+                        token = token,
+                        body = JSONObject().put("chain", witnessChain).put("nowMs", nowMs).toString(),
+                        configuration = configuration,
+                    )
+                    if (witnessResponse.status !in 200..299) {
+                        val code = runCatching {
+                            JSONObject(witnessResponse.body).optString("error", "WITNESS_HTTP_${witnessResponse.status}")
+                        }.getOrDefault("WITNESS_HTTP_${witnessResponse.status}")
+                        return if (witnessResponse.status in 400..499) {
+                            TransportResult.DeterministicFailure(code, witnessResponse.status, sha256(witnessResponse.body))
+                        } else {
+                            TransportResult.AmbiguousFailure(code)
+                        }
+                    }
+                }
                 val json = JSONObject(response.body)
                 val receipt = if (json.isNull("receipt")) null else verifyReceipt(
                     operation,

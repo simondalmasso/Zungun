@@ -15,6 +15,7 @@ import { ReceiverDatabase, evidenceHash } from '../../../services/receiver/src/d
 import { PersistentReceiver } from '../../../services/receiver/src/receiver.js';
 import { BASE_TIME, makeEnvelope } from '../../../tests/helpers.js';
 import { deterministicScenarios, type ResilienceScenario } from './scenarios.js';
+import { runIntegratedBlackoutDrill } from './blackout-drill.js';
 
 export interface ScenarioResult {
   readonly name: string;
@@ -290,6 +291,7 @@ function runScenario(scenario: ResilienceScenario): ScenarioResult {
 }
 
 const results = deterministicScenarios().map(runScenario);
+const blackoutDrill = runIntegratedBlackoutDrill();
 const passed = results.filter((result) => result.passed).length;
 const report = {
   schema: 'zungun.resilience-report.v2',
@@ -300,6 +302,7 @@ const report = {
   exactOutcomeMatching: true,
   normalizationApplied: false,
   results,
+  blackoutDrill,
 };
 const bytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
 mkdirSync('.artifacts/resilience', { recursive: true });
@@ -310,7 +313,9 @@ console.log(JSON.stringify({
   scenarioCount: results.length,
   passed,
   failed: results.length - passed,
+  blackoutDrillPassed: blackoutDrill.passed,
+  blackoutDrillFailed: blackoutDrill.failed,
   normalizationApplied: false,
   seeds: results.map((result) => result.seed),
 }));
-if (passed !== results.length) process.exitCode = 1;
+if (passed !== results.length || blackoutDrill.failed !== 0) process.exitCode = 1;

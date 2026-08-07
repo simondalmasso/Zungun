@@ -27,7 +27,10 @@
     "start:receiver": "npm run build && node dist/services/receiver/src/server.js",
     "demo:field-service": "npm run build && node dist/examples/field-service/src/demo.js",
     "verify:order076-baseline": "node tools/quality/order076-baseline-regressions.mjs",
-    "audit:osv": "node tools/security/osv-audit.mjs"
+    "audit:osv": "node tools/security/osv-audit.mjs",
+    "test:witness": "npm run build && node --test dist/tests/witness.test.js dist/tests/witness-receiver.test.js dist/tests/witness-verifier-cli.test.js dist/tests/server-api.test.js",
+    "verify:witness-bundle": "npm run build && node --test dist/tests/witness-verifier-cli.test.js",
+    "generate:witness-fixture": "npm run build && node dist/tools/resilience-lab/src/emit-proof-fixture.js"
   },
   "engines": {
     "node": ">=22.16.0"

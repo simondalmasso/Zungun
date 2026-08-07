@@ -120,6 +120,9 @@ class Order076RealReceiverInstrumentedTest {
             val kinds = database.operations().evidenceFor(OPERATION_ID).map { it.kind }
             assertTrue(kinds.containsAll(listOf("RECEIVER_ACCEPTED", "APPLICATION_ACK", "SIGNED_RECEIPT")))
             assertTrue(database.operations().attemptsFor(OPERATION_ID).size >= 3)
+            val witness = database.operations().witnessFor(OPERATION_ID)
+            assertEquals(listOf("DETECTED", "COMMITTED_LOCAL", "CUSTODY_ACCEPTED"), witness.map { it.state })
+            assertEquals(listOf(0, 1, 2), witness.map { it.chainPosition })
         } finally {
             database.close()
         }
@@ -129,7 +132,7 @@ class Order076RealReceiverInstrumentedTest {
     fun verifyNegativeReceiptMatrix() = runBlocking {
         val original = snapshot() ?: error("primary operation missing")
         val client = HttpReceiverTransportClient()
-        val missing = client.deliver(original, configuration("missing"), System.currentTimeMillis())
+        val missing = client.deliver(original, configuration("missing"), System.currentTimeMillis(), emptyList())
         assertTrue(missing is TransportResult.Accepted && missing.receipt == null)
 
         assertRejected("tampered", original)
@@ -145,7 +148,7 @@ class Order076RealReceiverInstrumentedTest {
 
     private suspend fun assertRejected(mode: String, operation: OperationEntity) {
         val result = runCatching {
-            HttpReceiverTransportClient().deliver(operation, configuration(mode), System.currentTimeMillis())
+            HttpReceiverTransportClient().deliver(operation, configuration(mode), System.currentTimeMillis(), emptyList())
         }
         assertTrue("$mode receipt must fail closed", result.isFailure)
     }

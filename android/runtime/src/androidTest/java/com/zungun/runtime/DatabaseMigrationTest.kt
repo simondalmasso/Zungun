@@ -12,9 +12,9 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class DatabaseMigrationTest {
     @Test
-    fun migration1To3AddsOperationalDeliveryState() {
+    fun migration1To4AddsOperationalDeliveryAndWitnessState() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val path = context.getDatabasePath("migration-order076.sqlite")
+        val path = context.getDatabasePath("migration-order080.sqlite")
         path.delete()
         path.parentFile?.mkdirs()
         val raw = SQLiteDatabase.openOrCreateDatabase(path, null)
@@ -47,6 +47,7 @@ class DatabaseMigrationTest {
         val database = FrameworkSQLiteDatabase(raw)
         ZungunDatabase.MIGRATION_1_2.migrate(database)
         ZungunDatabase.MIGRATION_2_3.migrate(database)
+        ZungunDatabase.MIGRATION_3_4.migrate(database)
         val columns = raw.rawQuery("PRAGMA table_info(operations)", null).use { cursor ->
             buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
         }
@@ -55,6 +56,12 @@ class DatabaseMigrationTest {
             buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
         }
         assertTrue(tables.contains("transport_attempts"))
+        assertTrue(tables.contains("witness_evidence"))
+        val indexes = raw.rawQuery("PRAGMA index_list(witness_evidence)", null).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
+        }
+        assertTrue(indexes.contains("index_witness_evidence_operationId"))
+        assertTrue(indexes.contains("index_witness_evidence_operationId_chainPosition"))
         raw.close()
         path.delete()
     }
