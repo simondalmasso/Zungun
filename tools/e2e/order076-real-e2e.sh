@@ -11,7 +11,10 @@ avdmanager="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
 out="$RUNNER_TEMP/order076-real-e2e"
 state="$RUNNER_TEMP/order076-proxy"
 data="$RUNNER_TEMP/order076-receiver"
-mkdir -p "$out" "$state" "$data"
+export ANDROID_USER_HOME="$RUNNER_TEMP/order076-android-user-home"
+export ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
+export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+mkdir -p "$out" "$state" "$data" "$ANDROID_AVD_HOME"
 
 app_token='android-client-token-order076b'
 reader_token='reader-principal-token-order076b'
@@ -40,8 +43,8 @@ instrument() {
 }
 
 wait_boot() {
-  "$adb" wait-for-device
-  for _ in $(seq 1 240); do
+  timeout 180s "$adb" wait-for-device
+  for _ in $(seq 1 120); do
     [ "$("$adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && return 0
     sleep 2
   done
@@ -68,8 +71,10 @@ test_apk=android/external-consumer/build/outputs/apk/androidTest/debug/external-
 test -s "$app_apk" && test -s "$test_apk"
 
 echo no | "$avdmanager" create avd --force --name zungun-order076b --package 'system-images;android-35;google_apis;x86_64' --device pixel_6
+"$emulator" -list-avds | grep -Fx zungun-order076b
 sudo chmod 666 /dev/kvm || true
 nohup "$emulator" -avd zungun-order076b -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -accel auto > "$out/emulator.log" 2>&1 &
+trap 'cat "$out/emulator.log" 2>/dev/null || true; kill "${proxy_pid:-0}" 2>/dev/null || true; stop_receiver; "$adb" emu kill >/dev/null 2>&1 || true' ERR EXIT
 wait_boot
 "$adb" install -r "$app_apk"
 "$adb" install -r "$test_apk"
