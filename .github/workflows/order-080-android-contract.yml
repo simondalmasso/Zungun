@@ -82,7 +82,10 @@ jobs:
           android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
             -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" clean assembleDebug assembleDebugAndroidTest
           sha256sum -c "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256"
-          test -s android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk
+          apk="$(find android/external-consumer/build/outputs/apk/debug -maxdepth 1 -type f -name '*-debug.apk' -print -quit)"
+          test -n "$apk"
+          test -s "$apk"
+          printf 'ZUNGUN_CONSUMER_APK=%s\n' "$apk" >> "$GITHUB_ENV"
           test -s android/external-consumer/gradle.lockfile
           test -s android/external-consumer/gradle/verification-metadata.xml
       - name: Archive Gate 29 and 30 evidence
@@ -93,7 +96,7 @@ jobs:
           mkdir -p "$out"
           cp "$ZUNGUN_RUNTIME_AAR" "$out/zungun-runtime-1.0.80.aar"
           cp "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256" "$out/"
-          cp android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk "$out/"
+          cp "$ZUNGUN_CONSUMER_APK" "$out/external-consumer-debug.apk"
           sha256sum "$out/external-consumer-debug.apk" > "$out/external-consumer-debug.apk.sha256"
           cp android/external-consumer/gradle/verification-metadata.xml "$out/consumer-verification-metadata.xml"
           cp android/external-consumer/gradle.lockfile "$out/consumer-gradle.lockfile"
