@@ -77,9 +77,13 @@ const server = createServer(async (req, res) => {
       const parsed = JSON.parse(response.body.toString('utf8'));
       if (parsed.receipt) writeFileSync(resolve(stateDir, 'final-response.json'), JSON.stringify(parsed));
       if (readMode() === 'drop') {
-        writeFileSync(resolve(stateDir, 'drop-observed'), `${Date.now()}\n`, { flag: 'a' });
-        req.socket.destroy();
-        return;
+        const accepted = response.status >= 200 && response.status < 300 &&
+          typeof parsed.operationId === 'string' && parsed.operationId.length > 0;
+        if (accepted) {
+          writeFileSync(resolve(stateDir, 'drop-observed'), `${Date.now()}\n`, { flag: 'a' });
+          req.socket.destroy();
+          return;
+        }
       }
     }
 
