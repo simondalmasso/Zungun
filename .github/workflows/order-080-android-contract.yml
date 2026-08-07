@@ -11,7 +11,7 @@ name: Order 080 standalone Android contract
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: order-080-android-contract-${{ github.ref }}
@@ -26,6 +26,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Install Android SDK inputs
         shell: bash
         run: |
@@ -56,7 +57,7 @@ jobs:
           sha256sum "$aar" | tee "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256"
           printf 'ZUNGUN_RUNTIME_REPO=%s\n' "$repo" >> "$GITHUB_ENV"
           printf 'ZUNGUN_RUNTIME_AAR=%s\n' "$aar" >> "$GITHUB_ENV"
-      - name: Gate 29 standalone consumer bootstrap metadata if needed
+      - name: Gate 29 standalone consumer bootstrap evidence if needed
         shell: bash
         run: |
           set -euo pipefail
@@ -68,7 +69,6 @@ jobs:
               -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" \
               --write-locks --write-verification-metadata sha256 \
               assembleDebug assembleDebugAndroidTest
-            echo 'GENERATED_CONSUMER_METADATA=1' >> "$GITHUB_ENV"
           fi
       - name: Gate 29 strict standalone coordinate consumption
         shell: bash
@@ -82,18 +82,6 @@ jobs:
           test -s android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk
           test -s android/external-consumer/gradle.lockfile
           test -s android/external-consumer/gradle/verification-metadata.xml
-      - name: Commit generated standalone verification evidence
-        if: env.GENERATED_CONSUMER_METADATA == '1'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --check
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add android/external-consumer/gradle.lockfile android/external-consumer/gradle/verification-metadata.xml
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'build(android): lock standalone consumer graph'
-          git push origin HEAD:feat/zungun-full-project-v1
       - name: Archive Gate 29 and 30 evidence
         shell: bash
         run: |
