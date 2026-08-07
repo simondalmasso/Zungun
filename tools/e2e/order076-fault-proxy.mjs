@@ -55,8 +55,8 @@ function mutateNegative(mode, path, response) {
     const now = Date.now();
     for (const item of json.items) {
       if (mode === 'future') item.validFromMs = now + 86_400_000;
-      if (mode === 'expired') item.validUntilMs = now - 1;
-      if (mode === 'revoked') item.revokedAtMs = now - 1;
+      if (mode === 'expired') item.validUntilMs = 0;
+      if (mode === 'revoked') item.revokedAtMs = 0;
     }
     return { ...response, body: Buffer.from(JSON.stringify(json)) };
   }
