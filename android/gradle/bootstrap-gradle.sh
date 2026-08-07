@@ -2,6 +2,10 @@
 set -euo pipefail
 version=8.10.2
 sha256=31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
+metadata="$script_dir/verification-metadata.xml"
+supplement="$script_dir/order080-verification.patch"
 cache="${GRADLE_USER_HOME:-$HOME/.gradle}/zungun-distributions"
 zip="$cache/gradle-$version-bin.zip"
 home="$cache/gradle-$version"
@@ -15,8 +19,24 @@ if [ ! -x "$home/bin/gradle" ]; then
   mv "$cache/gradle-$version.tmp/gradle-$version" "$home"
   rmdir "$cache/gradle-$version.tmp"
 fi
-aapt2="${ZUNGUN_AAPT2_OVERRIDE:-${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools/35.0.0/aapt2}"
-if [ -n "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}" ] && [ -x "$aapt2" ]; then
-  exec "$home/bin/gradle" -Pandroid.aapt2FromMavenOverride="$aapt2" "$@"
+backup=""
+if [ -f "$supplement" ]; then
+  backup="$(mktemp)"
+  cp "$metadata" "$backup"
+  restore_metadata() {
+    cp "$backup" "$metadata"
+    rm -f "$backup"
+  }
+  trap restore_metadata EXIT INT TERM
+  (cd "$repo_root" && git apply --check "$supplement" && git apply "$supplement")
 fi
-exec "$home/bin/gradle" "$@"
+aapt2="${ZUNGUN_AAPT2_OVERRIDE:-${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools/35.0.0/aapt2}"
+args=()
+if [ -n "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}" ] && [ -x "$aapt2" ]; then
+  args+=("-Pandroid.aapt2FromMavenOverride=$aapt2")
+fi
+set +e
+"$home/bin/gradle" "${args[@]}" "$@"
+status=$?
+set -e
+exit "$status"
