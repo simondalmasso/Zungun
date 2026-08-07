@@ -49,9 +49,7 @@ publishing {
             groupId = "com.zungun"
             artifactId = "zungun-runtime"
             version = "1.0.80"
-            artifact(layout.buildDirectory.file("outputs/aar/runtime-release.aar")) {
-                builtBy("assembleRelease")
-            }
+            artifact(layout.buildDirectory.file("outputs/aar/runtime-release.aar"))
             pom.withXml {
                 val dependenciesNode = asNode().appendNode("dependencies")
                 fun runtimeDependency(groupId: String, artifactId: String, version: String) {
