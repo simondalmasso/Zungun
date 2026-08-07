@@ -80,7 +80,7 @@ const server = createServer(async (req, res) => {
         const accepted = response.status >= 200 && response.status < 300 &&
           typeof parsed.operationId === 'string' && parsed.operationId.length > 0;
         if (accepted) {
-          writeFileSync(resolve(stateDir, 'drop-observed'), `${Date.now()}\n`, { flag: 'a' });
+          writeFileSync(resolve(stateDir, 'drop-observed'), `${parsed.operationId}\t${Date.now()}\n`, { flag: 'a' });
           req.socket.destroy();
           return;
         }
