@@ -7,7 +7,7 @@ name: Order 080 publish-graph metadata capture
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   capture-strict-metadata:
@@ -18,7 +18,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: false
       - name: Install Android SDK inputs
         shell: bash
         run: |
@@ -49,6 +48,18 @@ jobs:
             :runtime:clean :runtime:publishReleasePublicationToOrder080Repository
           test -s android/runtime/build/order080-repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar
           sha256sum android/runtime/build/order080-repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar > "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256"
+      - name: Commit only exact verified metadata delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = android/gradle/verification-metadata.xml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android/gradle/verification-metadata.xml
+          git commit -m 'build(android): verify runtime publication graph'
+          git push origin HEAD:feat/zungun-full-project-v1
       - name: Archive exact metadata evidence
         shell: bash
         run: |
