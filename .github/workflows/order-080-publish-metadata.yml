@@ -1,0 +1,68 @@
+name: Order 080 publish-graph metadata capture
+
+"on":
+  push:
+    branches: [feat/zungun-full-project-v1]
+    paths: [.github/workflows/order-080-publish-metadata.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture-strict-metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Android SDK inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+      - name: Generate metadata from exact runtime publication graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            --write-verification-metadata sha256 \
+            :runtime:publishReleasePublicationToOrder080Repository
+          test -s android/gradle/verification-metadata.xml
+          ! grep -q '<trusted-artifacts>' android/gradle/verification-metadata.xml
+          ! grep -q '<verify-metadata>false</verify-metadata>' android/gradle/verification-metadata.xml
+          ! grep -q '<verify-signatures>false</verify-signatures>' android/gradle/verification-metadata.xml
+      - name: Strict replay of publication graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            :runtime:clean :runtime:publishReleasePublicationToOrder080Repository
+          test -s android/runtime/build/order080-repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar
+          sha256sum android/runtime/build/order080-repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar > "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256"
+      - name: Archive exact metadata evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/order080-publish-metadata"
+          mkdir -p "$out"
+          cp android/gradle/verification-metadata.xml "$out/verification-metadata.xml"
+          cp "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256" "$out/"
+          sha256sum "$out/verification-metadata.xml" > "$out/verification-metadata.xml.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order080-publish-metadata-${{ github.run_id }}
+          path: ${{ runner.temp }}/order080-publish-metadata
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
