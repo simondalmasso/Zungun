@@ -132,11 +132,11 @@ object LinkCanonical {
         is String -> quote(value)
         is Boolean -> value.toString()
         is Number -> value.toString()
-        is List<*> -> value.joinToString("[", ",", "]") { json(it) }
+        is List<*> -> value.joinToString(separator = ",", prefix = "[", postfix = "]") { json(it) }
         is Map<*, *> -> {
             val sorted = TreeMap<String, Any?>()
             value.forEach { (key, item) -> sorted[key as String] = item }
-            sorted.entries.joinToString("{", ",", "}") { quote(it.key) + ":" + json(it.value) }
+            sorted.entries.joinToString(separator = ",", prefix = "{", postfix = "}") { quote(it.key) + ":" + json(it.value) }
         }
         else -> error("UNSUPPORTED_CANONICAL_TYPE:${value::class.java.name}")
     }
