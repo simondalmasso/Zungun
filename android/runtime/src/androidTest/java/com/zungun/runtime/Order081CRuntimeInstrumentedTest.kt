@@ -39,7 +39,7 @@ class Order081CRuntimeInstrumentedTest {
     @Test
     fun requiredForEffectReceiptDoesNotFalseCompleteAcrossReopen() = runBlocking {
         val op = operation("effect-gate", OperationState.QUEUED.name, 0)
-        ZungunDatabase.open(context, dbName).use { db ->
+        withDatabase { db ->
             db.operations().insert(op)
             db.link().linkState(LinkPersistence.state(op.operationId, profile(LinkPayloadStrategy.CORE_PLUS_DEFERRED), 1_000))
             db.link().deferred(deferred(op.operationId, "effect-object", "REQUIRED_FOR_EFFECT"))
@@ -47,7 +47,7 @@ class Order081CRuntimeInstrumentedTest {
             assertEquals(OperationState.RECEIVER_ACCEPTED, state)
             assertEquals(1, db.link().requiredEffectPendingCount(op.operationId))
         }
-        ZungunDatabase.open(context, dbName).use { db ->
+        withDatabase { db ->
             assertEquals(OperationState.RECEIVER_ACCEPTED.name, db.operations().get(op.operationId)!!.state)
             assertEquals(1, db.link().requiredEffectPendingCount(op.operationId))
             db.link().setDeferredState(op.operationId, "effect-object", "COMPLETED", 3_000)
@@ -61,49 +61,57 @@ class Order081CRuntimeInstrumentedTest {
         val op = operation("delta-send", OperationState.QUEUED.name, 0)
         val deltaBytes = "delta-v1".toByteArray()
         val delta = LinkDeltaSpec(sha256("base-v1".toByteArray()), deltaBytes)
-        ZungunDatabase.open(context, dbName).use { db ->
+        withDatabase { db ->
             db.operations().insert(op)
             db.link().linkState(LinkPersistence.state(op.operationId, profile(LinkPayloadStrategy.DELTA_ALLOWED), 1_000, LinkPayloadMetadata(delta)))
-            db.link().plan(TransmissionPlanEntity(
-                planId = "plan-delta",
-                operationId = op.operationId,
-                plannerVersion = "link-planner-v1",
-                profileHash = db.link().state(op.operationId)!!.profileHash,
-                snapshotId = "snap-1",
-                snapshotHash = "snap-hash",
-                decision = "SEND_DELTA_NOW",
-                reasonsJson = "[\"DELTA_BASE_AVAILABLE\"]",
-                adapterId = "http",
-                networkKey = "net-1",
-                plannedBytes = deltaBytes.size,
-                reconcileFirst = false,
-                nextEligibilityAtMs = null,
-                activeProbeAuthorized = false,
-                activeProbeBudgetRemainingBytes = 0,
-                createdAtMs = 1_100,
-            ))
+            db.link().plan(
+                TransmissionPlanEntity(
+                    planId = "plan-delta",
+                    operationId = op.operationId,
+                    plannerVersion = "link-planner-v1",
+                    profileHash = db.link().state(op.operationId)!!.profileHash,
+                    snapshotId = "snap-1",
+                    snapshotHash = "snap-hash",
+                    decision = "SEND_DELTA_NOW",
+                    reasonsJson = "[\"DELTA_BASE_AVAILABLE\"]",
+                    adapterId = "http",
+                    networkKey = "net-1",
+                    plannedBytes = deltaBytes.size,
+                    reconcileFirst = false,
+                    nextEligibilityAtMs = null,
+                    activeProbeAuthorized = false,
+                    activeProbeBudgetRemainingBytes = 0,
+                    createdAtMs = 1_100,
+                ),
+            )
             db.link().deferred(deferred(op.operationId, "evidence-object", "REQUIRED_FOR_FINAL_EVIDENCE"))
         }
         val sent = mutableListOf<ByteArray>()
-        DeliveryRuntimeRegistry.install(provider(ReceiverTransportClient { operation, _, _ ->
-            sent += operation.payload.copyOf()
-            TransportResult.Accepted(false, "COMPLETED", receipt(op.operationId), 200, sha256("ok".toByteArray()))
-        }))
+        DeliveryRuntimeRegistry.install(
+            provider(
+                ReceiverTransportClient { operation, _, _ ->
+                    sent += operation.payload.copyOf()
+                    TransportResult.Accepted(false, "COMPLETED", receipt(op.operationId), 200, sha256("ok".toByteArray()))
+                },
+            ),
+        )
         TestListenableWorkerBuilder<DeliveryWorker>(context)
             .setInputData(workDataOf("operationId" to op.operationId))
             .build()
             .doWork()
         assertEquals(1, sent.size)
         assertTrue(sent.single().contentEquals(deltaBytes))
-        ZungunDatabase.open(context, dbName).use { db ->
-            assertTrue(db.operations().evidenceFor(op.operationId).any {
-                it.kind == "TRANSMITTED_REPRESENTATION" && it.payloadJson.contains("DELTA") && it.payloadJson.contains(delta.sha256)
-            })
+        withDatabase { db ->
+            assertTrue(
+                db.operations().evidenceFor(op.operationId).any {
+                    it.kind == "TRANSMITTED_REPRESENTATION" && it.payloadJson.contains("DELTA") && it.payloadJson.contains(delta.sha256)
+                },
+            )
             val status = LinkStatusReader.read(db, op.operationId)
             assertNotNull(status)
             assertEquals("plan-delta", status!!.planId)
             assertEquals("SEND_DELTA_NOW", status.planDecision)
-            assertEquals(1, status.requiredFinalEvidencePending)
+            assertEquals(1, status.requiredForFinalEvidencePending)
             assertNotNull(status.immediateReceiptId)
         }
     }
@@ -114,23 +122,25 @@ class Order081CRuntimeInstrumentedTest {
         seedAmbiguous(op)
         val transportCalls = AtomicInteger(0)
         val queryCalls = AtomicInteger(0)
-        DeliveryRuntimeRegistry.install(provider(
-            transport = ReceiverTransportClient { _, _, _ ->
-                transportCalls.incrementAndGet()
-                error("SECOND_SIDE_EFFECT_SEND")
-            },
-            reconciliation = ReceiverReconciliationClient { _, _, _ ->
-                queryCalls.incrementAndGet()
-                ReceiverReconciliationResult.AcceptanceRecovered("COMPLETED", "EFFECT_APPLIED", receipt(op.operationId))
-            },
-        ))
+        DeliveryRuntimeRegistry.install(
+            provider(
+                transport = ReceiverTransportClient { _, _, _ ->
+                    transportCalls.incrementAndGet()
+                    error("SECOND_SIDE_EFFECT_SEND")
+                },
+                reconciliation = ReceiverReconciliationClient { _, _, _ ->
+                    queryCalls.incrementAndGet()
+                    ReceiverReconciliationResult.AcceptanceRecovered("COMPLETED", "EFFECT_APPLIED", receipt(op.operationId))
+                },
+            ),
+        )
         TestListenableWorkerBuilder<LinkDeliveryWorker>(context)
             .setInputData(workDataOf("operationId" to op.operationId))
             .build()
             .doWork()
         assertEquals(1, queryCalls.get())
         assertEquals(0, transportCalls.get())
-        ZungunDatabase.open(context, dbName).use { db ->
+        withDatabase { db ->
             assertEquals(OperationState.COMPLETED.name, db.operations().get(op.operationId)!!.state)
             assertNotNull(db.operations().receiptFor(op.operationId))
             assertTrue(db.operations().evidenceFor(op.operationId).any { it.kind == "RECONCILIATION_RESULT" })
@@ -142,40 +152,59 @@ class Order081CRuntimeInstrumentedTest {
         val bounded = operation("reconcile-bounded", OperationState.UNKNOWN.name, 1)
         seedAmbiguous(bounded)
         val boundedCalls = AtomicInteger(0)
-        DeliveryRuntimeRegistry.install(provider(
-            transport = ReceiverTransportClient { _, _, _ ->
-                boundedCalls.incrementAndGet()
-                TransportResult.Accepted(false, "COMPLETED", receipt(bounded.operationId), 200, sha256("ok".toByteArray()))
-            },
-            reconciliation = ReceiverReconciliationClient { _, _, _ -> ReceiverReconciliationResult.BoundedNotAccepted("proof-not-accepted") },
-        ))
+        DeliveryRuntimeRegistry.install(
+            provider(
+                transport = ReceiverTransportClient { _, _, _ ->
+                    boundedCalls.incrementAndGet()
+                    TransportResult.Accepted(false, "COMPLETED", receipt(bounded.operationId), 200, sha256("ok".toByteArray()))
+                },
+                reconciliation = ReceiverReconciliationClient { _, _, _ ->
+                    ReceiverReconciliationResult.BoundedNotAccepted("proof-not-accepted")
+                },
+            ),
+        )
         TestListenableWorkerBuilder<LinkDeliveryWorker>(context)
-            .setInputData(workDataOf("operationId" to bounded.operationId)).build().doWork()
+            .setInputData(workDataOf("operationId" to bounded.operationId))
+            .build()
+            .doWork()
         assertEquals(1, boundedCalls.get())
 
         val unbounded = operation("reconcile-unbounded", OperationState.UNKNOWN.name, 1)
         seedAmbiguous(unbounded)
         val unsafeCalls = AtomicInteger(0)
-        DeliveryRuntimeRegistry.install(provider(
-            transport = ReceiverTransportClient { _, _, _ ->
-                unsafeCalls.incrementAndGet()
-                error("UNSAFE_RESEND")
-            },
-            reconciliation = ReceiverReconciliationClient { _, _, _ -> ReceiverReconciliationResult.NotFoundUnbounded },
-        ))
+        DeliveryRuntimeRegistry.install(
+            provider(
+                transport = ReceiverTransportClient { _, _, _ ->
+                    unsafeCalls.incrementAndGet()
+                    error("UNSAFE_RESEND")
+                },
+                reconciliation = ReceiverReconciliationClient { _, _, _ -> ReceiverReconciliationResult.NotFoundUnbounded },
+            ),
+        )
         TestListenableWorkerBuilder<LinkDeliveryWorker>(context)
-            .setInputData(workDataOf("operationId" to unbounded.operationId)).build().doWork()
+            .setInputData(workDataOf("operationId" to unbounded.operationId))
+            .build()
+            .doWork()
         assertEquals(0, unsafeCalls.get())
-        ZungunDatabase.open(context, dbName).use { db ->
+        withDatabase { db ->
             assertEquals(OperationState.UNKNOWN.name, db.operations().get(unbounded.operationId)!!.state)
             assertTrue(db.link().state(unbounded.operationId)!!.automaticRetryBlocked)
         }
     }
 
     private suspend fun seedAmbiguous(op: OperationEntity) {
-        ZungunDatabase.open(context, dbName).use { db ->
+        withDatabase { db ->
             db.operations().insert(op)
             db.link().linkState(LinkPersistence.state(op.operationId, profile(LinkPayloadStrategy.FULL_ONLY), 1_000))
+        }
+    }
+
+    private suspend fun <T> withDatabase(block: suspend (ZungunDatabase) -> T): T {
+        val db = ZungunDatabase.open(context, dbName)
+        return try {
+            block(db)
+        } finally {
+            db.close()
         }
     }
 
@@ -190,21 +219,25 @@ class Order081CRuntimeInstrumentedTest {
             CredentialProvider { "token-order081c-123456" },
             allowCleartextLoopback = true,
         )
+
         override fun semanticRevalidator(context: Context) = SemanticRevalidator { Result.success(Unit) }
         override fun transportClient(context: Context) = transport
         override fun transportClient(context: Context, adapterId: String): ReceiverTransportClient {
             require(adapterId == "http")
             return transport
         }
+
         override fun transportCapabilities(context: Context) = listOf(
             RuntimeTransportCapability(
-                "http", true,
+                "http",
+                true,
                 supportsDurableReceipt = true,
                 supportsReceiverQuery = true,
                 supportsResume = true,
                 supportsNetworkBinding = true,
             ),
         )
+
         override fun reconciliationClient(context: Context) = reconciliation
     }
 
