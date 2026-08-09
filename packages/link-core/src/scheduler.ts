@@ -44,3 +44,33 @@ export function selectNextOperation(
   }
   return ordered[0] ?? null;
 }
+
+export interface LogicalWakeExecution<T> {
+  readonly logicalExecutionId: string;
+  readonly executed: boolean;
+  readonly value: T;
+}
+
+/**
+ * Coalesces duplicate OS/connectivity wakeups onto one logical execution.
+ * The completed promise remains keyed for the lifetime of the gate, so a
+ * repeated wakeup for the same logical execution cannot re-run the effect.
+ */
+export class LogicalWakeupGate {
+  private readonly executions = new Map<string, Promise<unknown>>();
+
+  run<T>(logicalExecutionId: string, execute: () => Promise<T> | T): Promise<LogicalWakeExecution<T>> {
+    if (!/^[A-Za-z0-9._:-]{1,200}$/.test(logicalExecutionId)) throw new Error('LOGICAL_WAKEUP_ID_INVALID');
+    const existing = this.executions.get(logicalExecutionId) as Promise<T> | undefined;
+    if (existing) {
+      return existing.then((value) => Object.freeze({ logicalExecutionId, executed: false, value }));
+    }
+    const execution = Promise.resolve().then(execute);
+    this.executions.set(logicalExecutionId, execution);
+    return execution.then((value) => Object.freeze({ logicalExecutionId, executed: true, value }));
+  }
+
+  has(logicalExecutionId: string): boolean {
+    return this.executions.has(logicalExecutionId);
+  }
+}
