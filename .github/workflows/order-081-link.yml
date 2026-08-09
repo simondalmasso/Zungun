@@ -70,12 +70,13 @@ jobs:
           cp .artifacts/npm-package.json "$out/"
           printf '%s\n' "$vector_sha" > "$out/VECTOR_SHA256"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order081-link-core-${{ github.run_id }}", path: "${{ runner.temp }}/order081-core", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
   android-link:
     runs-on: ubuntu-24.04
-    timeout-minutes: 95
+    timeout-minutes: 110
     outputs:
       aar_sha: ${{ steps.android_hash.outputs.aar_sha }}
     steps:
@@ -141,10 +142,19 @@ jobs:
         run: |
           set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:testDebugUnitTest --tests com.zungun.runtime.link.LinkSchedulerTest
-      - name: "Gate 26 — critical core deferred split"
-        run: node --test --test-name-pattern='critical core|content-addressed deferred object' dist/tests/link-payload-reconciliation.test.js dist/tests/link-core.test.js
-      - name: "Gate 27 — exact-base delta safety"
-        run: node --test --test-name-pattern='delta requires exact base' dist/tests/link-payload-reconciliation.test.js dist/tests/link-core.test.js
+      - name: "Gate 26 — critical core deferred split and REQUIRED_FOR_EFFECT semantic completion gate"
+        shell: bash
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
+          node --test --test-name-pattern='critical core|content-addressed deferred object' dist/tests/link-payload-reconciliation.test.js dist/tests/link-core.test.js
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.zungun.runtime.Order081CRuntimeInstrumentedTest#requiredForEffectReceiptDoesNotFalseCompleteAcrossReopen
+      - name: "Gate 27 — receiver capability negotiation exact-base delta and Android transmitted representation"
+        shell: bash
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
+          node --test --test-name-pattern='delta requires exact base' dist/tests/link-payload-reconciliation.test.js dist/tests/link-core.test.js
+          node --test dist/tests/receiver-capabilities.test.js
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.zungun.runtime.Order081CRuntimeInstrumentedTest#selectedDeltaBytesAreActuallyTransmittedAndStatusExposesProgress
       - name: "Gate 28 — resumable content-addressed heavy transfer"
         shell: bash
         run: |
@@ -153,14 +163,20 @@ jobs:
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.zungun.runtime.LinkDeferredObjectInstrumentedTest
       - name: "Gate 29 — prefetch and good-link opportunity policy"
         run: node --test --test-name-pattern='prefetch|good-link opportunity' dist/tests/link-capabilities-prefetch-trace.test.js dist/tests/link-prefetch-android-source.test.js
-      - name: "Gate 30 — transport adapter and network-binding safety"
+      - name: "Gate 30 — real multi-candidate transport capability selection and network-binding safety"
         shell: bash
         run: |
-          set -euo pipefail
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:testDebugUnitTest --tests com.zungun.runtime.link.TransportRegistryTest
           ! grep -R -n -E 'bindProcessToNetwork|setProcessDefaultNetwork' android/runtime/src/main
-          grep -q 'val network: Network?' android/runtime/src/main/java/com/zungun/runtime/link/DeferredTransferAdapter.kt
-          grep -q 'registerDefaultNetworkCallback' android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkObserver.kt
           node --test --test-name-pattern='hedging is off' dist/tests/link-payload-reconciliation.test.js
+      - name: "Gate 31 — reconcile-before-retry Android worker path"
+        shell: bash
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
+          node --test --test-name-pattern='ambiguous durable acceptance|bounded authoritative' dist/tests/link-payload-reconciliation.test.js
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.zungun.runtime.Order081CRuntimeInstrumentedTest#reconcileBeforeRetryRecoversAcceptanceWithoutSecondSideEffect
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.zungun.runtime.Order081CRuntimeInstrumentedTest#boundedNotAcceptedAllowsExactlyOneRetryButUnboundedNotFoundAllowsNone
       - name: Build and hash Android AAR
         id: android_hash
         shell: bash
@@ -170,7 +186,9 @@ jobs:
           aar=android/runtime/build/outputs/aar/runtime-release.aar; test -s "$aar"
           aar_sha="$(sha256sum "$aar" | cut -d' ' -f1)"; echo "aar_sha=$aar_sha" >> "$GITHUB_OUTPUT"
           out="$RUNNER_TEMP/order081-android"; mkdir -p "$out"; cp "$aar" "$out/zungun-runtime-release.aar"; cp "$RUNNER_TEMP/order081-emulator.log" "$out/"
-          printf '%s\n' "$aar_sha" > "$out/AAR_SHA256"; find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          printf '%s\n' "$aar_sha" > "$out/AAR_SHA256"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
           adb emu kill || true
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order081-android-${{ github.run_id }}", path: "${{ runner.temp }}/order081-android", if-no-files-found: error, retention-days: 14, compression-level: 0}
@@ -188,19 +206,17 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with: {node-version: 22.16.0, package-manager-cache: false}
       - run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
-      - name: "Gate 31 — reconcile before retry"
-        run: node --test --test-name-pattern='ambiguous durable acceptance|bounded authoritative' dist/tests/link-payload-reconciliation.test.js
       - name: "Gate 32 — Receiver Proxy L1 security and compatibility"
         run: node --test dist/tests/link-proxy.test.js dist/tests/link-security-negative.test.js
-      - name: "Gate 33 — Link Doctor and OpenAPI scaffold"
+      - name: "Gate 33 — Link Doctor OpenAPI required signals and deterministic scaffold"
         shell: bash
         run: |
           set -euo pipefail; mkdir -p .tmp
           node dist/tools/link-doctor/src/cli.js --openapi testdata/link-doctor-openapi.yaml --format json > .tmp/link-doctor.json
           node dist/tools/link-doctor/src/cli.js --openapi testdata/link-doctor-openapi.yaml --format json > .tmp/link-doctor.second.json
           cmp .tmp/link-doctor.json .tmp/link-doctor.second.json
-          grep -q 'UNKNOWN_REQUIRES_ANNOTATION' .tmp/link-doctor.json
           node --test dist/tests/link-doctor.test.js
+          jq -e '[.findings[].ruleId] | index("ZL015_NO_RECEIVER_RECONCILIATION_PATH") != null or index("ZL016_OPENAPI_RETRY_AMBIGUOUS") != null' .tmp/link-doctor.json >/dev/null
       - name: "Gate 34 — Link Witness Proof Bundle Control Room"
         shell: bash
         run: |
@@ -218,7 +234,9 @@ jobs:
           npm run verify:security-evidence
           doctor_sha="$(sha256sum .tmp/link-doctor.json | cut -d' ' -f1)"; echo "doctor_sha=$doctor_sha" >> "$GITHUB_OUTPUT"
           out="$RUNNER_TEMP/order081-service"; mkdir -p "$out"; cp .tmp/link-doctor.json .tmp/link-witness-integration.json "$out/"
-          printf '%s\n' "$doctor_sha" > "$out/DOCTOR_SHA256"; find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          printf '%s\n' "$doctor_sha" > "$out/DOCTOR_SHA256"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order081-service-${{ github.run_id }}", path: "${{ runner.temp }}/order081-service", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
@@ -235,11 +253,11 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with: {node-version: 22.16.0, package-manager-cache: false}
       - run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
-      - name: "Gate 35 — Resilience Lab and Link Blackout Drill"
+      - name: "Gate 35 — executed Resilience Lab scenarios and implementation-driven Link Blackout Drill"
         shell: bash
         run: |
           set -euo pipefail
-          node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js dist/tests/link-quickstart.test.js
+          node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-resilience-executed.test.js dist/tests/link-blackout.test.js dist/tests/link-quickstart.test.js
           npm run test:resilience
           npm run generate:link-proof
           cp .artifacts/link/blackout-proof-bundle.json "$RUNNER_TEMP/link-proof.first.json"
@@ -254,7 +272,9 @@ jobs:
           set -euo pipefail
           proof_sha="$(sha256sum .artifacts/link/blackout-proof-bundle.json | cut -d' ' -f1)"; echo "proof_sha=$proof_sha" >> "$GITHUB_OUTPUT"
           out="$RUNNER_TEMP/order081-resilience"; mkdir -p "$out"; cp .artifacts/link/blackout-proof-bundle.json "$out/"; cp "$RUNNER_TEMP/link-quickstart.txt" "$out/"
-          printf '%s\n' "$proof_sha" > "$out/PROOF_SHA256"; find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          printf '%s\n' "$proof_sha" > "$out/PROOF_SHA256"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order081-resilience-${{ github.run_id }}", path: "${{ runner.temp }}/order081-resilience", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
@@ -298,10 +318,11 @@ jobs:
           done
           test -n "$baseline_run"
           out="$RUNNER_TEMP/order081-completion"; mkdir -p "$out"
-          jq -n --arg head "$HEAD_SHA" --arg tree "$(git rev-parse HEAD^{tree})" --arg baselineRun "$baseline_run" --arg vector "$VECTOR_SHA" --arg npm "$NPM_SHA" --arg aar "$AAR_SHA" --arg doctor "$DOCTOR_SHA" --arg proof "$PROOF_SHA" '{orderId:"ZUNGUN-OWNER-ARQ-SEMANTIC-CONNECTIVITY-RUNTIME-081",ok:true,head:$head,tree:$tree,baselineOrder077RunId:$baselineRun,gates01_36:"SUCCESS",requiredGatesSkipped:0,vectorCorpusSha256:$vector,npmPackageSha256:$npm,androidAarSha256:$aar,linkDoctorFixtureSha256:$doctor,proofFixtureSha256:$proof,forcePush:false,merge:false,deploy:false,release:false,productionMutations:0,costUsd:0}' > "$out/result.json"
+          jq -n --arg head "$HEAD_SHA" --arg tree "$(git rev-parse HEAD^{tree})" --arg baselineRun "$baseline_run" --arg vector "$VECTOR_SHA" --arg npm "$NPM_SHA" --arg aar "$AAR_SHA" --arg doctor "$DOCTOR_SHA" --arg proof "$PROOF_SHA" '{orderId:"ZUNGUN-OWNER-ARQ-SEMANTIC-CONNECTIVITY-RUNTIME-081C",ok:true,head:$head,tree:$tree,baselineOrder077RunId:$baselineRun,artifactPrivateKeyMaterial:0,requiredForEffectFalseCompletionTest:"PASS",transportMultiCandidateSelection:"PASS",receiverCapabilityNegotiation:"PASS",androidRuntimeDeltaPath:"PASS",reconcileBeforeRetryAndroidPath:"PASS",resilienceScenariosExecutedNotDeclared:"PASS",blackoutDrillImplementationDriven:"PASS",linkStatusHandle:"PASS",doctorOpenapiRequiredSignals:"PASS",gates01_19:"SUCCESS",gates20_36:"SUCCESS",requiredGatesSkipped:0,vectorCorpusSha256:$vector,npmPackageSha256:$npm,androidAarSha256:$aar,linkDoctorFixtureSha256:$doctor,proofFixtureSha256:$proof,forcePush:false,merge:false,deploy:false,release:false,productionMutations:0,costUsd:0}' > "$out/result.json"
           git status --porcelain=v1 > "$out/git-status.txt"
           test ! -s "$out/git-status.txt"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
           echo "$baseline_run" > "$out/BASELINE_ORDER077_RUN_ID"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order081-completion-${{ github.run_id }}", path: "${{ runner.temp }}/order081-completion", if-no-files-found: error, retention-days: 14, compression-level: 0}
