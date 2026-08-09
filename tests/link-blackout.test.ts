@@ -14,7 +14,7 @@ test('Blackout Drill drives real proxy transport ambiguity, reconciliation and r
   assert.equal(verifyLinkProofBundle(r.proofBundle),true);
   assert.ok(r.decisions.includes('SEND_CRITICAL_CORE_NOW'));
   assert.ok(r.decisions.includes('RECONCILE_BEFORE_RETRY'));
-  assert.ok(r.proofBundle.records.some(x=>x.kind==='TRANSPORT_OUTCOME'&&x.details.fault==='DROP_RESPONSE_AFTER_DURABLE_ACCEPT'));
+  assert.ok(r.proofBundle.records.some(x=>x.kind==='TRANSPORT_PATH_SELECTED'&&x.details.fault==='DROP_RESPONSE_AFTER_DURABLE_ACCEPT'));
   assert.ok(r.proofBundle.records.some(x=>x.kind==='RECONCILIATION_RESULT'));
   assert.ok(r.proofBundle.records.some(x=>x.kind==='DEFERRED_TRANSFER_CHECKPOINT'));
   assert.ok(r.proofBundle.records.some(x=>x.kind==='DEFERRED_TRANSFER_COMPLETED'));
