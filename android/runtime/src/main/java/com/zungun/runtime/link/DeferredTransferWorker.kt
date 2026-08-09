@@ -3,99 +3,21 @@ package com.zungun.runtime.link
 import android.content.Context
 import android.net.ConnectivityManager
 import androidx.room.withTransaction
-import androidx.work.CoroutineWorker
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkerParameters
-import androidx.work.workDataOf
+import androidx.work.*
 import com.zungun.runtime.db.EvidenceEntity
 import com.zungun.runtime.db.LinkTransferCheckpointEntity
 import com.zungun.runtime.delivery.EvidenceHasher
 import com.zungun.runtime.network.DeliveryRuntimeRegistry
 
-object DeferredTransferScheduler {
-    fun enqueue(context: Context, operationId: String) {
-        val request = OneTimeWorkRequestBuilder<DeferredTransferWorker>()
-            .setInputData(workDataOf("operationId" to operationId))
-            .addTag("zungun:link:deferred:$operationId")
-            .build()
-        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
-            "zungun:link:deferred:$operationId",
-            ExistingWorkPolicy.KEEP,
-            request,
-        )
-    }
-}
+object DeferredTransferScheduler{fun enqueue(context:Context,operationId:String){val request=OneTimeWorkRequestBuilder<DeferredTransferWorker>().setInputData(workDataOf("operationId" to operationId)).addTag("zungun:link:deferred:$operationId").build();WorkManager.getInstance(context.applicationContext).enqueueUniqueWork("zungun:link:deferred:$operationId",ExistingWorkPolicy.KEEP,request)}}
 
-class DeferredTransferWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        val operationId = inputData.getString("operationId") ?: return Result.failure()
-        val provider = runCatching { DeliveryRuntimeRegistry.require() }.getOrNull() ?: return Result.success()
-        val adapter = provider.deferredTransferAdapter(applicationContext) ?: return Result.success()
-        val database = provider.database(applicationContext)
-        try {
-            val operation = database.operations().get(operationId) ?: return Result.success()
-            val linkState = database.link().state(operationId) ?: return Result.success()
-            val profile = LinkPersistence.profile(linkState.profileJson)
-            val coordinator = LinkCoordinator(applicationContext, database)
-            val now = System.currentTimeMillis()
-            val snapshot = coordinator.observeSnapshot(now)
-            val pending = database.link().deferredFor(operationId).filter { it.state !in setOf("COMPLETED", "REJECTED") }
-            if (pending.isEmpty()) return Result.success()
-            val required = pending.any { it.requirement == "REQUIRED_FOR_FINAL_EVIDENCE" }
-            if (!coordinator.deferredEligible(profile, snapshot, required, now)) return Result.success()
-            val network = applicationContext.getSystemService(ConnectivityManager::class.java).activeNetwork
-            val store = DeferredObjectStore(applicationContext)
-            for (item in pending.sortedWith(compareBy({ it.requirement != "REQUIRED_FOR_FINAL_EVIDENCE" }, { it.objectId }))) {
-                val checkpoint = database.link().checkpointFor(operationId, item.objectId)
-                val offset = checkpoint?.confirmedOffset ?: 0L
-                require(offset in 0..item.byteLength) { "LINK_CHECKPOINT_OFFSET_INVALID" }
-                require(offset == item.byteLength || offset % item.chunkSizeBytes == 0L) { "LINK_CHECKPOINT_NOT_CHUNK_ALIGNED" }
-                val result = runCatching {
-                    evidence(database, operationId, "DEFERRED_TRANSFER_STARTED", now, item.objectId, "offset=$offset")
-                    database.link().setDeferredState(operationId, item.objectId, "IN_PROGRESS", now)
-                    adapter.transfer(
-                        DeferredTransferRequest(operationId, item.objectId, item.sha256, item.byteLength, item.contentType, offset, network),
-                    ) { requestedOffset -> store.open(item.sha256, requestedOffset) }
-                }.getOrElse { error ->
-                    database.link().setDeferredState(operationId, item.objectId, "PENDING", System.currentTimeMillis())
-                    evidence(database, operationId, "DEFERRED_TRANSFER_INTERRUPTED", System.currentTimeMillis(), item.objectId, error.javaClass.simpleName)
-                    return Result.success()
-                }
-                require(result.confirmedOffset in offset..item.byteLength) { "LINK_TRANSFER_OFFSET_REGRESSION" }
-                require(result.complete || result.confirmedOffset % item.chunkSizeBytes == 0L) { "LINK_TRANSFER_UNALIGNED_CHECKPOINT" }
-                if (result.complete) require(result.confirmedOffset == item.byteLength) { "LINK_TRANSFER_INCOMPLETE_FINAL_OFFSET" }
-                val at = System.currentTimeMillis()
-                database.withTransaction {
-                    database.link().checkpoint(
-                        LinkTransferCheckpointEntity(
-                            operationId, item.objectId, item.sha256, result.confirmedOffset,
-                            store.prefixSha256(item.sha256, result.confirmedOffset), result.remoteVersion, at,
-                        ),
-                    )
-                    database.link().setDeferredState(operationId, item.objectId, if (result.complete) "COMPLETED" else "PENDING", at)
-                    evidence(database, operationId, if (result.complete) "DEFERRED_TRANSFER_COMPLETED" else "DEFERRED_TRANSFER_CHECKPOINT", at, item.objectId, "offset=${result.confirmedOffset};remoteVersion=${result.remoteVersion ?: "none"};receipt=${result.applicationReceipt != null}")
-                }
-                if (!result.complete) return Result.success()
-            }
-            return Result.success()
-        } finally {
-            database.close()
-        }
+class DeferredTransferWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params){
+    override suspend fun doWork():Result{
+        val operationId=inputData.getString("operationId")?:return Result.failure();val provider=runCatching{DeliveryRuntimeRegistry.require()}.getOrNull()?:return Result.success();val adapter=provider.deferredTransferAdapter(applicationContext)?:return Result.success();val database=provider.database(applicationContext)
+        try{val operation=database.operations().get(operationId)?:return Result.success();val linkState=database.link().state(operationId)?:return Result.success();val profile=LinkPersistence.profile(linkState.profileJson);val coordinator=LinkCoordinator(applicationContext,database);val now=System.currentTimeMillis();val snapshot=coordinator.observeSnapshot(now);val pending=database.link().deferredFor(operationId).filter{it.state !in setOf("COMPLETED","REJECTED")};if(pending.isEmpty()){LinkCompletionPolicy.finalizeAfterDeferredTransfer(database,operationId,now);return Result.success()};val required=pending.any{it.requirement in setOf("REQUIRED_FOR_EFFECT","REQUIRED_FOR_FINAL_EVIDENCE")};if(!coordinator.deferredEligible(profile,snapshot,required,now))return Result.success();val network=applicationContext.getSystemService(ConnectivityManager::class.java).activeNetwork;val store=DeferredObjectStore(applicationContext)
+            for(item in pending.sortedWith(compareBy({when(it.requirement){"REQUIRED_FOR_EFFECT"->0;"REQUIRED_FOR_FINAL_EVIDENCE"->1;else->2}},{it.objectId}))){val checkpoint=database.link().checkpointFor(operationId,item.objectId);val offset=checkpoint?.confirmedOffset?:0L;require(offset in 0..item.byteLength){"LINK_CHECKPOINT_OFFSET_INVALID"};require(offset==item.byteLength||offset%item.chunkSizeBytes==0L){"LINK_CHECKPOINT_NOT_CHUNK_ALIGNED"};val result=runCatching{evidence(database,operationId,"DEFERRED_TRANSFER_STARTED",now,item.objectId,"offset=$offset;requirement=${item.requirement}");database.link().setDeferredState(operationId,item.objectId,"IN_PROGRESS",now);adapter.transfer(DeferredTransferRequest(operationId,item.objectId,item.sha256,item.byteLength,item.contentType,offset,network)){requestedOffset->store.open(item.sha256,requestedOffset)}}.getOrElse{error->database.link().setDeferredState(operationId,item.objectId,"PENDING",System.currentTimeMillis());evidence(database,operationId,"DEFERRED_TRANSFER_INTERRUPTED",System.currentTimeMillis(),item.objectId,error.javaClass.simpleName);return Result.success()};require(result.confirmedOffset in offset..item.byteLength){"LINK_TRANSFER_OFFSET_REGRESSION"};require(result.complete||result.confirmedOffset%item.chunkSizeBytes==0L){"LINK_TRANSFER_UNALIGNED_CHECKPOINT"};if(result.complete)require(result.confirmedOffset==item.byteLength){"LINK_TRANSFER_INCOMPLETE_FINAL_OFFSET"};val at=System.currentTimeMillis();database.withTransaction{database.link().checkpoint(LinkTransferCheckpointEntity(operationId,item.objectId,item.sha256,result.confirmedOffset,store.prefixSha256(item.sha256,result.confirmedOffset),result.remoteVersion,at));database.link().setDeferredState(operationId,item.objectId,if(result.complete)"COMPLETED" else "PENDING",at);evidence(database,operationId,if(result.complete)"DEFERRED_TRANSFER_COMPLETED" else "DEFERRED_TRANSFER_CHECKPOINT",at,item.objectId,"offset=${result.confirmedOffset};requirement=${item.requirement};remoteVersion=${result.remoteVersion?:"none"};receipt=${result.applicationReceipt!=null}")};if(!result.complete)return Result.success()}
+            LinkCompletionPolicy.finalizeAfterDeferredTransfer(database,operationId,System.currentTimeMillis());return Result.success()
+        }finally{database.close()}
     }
-
-    private suspend fun evidence(database: com.zungun.runtime.db.ZungunDatabase, operationId: String, kind: String, at: Long, reference: String, detail: String) {
-        database.operations().evidence(
-            EvidenceEntity(
-                operationId = operationId,
-                source = "DEVICE",
-                kind = kind,
-                occurredAtMs = at,
-                reference = reference,
-                payloadJson = "{\"detail\":${org.json.JSONObject.quote(detail)}}",
-                sha256 = EvidenceHasher.sha256("$operationId|$kind|$at|$reference|$detail"),
-            ),
-        )
-    }
+    private suspend fun evidence(database:com.zungun.runtime.db.ZungunDatabase,operationId:String,kind:String,at:Long,reference:String,detail:String){database.operations().evidence(EvidenceEntity(operationId=operationId,source="DEVICE",kind=kind,occurredAtMs=at,reference=reference,payloadJson="{\"detail\":${org.json.JSONObject.quote(detail)}}",sha256=EvidenceHasher.sha256("$operationId|$kind|$at|$reference|$detail")))}
 }
