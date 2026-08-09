@@ -66,6 +66,7 @@ jobs:
           cp -a .artifacts/. "$out/"; cp services/receiver/openapi/openapi.yaml "$out/openapi.yaml"
           git ls-files | LC_ALL=C sort > "$out/source-files.txt"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
           echo "sha=$(jq -r .sha256 .artifacts/npm-package.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order077-typescript-${{ github.run_id }}", path: "${{ runner.temp }}/order077-typescript", if-no-files-found: error, retention-days: 14, compression-level: 0}
@@ -85,9 +86,11 @@ jobs:
         run: bash tools/ci/order077-platform.sh
       - name: Seal browser container and history evidence
         run: |
+          set -euo pipefail
           out="$RUNNER_TEMP/order077-platform"; mkdir -p "$out"
           cp control-room-e2e.json image-inspect.json "$out/"
           find "$out" -type f -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order077-platform-${{ github.run_id }}", path: "${{ runner.temp }}/order077-platform", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
@@ -158,11 +161,15 @@ jobs:
         run: bash tools/e2e/order076-real-e2e.sh
       - name: Seal Android and real E2E evidence
         run: |
+          set -euo pipefail
           out="$RUNNER_TEMP/order077-android"; mkdir -p "$out"
           cp android/runtime/build/outputs/aar/runtime-release.aar "$out/zungun-runtime-release.aar"; cp "$RUNNER_TEMP/runtime-release.aar.sha256" "$out/"
           apk="$(find android/external-consumer/build/outputs/apk/debug -maxdepth 1 -type f -name '*-debug.apk' -print -quit)"; test -n "$apk"; cp "$apk" "$out/external-consumer-debug.apk"
           cp android/external-consumer/gradle.lockfile "$out/"; cp android/external-consumer/gradle/verification-metadata.xml "$out/"; cp -a "$RUNNER_TEMP/order076-real-e2e" "$out/real-e2e"; cp "$RUNNER_TEMP/emulator-unit.log" "$out/"
+          rm -f "$out/real-e2e/keys.json"
+          test -z "$(find "$out" -type f \( -name 'keys.json' -o -iname '*private*.pem' -o -iname '*private*.key' \) -print -quit)"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out" | tee "$out/ARTIFACT_SECRET_SCAN.json"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order077-android-e2e-${{ github.run_id }}", path: "${{ runner.temp }}/order077-android", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
@@ -194,7 +201,8 @@ jobs:
       - name: "Gate 19 — no skips fixed-head completion seal"
         run: |
           set -euo pipefail; test '${{ needs.typescript-primary.result }}' = success; test '${{ needs.browser-container-history.result }}' = success; test '${{ needs.android-primary.result }}' = success; test '${{ needs.independent-reproduction.result }}' = success
-          out="$RUNNER_TEMP/order077-completion"; mkdir -p "$out"; jq -n --arg head "$(git rev-parse HEAD)" --arg tree "$(git rev-parse HEAD^{tree})" '{orderId:"ZUNGUN-OWNER-ARQ-MASTER-FULL-PROJECT-COMPLETION-077",ok:true,head:$head,tree:$tree,logicalGates:19,productionMutations:0,merge:false,release:false}' > "$out/result.json"
+          out="$RUNNER_TEMP/order077-completion"; mkdir -p "$out"; jq -n --arg head "$(git rev-parse HEAD)" --arg tree "$(git rev-parse HEAD^{tree})" '{orderId:"ZUNGUN-OWNER-ARQ-MASTER-FULL-PROJECT-COMPLETION-077",ok:true,head:$head,tree:$tree,logicalGates:19,requiredGatesSkipped:0,artifactPrivateKeyMaterial:0,productionMutations:0,merge:false,release:false}' > "$out/result.json"
           git diff --name-status "$START_SHA..HEAD" > "$out/changed-files.txt"; find "$out" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order077-completion-${{ github.run_id }}", path: "${{ runner.temp }}/order077-completion", if-no-files-found: error, retention-days: 14, compression-level: 0}
