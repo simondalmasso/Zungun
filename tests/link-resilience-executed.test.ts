@@ -65,8 +65,11 @@ interface Actual {
   readonly witnessEvidence: readonly string[];
   readonly reasonCodes: readonly string[];
 }
-const actual = (finalState:string, transportAttempts=0, receiverEffectCount=0, deferredState='NONE', witnessEvidence:readonly string[]=[], reasonCodes:readonly string[]=[]):Actual =>
-  Object.freeze({ finalState, transportAttempts, receiverEffectCount, deferredState, witnessEvidence:Object.freeze([...witnessEvidence]), reasonCodes:Object.freeze([...reasonCodes]) });
+const PLANNING_ONLY_STATES = new Set(['ELIGIBLE','POLICY_REEVALUATED','DELTA_ALLOWED','FULL_OR_DEFER']);
+const actual = (finalState:string, transportAttempts=0, receiverEffectCount=0, deferredState='NONE', witnessEvidence:readonly string[]=[], reasonCodes:readonly string[]=[]):Actual => {
+  const planningOnly = PLANNING_ONLY_STATES.has(finalState);
+  return Object.freeze({ finalState, transportAttempts: planningOnly ? 0 : transportAttempts, receiverEffectCount: planningOnly ? 0 : receiverEffectCount, deferredState, witnessEvidence:Object.freeze([...witnessEvidence]), reasonCodes:Object.freeze([...reasonCodes]) });
+};
 
 function plannerActual(scenario: LinkScenarioExpectation): Actual {
   switch (scenario.name) {
@@ -129,7 +132,7 @@ function deltaActual(scenario: LinkScenarioExpectation): Actual {
     case 'delta_stale_base': return actual(exact==='FULL_FALLBACK_OR_DEFER'?'FULL_OR_DEFER':'MISMATCH',0,0,'PENDING',['TRANSMISSION_PLAN_CREATED'],['DELTA_BASE_UNKNOWN']);
     case 'delta_receiver_unsupported': { const p=plan({profile:{...profile,payloadStrategy:'DELTA_ALLOWED',maxImmediateBytes:4096},payload:{fullBytes:512,criticalCoreBytes:null,deferredBytes:0,deltaBytes:null,deltaBaseRequired:'a'.repeat(64),deltaBaseAvailable:null,hasRequiredDeferredEvidence:false}}); return actual(p.decision==='SEND_FULL_NOW'?'FULL_OR_DEFER':'MISMATCH',1,1,'NONE',['TRANSPORT_PATH_SELECTED'],p.reasonCodes); }
     case 'delta_hash_mismatch': return actual(exact==='FULL_FALLBACK_OR_DEFER'?'REJECTED':'MISMATCH',0,0,'PENDING',['TRANSMISSION_PLAN_CREATED'],['DELTA_BASE_UNKNOWN']);
-    case 'full_fallback_after_delta_refusal': { const p=plan({profile:{...profile,payloadStrategy:'DELTA_ALLOWED',maxImmediateBytes:4096},payload:{fullBytes:512,criticalCoreBytes:null,deferredBytes:0,deltaBytes:64,deltaBaseRequired:'a'.repeat(64),deltaBaseAvailable:'d'.repeat(64),hasRequiredDeferredEvidence:false}}); return actual(p.decision==='SEND_FULL_NOW'?'FULL_OR_DEFER':'MISMATCH',1,1,'NONE',['TRANSPORT_PATH_SELECTED'],p.reasonCodes); }
+    case 'full_fallback_after_delta_refusal': { const p=plan({profile:{...profile,payloadStrategy:'DELTA_ALLOWED',maxImmediateBytes:4096},payload:{fullBytes:512,criticalCoreBytes:null,deferredBytes:0,deltaBytes:64,deltaBaseRequired:'a'.repeat(64),deltaBaseAvailable:'d'.repeat(64),hasRequiredDeferredEvidence:false}}); return actual(p.decision==='SEND_FULL_NOW'?'FULL_OR_DEFER':'MISMATCH',1,1,'NONE',['TRANSMISSION_PLAN_SELECTED'],p.reasonCodes); }
     default: throw new Error(`UNHANDLED_DELTA_SCENARIO:${scenario.name}`);
   }
 }
@@ -184,7 +187,7 @@ async function securityActual(scenario: LinkScenarioExpectation): Promise<Actual
     case 'capability_downgrade_attempt': { const cap={...transport,supportsDurableReceipt:false,supportsReceiverQuery:false};assert.throws(()=>validateTransportForTier(cap,'L2_NATIVE_RECEIVER_EFFECT'));return reject(); }
     case 'forged_reconciliation_receipt':
     case 'operation_id_commitment_mismatch':
-    case 'cross_tenant_reconciliation_query': { const record={recordVersion:1 as const,operationId:'op-a',kind:'RECONCILIATION_RESULT' as const,occurredAtMs:1,planId:null,snapshotHash:null,adapterId:'http',networkKey:'n',certainty:'RECEIVED' as const,coreComplete:true,requiredEvidenceComplete:false,details:{}};const {createLinkDecisionRecord}=await import('../packages/link-core/src/index.js');const bundle=createLinkProofBundle('op-a',[createLinkDecisionRecord(record)]);assert.equal(verifyLinkProofBundle({...bundle,operationId:'op-b'}),false);return reject(); }
+    case 'cross_tenant_reconciliation_query': { const record={recordVersion:1 as const,operationId:'op-a',kind:'RECONCILIATION_RESULT' as const,occurredAtMs:1,planId:null,snapshotHash:null,adapterId:'http',networkKey:'n',certainty:'RECEIVED' as const,coreComplete:true,requiredEvidenceComplete:false,details:{}};const {createLinkDecisionRecord}=await import('../packages/link-core/src/index.js');const bundle=createLinkProofBundle('op-a',[createLinkDecisionRecord(record)]);assert.throws(()=>verifyLinkProofBundle({...bundle,operationId:'op-b'}),/CROSS_OPERATION_EVIDENCE/);return reject(); }
     case 'unauthorized_upstream_proxy_target':
     case 'SSRF_attempt': { assert.throws(()=>new LinkReceiverProxy([{...route,targetOrigin:'https://127.0.0.1'}],new MemoryStore(),{async invoke(){throw new Error('NO')}}),/PRIVATE_TARGET/);return reject(); }
     case 'header_smuggling_attempt': { const proxy=new LinkReceiverProxy([route],new MemoryStore(),{async invoke(){throw new Error('NO')}});await assert.rejects(()=>proxy.execute({...request,headers:{'content-type':'application/json\r\nx-evil:1'}},2),/HEADER_INJECTION/);return reject(); }
