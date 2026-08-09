@@ -133,7 +133,7 @@ class BlackoutRuntime {
     if (response.record.state !== 'UNKNOWN') throw new Error(`BLACKOUT_EXPECTED_UNKNOWN:${response.record.state}`);
     if (this.upstream.businessEffectCount !== 1) throw new Error('BLACKOUT_DURABLE_EFFECT_NOT_APPLIED_ONCE');
     this.coreComplete = true;
-    this.record('TRANSPORT_OUTCOME',at+1,'UNKNOWN',{fault:'DROP_RESPONSE_AFTER_DURABLE_ACCEPT',proxyState:response.record.state},plan);
+    this.record('TRANSPORT_PATH_SELECTED',at+1,'UNKNOWN',{fault:'DROP_RESPONSE_AFTER_DURABLE_ACCEPT',proxyState:response.record.state},plan);
     return 'UNKNOWN';
   }
 
