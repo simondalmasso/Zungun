@@ -26,7 +26,7 @@ test('Blackout Drill drives real proxy ambiguity and persisted deferred resume a
 });
 
 test('Blackout Drill cannot directly manufacture deferred completion state',()=>{
-  const source=readFileSync(new URL('../tools/resilience-lab/src/link-blackout-drill.ts',import.meta.url),'utf8');
+  const source=readFileSync('tools/resilience-lab/src/link-blackout-drill.ts','utf8');
   assert.doesNotMatch(source,/evidenceComplete\s*=\s*true/);
   assert.doesNotMatch(source,/this\.record\(\s*['"]DEFERRED_TRANSFER_COMPLETED['"]/);
   assert.doesNotMatch(source,/resumeDeferred\s*\(/);
