@@ -79,6 +79,7 @@ jobs:
     timeout-minutes: 110
     outputs:
       aar_sha: ${{ steps.android_hash.outputs.aar_sha }}
+      runtime_wake_dedup: ${{ steps.runtime_wake.outputs.runtime_wake_dedup }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -137,11 +138,14 @@ jobs:
         run: |
           set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.zungun.runtime.DatabaseMigrationTest,com.zungun.runtime.LinkRecoveryInstrumentedTest
-      - name: "Gate 25 — priority deadline dependency fairness scheduler"
+      - name: "Gate 25 — priority dependency scheduler and runtime network-wake dedup"
+        id: runtime_wake
         shell: bash
         run: |
           set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:testDebugUnitTest --tests com.zungun.runtime.link.LinkSchedulerTest
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.zungun.runtime.Order081CRuntimeInstrumentedTest#duplicateConnectivityWakeBurstCoalescesOneRuntimeDispatch
+          echo 'runtime_wake_dedup=PASS' >> "$GITHUB_OUTPUT"
       - name: "Gate 26 — critical core deferred split and REQUIRED_FOR_EFFECT semantic completion gate"
         shell: bash
         run: |
@@ -187,6 +191,7 @@ jobs:
           aar_sha="$(sha256sum "$aar" | cut -d' ' -f1)"; echo "aar_sha=$aar_sha" >> "$GITHUB_OUTPUT"
           out="$RUNNER_TEMP/order081-android"; mkdir -p "$out"; cp "$aar" "$out/zungun-runtime-release.aar"; cp "$RUNNER_TEMP/order081-emulator.log" "$out/"
           printf '%s\n' "$aar_sha" > "$out/AAR_SHA256"
+          printf '%s\n' '${{ steps.runtime_wake.outputs.runtime_wake_dedup }}' > "$out/RUNTIME_WAKE_DEDUP"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
           node tools/ci/scan-artifact-secrets.mjs "$out"
           adb emu kill || true
@@ -241,6 +246,8 @@ jobs:
         with: {name: "order081-service-${{ github.run_id }}", path: "${{ runner.temp }}/order081-service", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
   resilience-link:
+    if: always()
+    needs: [android-link]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     outputs:
@@ -253,10 +260,15 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with: {node-version: 22.16.0, package-manager-cache: false}
       - run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
-      - name: "Gate 35 — executed Resilience Lab scenarios and implementation-driven Link Blackout Drill"
+      - name: "Gate 35 — runtime-wake bound Resilience Lab and persisted Link Blackout Drill"
         shell: bash
+        env:
+          ANDROID_RESULT: ${{ needs.android-link.result }}
+          RUNTIME_WAKE_DEDUP: ${{ needs.android-link.outputs.runtime_wake_dedup }}
         run: |
           set -euo pipefail
+          test "$ANDROID_RESULT" = success
+          test "$RUNTIME_WAKE_DEDUP" = PASS
           node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-resilience-executed.test.js dist/tests/link-blackout.test.js dist/tests/link-quickstart.test.js
           npm run test:resilience
           npm run generate:link-proof
@@ -265,6 +277,8 @@ jobs:
           cmp "$RUNNER_TEMP/link-proof.first.json" .artifacts/link/blackout-proof-bundle.json
           npm run demo:link > "$RUNNER_TEMP/link-quickstart.txt"
           grep -q '"secondSideEffectSendCount": 0' "$RUNNER_TEMP/link-quickstart.txt"
+          grep -q '"deferredRuntimeReopenCount": 1' "$RUNNER_TEMP/link-quickstart.txt"
+          grep -q '"deferredPersistentState": "COMPLETED"' "$RUNNER_TEMP/link-quickstart.txt"
       - name: Seal resilience evidence
         id: resilience_hash
         shell: bash
@@ -273,8 +287,11 @@ jobs:
           proof_sha="$(sha256sum .artifacts/link/blackout-proof-bundle.json | cut -d' ' -f1)"; echo "proof_sha=$proof_sha" >> "$GITHUB_OUTPUT"
           out="$RUNNER_TEMP/order081-resilience"; mkdir -p "$out"; cp .artifacts/link/blackout-proof-bundle.json "$out/"; cp "$RUNNER_TEMP/link-quickstart.txt" "$out/"
           printf '%s\n' "$proof_sha" > "$out/PROOF_SHA256"
+          printf '%s\n' "$RUNTIME_WAKE_DEDUP" > "$out/RUNTIME_WAKE_DEDUP"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
           node tools/ci/scan-artifact-secrets.mjs "$out"
+        env:
+          RUNTIME_WAKE_DEDUP: ${{ needs.android-link.outputs.runtime_wake_dedup }}
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: "order081-resilience-${{ github.run_id }}", path: "${{ runner.temp }}/order081-resilience", if-no-files-found: error, retention-days: 14, compression-level: 0}
 
@@ -298,6 +315,7 @@ jobs:
           ANDROID_RESULT: ${{ needs.android-link.result }}
           SERVICE_RESULT: ${{ needs.receiver-developer-link.result }}
           RESILIENCE_RESULT: ${{ needs.resilience-link.result }}
+          RUNTIME_WAKE_DEDUP: ${{ needs.android-link.outputs.runtime_wake_dedup }}
           VECTOR_SHA: ${{ needs.link-core.outputs.vector_sha }}
           NPM_SHA: ${{ needs.link-core.outputs.npm_sha }}
           AAR_SHA: ${{ needs.android-link.outputs.aar_sha }}
@@ -306,6 +324,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$CORE_RESULT" = success; test "$ANDROID_RESULT" = success; test "$SERVICE_RESULT" = success; test "$RESILIENCE_RESULT" = success
+          test "$RUNTIME_WAKE_DEDUP" = PASS
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           baseline_run=""
           for _ in $(seq 1 340); do
@@ -318,7 +337,7 @@ jobs:
           done
           test -n "$baseline_run"
           out="$RUNNER_TEMP/order081-completion"; mkdir -p "$out"
-          jq -n --arg head "$HEAD_SHA" --arg tree "$(git rev-parse HEAD^{tree})" --arg baselineRun "$baseline_run" --arg vector "$VECTOR_SHA" --arg npm "$NPM_SHA" --arg aar "$AAR_SHA" --arg doctor "$DOCTOR_SHA" --arg proof "$PROOF_SHA" '{orderId:"ZUNGUN-OWNER-ARQ-SEMANTIC-CONNECTIVITY-RUNTIME-081C",ok:true,head:$head,tree:$tree,baselineOrder077RunId:$baselineRun,artifactPrivateKeyMaterial:0,requiredForEffectFalseCompletionTest:"PASS",transportMultiCandidateSelection:"PASS",receiverCapabilityNegotiation:"PASS",androidRuntimeDeltaPath:"PASS",reconcileBeforeRetryAndroidPath:"PASS",resilienceScenariosExecutedNotDeclared:"PASS",blackoutDrillImplementationDriven:"PASS",linkStatusHandle:"PASS",doctorOpenapiRequiredSignals:"PASS",gates01_19:"SUCCESS",gates20_36:"SUCCESS",requiredGatesSkipped:0,vectorCorpusSha256:$vector,npmPackageSha256:$npm,androidAarSha256:$aar,linkDoctorFixtureSha256:$doctor,proofFixtureSha256:$proof,forcePush:false,merge:false,deploy:false,release:false,productionMutations:0,costUsd:0}' > "$out/result.json"
+          jq -n --arg head "$HEAD_SHA" --arg tree "$(git rev-parse HEAD^{tree})" --arg baselineRun "$baseline_run" --arg vector "$VECTOR_SHA" --arg npm "$NPM_SHA" --arg aar "$AAR_SHA" --arg doctor "$DOCTOR_SHA" --arg proof "$PROOF_SHA" '{orderId:"ZUNGUN-OWNER-ARQ-SEMANTIC-CONNECTIVITY-RUNTIME-081C",ok:true,head:$head,tree:$tree,baselineOrder077RunId:$baselineRun,artifactPrivateKeyMaterial:0,requiredForEffectFalseCompletionTest:"PASS",transportMultiCandidateSelection:"PASS",receiverCapabilityNegotiation:"PASS",androidRuntimeDeltaPath:"PASS",reconcileBeforeRetryAndroidPath:"PASS",runtimeWakeDeduplication:"PASS",resilienceScenariosExecutedNotDeclared:"PASS",blackoutDeferredPersistentCompletion:"PASS",blackoutDrillImplementationDriven:"PASS",linkStatusHandle:"PASS",doctorOpenapiRequiredSignals:"PASS",gates01_19:"SUCCESS",gates20_36:"SUCCESS",requiredGatesSkipped:0,vectorCorpusSha256:$vector,npmPackageSha256:$npm,androidAarSha256:$aar,linkDoctorFixtureSha256:$doctor,proofFixtureSha256:$proof,forcePush:false,merge:false,deploy:false,release:false,productionMutations:0,costUsd:0}' > "$out/result.json"
           git status --porcelain=v1 > "$out/git-status.txt"
           test ! -s "$out/git-status.txt"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
