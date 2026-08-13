@@ -33,6 +33,7 @@ class Order081CRuntimeInstrumentedTest {
     @After
     fun cleanup() {
         DeliveryRuntimeRegistry.clear()
+        LinkNetworkWakeRegistry.resetForTest()
         context.deleteDatabase(dbName)
     }
 
@@ -192,6 +193,44 @@ class Order081CRuntimeInstrumentedTest {
         }
     }
 
+    @Test
+    fun duplicateConnectivityWakeBurstCoalescesOneRuntimeDispatch() {
+        val op = operation("wake-dedup", OperationState.QUEUED.name, 0)
+        runBlocking {
+            withDatabase { db ->
+                db.operations().insert(op)
+                db.link().linkState(LinkPersistence.state(op.operationId, profile(LinkPayloadStrategy.FULL_ONLY), 1_000))
+            }
+        }
+        DeliveryRuntimeRegistry.install(
+            provider(
+                ReceiverTransportClient { _, _, _ -> error("WAKE_DISPATCH_MUST_NOT_SEND_DIRECTLY") },
+            ),
+        )
+        LinkNetworkWakeRegistry.resetForTest()
+        val enqueueCalls = AtomicInteger(0)
+        val dispatchCalls = AtomicInteger(0)
+        var recoveredOperations = 0
+        val snapshots = listOf(
+            wakeSnapshot("wake-1", 2_000),
+            wakeSnapshot("wake-2", 2_001),
+            wakeSnapshot("wake-3", 2_002),
+        )
+        snapshots.forEach { snapshot ->
+            LinkNetworkWakeRegistry.acceptSnapshot(context, snapshot) { app ->
+                enqueueCalls.incrementAndGet()
+                val result = runBlocking { LinkNetworkWakeDispatcher.dispatch(app) }
+                dispatchCalls.incrementAndGet()
+                recoveredOperations += result.recoveredOperations
+            }
+        }
+        assertEquals(1, enqueueCalls.get())
+        assertEquals(1, dispatchCalls.get())
+        assertEquals(1, recoveredOperations)
+        assertEquals("wake-3", LinkNetworkWakeRegistry.latest(2_003)?.snapshotId)
+        LinkNetworkWakeRegistry.completeWake()
+    }
+
     private suspend fun seedAmbiguous(op: OperationEntity) {
         withDatabase { db ->
             db.operations().insert(op)
@@ -287,6 +326,29 @@ class Order081CRuntimeInstrumentedTest {
         transportAllowlist = listOf("http"),
         receiptRequirement = "DURABLE_ACCEPTANCE",
         evidenceRequirement = "FULL_WITNESS",
+    )
+
+    private fun wakeSnapshot(id: String, at: Long) = LinkSnapshot(
+        snapshotId = id,
+        observedAtMs = at,
+        maxAgeMs = 30_000,
+        hasNetwork = true,
+        internetCapable = true,
+        validated = true,
+        captivePortal = false,
+        metered = false,
+        temporarilyUnmetered = false,
+        congested = false,
+        roaming = false,
+        vpn = false,
+        suspended = false,
+        downstreamKbps = 10_000,
+        upstreamKbps = 5_000,
+        transports = listOf("WIFI"),
+        networkKey = "net-wake",
+        recentRttMsEwma = null,
+        recentFailureRateEwma = null,
+        recentThroughputKbpsEwma = null,
     )
 
     private fun deferred(operationId: String, objectId: String, requirement: String) = DeferredObjectEntity(
