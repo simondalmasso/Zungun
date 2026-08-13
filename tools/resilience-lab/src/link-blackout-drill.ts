@@ -10,12 +10,15 @@ import {
   createTransmissionPlan,
   reconcileAmbiguous,
   resumeOffset,
+  sha256Bytes,
   verifyLinkProofBundle,
+  type DeferredObjectDescriptor,
   type DeliveryProfileV2,
   type LinkDecisionRecord,
   type LinkProofBundle,
   type LinkSnapshot,
   type PlannerInput,
+  type TransferCheckpoint,
 } from '../../../packages/link-core/src/index.js';
 import {
   LinkReceiverProxy,
@@ -32,6 +35,10 @@ export interface LinkBlackoutResult {
   readonly secondSideEffectSendCount: number;
   readonly transportAttemptCount: number;
   readonly reconciliationQueryCount: number;
+  readonly deferredTransportAttemptCount: number;
+  readonly deferredRuntimeReopenCount: number;
+  readonly deferredCheckpointOffset: number;
+  readonly deferredPersistentState: string;
   readonly decisions: readonly string[];
   readonly finalCoreComplete: boolean;
   readonly finalEvidenceComplete: boolean;
@@ -67,19 +74,242 @@ class FaultingDurableBusinessTransport implements LinkProxyInvoker {
   }
 }
 
+interface DeferredTransportRequest {
+  readonly operationId: string;
+  readonly descriptor: DeferredObjectDescriptor;
+  readonly offset: number;
+  readonly bytes: Uint8Array;
+}
+
+interface DeferredTransportResult {
+  readonly confirmedOffset: number;
+  readonly complete: boolean;
+  readonly remoteVersion: string;
+  readonly applicationReceipt: string | null;
+}
+
+class FaultingDeferredTransport {
+  transportAttemptCount = 0;
+  private remoteOffset = 0;
+
+  transfer(request: DeferredTransportRequest): DeferredTransportResult {
+    this.transportAttemptCount += 1;
+    if (request.offset !== this.remoteOffset) throw new Error('BLACKOUT_DEFERRED_REMOTE_OFFSET_MISMATCH');
+    if (this.transportAttemptCount === 1) {
+      const confirmedOffset = Math.min(request.descriptor.byteLength, 4 * request.descriptor.chunkSizeBytes);
+      const accepted = request.bytes.subarray(request.offset, confirmedOffset);
+      if (accepted.byteLength !== confirmedOffset - request.offset) throw new Error('BLACKOUT_DEFERRED_SHORT_ACCEPT');
+      this.remoteOffset = confirmedOffset;
+      return Object.freeze({ confirmedOffset, complete:false, remoteVersion:'remote-v1', applicationReceipt:null });
+    }
+    assertDeferredObjectIntegrity(request.descriptor, request.bytes);
+    this.remoteOffset = request.descriptor.byteLength;
+    return Object.freeze({
+      confirmedOffset:this.remoteOffset,
+      complete:true,
+      remoteVersion:'remote-v1',
+      applicationReceipt:'deferred-ack-1',
+    });
+  }
+}
+
+type DeferredEvidenceKind = 'DEFERRED_TRANSFER_STARTED' | 'DEFERRED_TRANSFER_CHECKPOINT' | 'DEFERRED_TRANSFER_COMPLETED';
+
+interface DeferredStateRow {
+  readonly operation_id: string;
+  readonly object_id: string;
+  readonly object_sha256: string;
+  readonly byte_length: number;
+  readonly chunk_size_bytes: number;
+  readonly confirmed_offset: number;
+  readonly confirmed_prefix_sha256: string;
+  readonly remote_version: string | null;
+  readonly state: string;
+}
+
+interface DeferredEvidenceRow {
+  readonly seq: number;
+  readonly kind: DeferredEvidenceKind;
+  readonly occurred_at_ms: number;
+  readonly confirmed_offset: number;
+  readonly remote_version: string | null;
+  readonly application_receipt: string | null;
+  readonly required_evidence_complete: number;
+}
+
+class PersistentDeferredTransferRuntime {
+  constructor(
+    private readonly database: DatabaseSync,
+    readonly transport: FaultingDeferredTransport,
+    private readonly descriptor: DeferredObjectDescriptor,
+    private readonly bytes: Uint8Array,
+  ) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS blackout_deferred_transfer (
+        operation_id TEXT NOT NULL,
+        object_id TEXT NOT NULL,
+        object_sha256 TEXT NOT NULL,
+        byte_length INTEGER NOT NULL,
+        chunk_size_bytes INTEGER NOT NULL,
+        confirmed_offset INTEGER NOT NULL,
+        confirmed_prefix_sha256 TEXT NOT NULL,
+        remote_version TEXT,
+        state TEXT NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        PRIMARY KEY(operation_id, object_id)
+      );
+      CREATE TABLE IF NOT EXISTS blackout_deferred_evidence (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        operation_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        occurred_at_ms INTEGER NOT NULL,
+        confirmed_offset INTEGER NOT NULL,
+        remote_version TEXT,
+        application_receipt TEXT,
+        required_evidence_complete INTEGER NOT NULL
+      );
+    `);
+  }
+
+  register(operationId: string, at: number): void {
+    assertDeferredObjectIntegrity(this.descriptor, this.bytes);
+    this.database.prepare(`
+      INSERT OR IGNORE INTO blackout_deferred_transfer(
+        operation_id,object_id,object_sha256,byte_length,chunk_size_bytes,confirmed_offset,
+        confirmed_prefix_sha256,remote_version,state,updated_at_ms
+      ) VALUES(?,?,?,?,?,0,?,NULL,'PENDING',?)
+    `).run(
+      operationId,
+      this.descriptor.objectId,
+      this.descriptor.sha256,
+      this.descriptor.byteLength,
+      this.descriptor.chunkSizeBytes,
+      sha256Bytes(this.bytes.subarray(0,0)),
+      at,
+    );
+  }
+
+  transfer(operationId: string, at: number): { readonly complete: boolean; readonly confirmedOffset: number } {
+    const row = this.state(operationId);
+    if (row.state === 'COMPLETED') return Object.freeze({ complete:true, confirmedOffset:row.confirmed_offset });
+    const checkpoint: TransferCheckpoint | null = row.confirmed_offset === 0 ? null : {
+      objectId:row.object_id,
+      objectSha256:row.object_sha256,
+      confirmedOffset:row.confirmed_offset,
+      confirmedPrefixSha256:row.confirmed_prefix_sha256,
+      remoteVersion:row.remote_version,
+      updatedAtMs:at,
+    };
+    const offset = resumeOffset(this.descriptor,checkpoint);
+    const localPrefix = sha256Bytes(this.bytes.subarray(0,offset));
+    if (localPrefix !== row.confirmed_prefix_sha256) throw new Error('BLACKOUT_DEFERRED_PREFIX_MISMATCH');
+    this.insertEvidence(operationId,'DEFERRED_TRANSFER_STARTED',at,offset,row.remote_version,null,false);
+
+    const result = this.transport.transfer({ operationId, descriptor:this.descriptor, offset, bytes:this.bytes });
+    if (result.confirmedOffset < offset || result.confirmedOffset > this.descriptor.byteLength) {
+      throw new Error('BLACKOUT_DEFERRED_OFFSET_REGRESSION');
+    }
+    if (!result.complete && result.confirmedOffset % this.descriptor.chunkSizeBytes !== 0) {
+      throw new Error('BLACKOUT_DEFERRED_UNALIGNED_CHECKPOINT');
+    }
+    if (result.complete && result.confirmedOffset !== this.descriptor.byteLength) {
+      throw new Error('BLACKOUT_DEFERRED_INCOMPLETE_FINAL_OFFSET');
+    }
+    if (result.complete) assertDeferredObjectIntegrity(this.descriptor,this.bytes);
+    const prefix = sha256Bytes(this.bytes.subarray(0,result.confirmedOffset));
+    const state = result.complete ? 'COMPLETED' : 'PENDING';
+    const kind: DeferredEvidenceKind = result.complete ? 'DEFERRED_TRANSFER_COMPLETED' : 'DEFERRED_TRANSFER_CHECKPOINT';
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      this.database.prepare(`
+        UPDATE blackout_deferred_transfer
+        SET confirmed_offset=?,confirmed_prefix_sha256=?,remote_version=?,state=?,updated_at_ms=?
+        WHERE operation_id=? AND object_id=?
+      `).run(result.confirmedOffset,prefix,result.remoteVersion,state,at+1,operationId,this.descriptor.objectId);
+      this.insertEvidence(
+        operationId,
+        kind,
+        at+1,
+        result.confirmedOffset,
+        result.remoteVersion,
+        result.applicationReceipt,
+        result.complete,
+      );
+      this.database.exec('COMMIT');
+    } catch (error) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
+    return Object.freeze({ complete:result.complete, confirmedOffset:result.confirmedOffset });
+  }
+
+  state(operationId: string): DeferredStateRow {
+    const row = this.database.prepare(`
+      SELECT operation_id,object_id,object_sha256,byte_length,chunk_size_bytes,confirmed_offset,
+             confirmed_prefix_sha256,remote_version,state
+      FROM blackout_deferred_transfer WHERE operation_id=? AND object_id=?
+    `).get(operationId,this.descriptor.objectId) as DeferredStateRow | undefined;
+    if (!row) throw new Error('BLACKOUT_DEFERRED_STATE_MISSING');
+    return row;
+  }
+
+  evidenceAfter(operationId: string, sequence: number): readonly DeferredEvidenceRow[] {
+    return this.database.prepare(`
+      SELECT seq,kind,occurred_at_ms,confirmed_offset,remote_version,application_receipt,required_evidence_complete
+      FROM blackout_deferred_evidence WHERE operation_id=? AND seq>? ORDER BY seq ASC
+    `).all(operationId,sequence) as DeferredEvidenceRow[];
+  }
+
+  isComplete(operationId: string): boolean {
+    const row = this.state(operationId);
+    if (row.state !== 'COMPLETED' || row.confirmed_offset !== row.byte_length) return false;
+    const evidence = this.database.prepare(`
+      SELECT COUNT(*) AS count FROM blackout_deferred_evidence
+      WHERE operation_id=? AND kind='DEFERRED_TRANSFER_COMPLETED' AND required_evidence_complete=1
+    `).get(operationId) as { count: number };
+    return Number(evidence.count) === 1;
+  }
+
+  private insertEvidence(
+    operationId: string,
+    kind: DeferredEvidenceKind,
+    at: number,
+    confirmedOffset: number,
+    remoteVersion: string | null,
+    applicationReceipt: string | null,
+    requiredEvidenceComplete: boolean,
+  ): void {
+    this.database.prepare(`
+      INSERT INTO blackout_deferred_evidence(
+        operation_id,kind,occurred_at_ms,confirmed_offset,remote_version,application_receipt,required_evidence_complete
+      ) VALUES(?,?,?,?,?,?,?)
+    `).run(operationId,kind,at,confirmedOffset,remoteVersion,applicationReceipt,requiredEvidenceComplete?1:0);
+  }
+}
+
 class BlackoutRuntime {
   readonly operationId = 'blackout-op-1';
   readonly records: LinkDecisionRecord[] = [];
   readonly decisions: string[] = [];
   coreComplete = false;
-  evidenceComplete = false;
+  private deferredEvidenceSequence = 0;
 
   constructor(
     private readonly profile: DeliveryProfileV2,
     private readonly transport: PlannerInput['transports'][number],
     private readonly proxy: LinkReceiverProxy,
     readonly upstream: FaultingDurableBusinessTransport,
+    private deferredRuntime: PersistentDeferredTransferRuntime,
   ) {}
+
+  get evidenceComplete(): boolean {
+    return this.deferredRuntime.isComplete(this.operationId);
+  }
+
+  replaceDeferredRuntime(runtime: PersistentDeferredTransferRuntime): void {
+    runtime.state(this.operationId);
+    this.deferredRuntime = runtime;
+  }
 
   private record(
     kind: LinkDecisionRecord['kind'],
@@ -87,12 +317,13 @@ class BlackoutRuntime {
     certainty: LinkDecisionRecord['certainty'],
     details: Record<string,string|number|boolean|null>,
     plan: ReturnType<typeof createTransmissionPlan> | null = null,
+    requiredEvidenceComplete: boolean = this.evidenceComplete,
   ) {
     this.records.push(createLinkDecisionRecord({
       recordVersion:1, operationId:this.operationId, kind, occurredAtMs:at,
       planId:plan?.planId ?? null, snapshotHash:plan?.snapshotHash ?? null,
       adapterId:plan?.adapterId ?? null, networkKey:plan?.networkKey ?? null,
-      certainty, coreComplete:this.coreComplete, requiredEvidenceComplete:this.evidenceComplete, details,
+      certainty, coreComplete:this.coreComplete, requiredEvidenceComplete, details,
     }));
   }
 
@@ -153,24 +384,39 @@ class BlackoutRuntime {
     return result;
   }
 
-  resumeDeferred(plan:ReturnType<typeof createTransmissionPlan>,at:number) {
-    const bytes = new Uint8Array(8_400_000).fill(7);
-    const object = contentAddressedObject(bytes,'application/octet-stream','REQUIRED_FOR_FINAL_EVIDENCE',256*1024);
-    const firstOffset = 4*256*1024;
-    const checkpoint = {
-      objectId:object.objectId, objectSha256:object.sha256, confirmedOffset:firstOffset,
-      confirmedPrefixSha256:object.chunkHashes[3]!, remoteVersion:'v1', updatedAtMs:at,
-    };
-    const resumed = resumeOffset(object,checkpoint);
-    if (resumed !== firstOffset) throw new Error('BLACKOUT_RESUME_OFFSET_MISMATCH');
-    this.record('DEFERRED_TRANSFER_STARTED',at,'SENT',{offset:resumed},plan);
-    this.record('DEFERRED_TRANSFER_CHECKPOINT',at+1,'SENT',{offset:resumed},plan);
-    assertDeferredObjectIntegrity(object,bytes);
-    this.evidenceComplete = true;
-    this.record('DEFERRED_TRANSFER_COMPLETED',at+2,'RECEIVED',{bytes:object.byteLength,sha256:object.sha256},plan);
+  transferDeferred(plan: ReturnType<typeof createTransmissionPlan>, at: number) {
+    const result = this.deferredRuntime.transfer(this.operationId,at);
+    this.syncDeferredEvidence(plan);
+    return result;
+  }
+
+  deferredState(): DeferredStateRow {
+    return this.deferredRuntime.state(this.operationId);
+  }
+
+  private syncDeferredEvidence(plan: ReturnType<typeof createTransmissionPlan>): void {
+    const rows = this.deferredRuntime.evidenceAfter(this.operationId,this.deferredEvidenceSequence);
+    for (const row of rows) {
+      this.deferredEvidenceSequence = row.seq;
+      const certainty: LinkDecisionRecord['certainty'] = row.kind === 'DEFERRED_TRANSFER_COMPLETED' ? 'RECEIVED' : 'SENT';
+      this.record(
+        row.kind,
+        row.occurred_at_ms,
+        certainty,
+        {
+          source:'PERSISTED_DEFERRED_RUNTIME',
+          confirmedOffset:row.confirmed_offset,
+          remoteVersion:row.remote_version,
+          applicationReceipt:row.application_receipt,
+        },
+        plan,
+        row.required_evidence_complete === 1,
+      );
+    }
   }
 
   finish() {
+    if (!this.evidenceComplete) throw new Error('BLACKOUT_REQUIRED_EVIDENCE_INCOMPLETE');
     const proofBundle = createLinkProofBundle(this.operationId,this.records);
     if (!verifyLinkProofBundle(proofBundle)) throw new Error('BLACKOUT_PROOF_INVALID');
     return proofBundle;
@@ -202,11 +448,19 @@ export async function runLinkBlackoutDrill(): Promise<LinkBlackoutResult> {
   });
 
   const dir = mkdtempSync(join(tmpdir(),'zungun-blackout-proxy-'));
-  const database = new DatabaseSync(join(dir,'proxy.sqlite'));
+  const proxyDatabase = new DatabaseSync(join(dir,'proxy.sqlite'));
+  const deferredPath = join(dir,'deferred.sqlite');
+  let deferredDatabase: DatabaseSync | null = new DatabaseSync(deferredPath);
+  const deferredTransport = new FaultingDeferredTransport();
+  const deferredBytes = new Uint8Array(8_400_000).fill(7);
+  const deferredObject = contentAddressedObject(deferredBytes,'application/octet-stream','REQUIRED_FOR_FINAL_EVIDENCE',256*1024);
+  let deferredRuntime = new PersistentDeferredTransferRuntime(deferredDatabase,deferredTransport,deferredObject,deferredBytes);
+  deferredRuntime.register('blackout-op-1',1_000);
+  let deferredRuntimeReopenCount = 0;
   try {
     const upstream = new FaultingDurableBusinessTransport();
-    const proxy = new LinkReceiverProxy([route],new SqliteLinkProxyStore(database),upstream);
-    const runtime = new BlackoutRuntime(profile,transport,proxy,upstream);
+    const proxy = new LinkReceiverProxy([route],new SqliteLinkProxyStore(proxyDatabase),upstream);
+    const runtime = new BlackoutRuntime(profile,transport,proxy,upstream,deferredRuntime);
     const good = snap('good',1000); runtime.observe(good);
     const constrained = snap('constrained',2000,{metered:true,congested:true,upstreamKbps:64}); runtime.observe(constrained);
     const corePlan = runtime.plan(2100,constrained);
@@ -217,7 +471,30 @@ export async function runLinkBlackoutDrill(): Promise<LinkBlackoutResult> {
     const recovery = snap('recovery',5000,{metered:false,congested:false,upstreamKbps:5000}); runtime.observe(recovery);
     const flush = runtime.plan(5300,recovery,false,true);
     if (flush.decision !== 'SEND_CRITICAL_CORE_NOW' && flush.decision !== 'SEND_FULL_NOW') throw new Error('BLACKOUT_RECOVERY_PLAN_INVALID');
-    runtime.resumeDeferred(flush,5400);
+
+    const checkpointed = runtime.transferDeferred(flush,5400);
+    if (checkpointed.complete || checkpointed.confirmedOffset <= 0) throw new Error('BLACKOUT_DEFERRED_CHECKPOINT_NOT_PERSISTED');
+    const persistedBeforeReopen = runtime.deferredState();
+    if (persistedBeforeReopen.state !== 'PENDING' || persistedBeforeReopen.confirmed_offset !== checkpointed.confirmedOffset) {
+      throw new Error('BLACKOUT_DEFERRED_CHECKPOINT_STATE_INVALID');
+    }
+
+    deferredDatabase.close();
+    deferredDatabase = null;
+    deferredRuntimeReopenCount += 1;
+    deferredDatabase = new DatabaseSync(deferredPath);
+    deferredRuntime = new PersistentDeferredTransferRuntime(deferredDatabase,deferredTransport,deferredObject,deferredBytes);
+    runtime.replaceDeferredRuntime(deferredRuntime);
+    const restored = runtime.deferredState();
+    if (restored.confirmed_offset !== checkpointed.confirmedOffset || restored.state !== 'PENDING') {
+      throw new Error('BLACKOUT_DEFERRED_REOPEN_LOST_CHECKPOINT');
+    }
+
+    const completed = runtime.transferDeferred(flush,5500);
+    if (!completed.complete || completed.confirmedOffset !== deferredObject.byteLength) {
+      throw new Error('BLACKOUT_DEFERRED_RUNTIME_DID_NOT_COMPLETE');
+    }
+    const finalDeferred = runtime.deferredState();
     const proofBundle = runtime.finish();
     return Object.freeze({
       operationId:runtime.operationId,
@@ -225,6 +502,10 @@ export async function runLinkBlackoutDrill(): Promise<LinkBlackoutResult> {
       secondSideEffectSendCount:Math.max(0,upstream.transportAttemptCount-1),
       transportAttemptCount:upstream.transportAttemptCount,
       reconciliationQueryCount:upstream.reconciliationQueryCount,
+      deferredTransportAttemptCount:deferredTransport.transportAttemptCount,
+      deferredRuntimeReopenCount,
+      deferredCheckpointOffset:checkpointed.confirmedOffset,
+      deferredPersistentState:finalDeferred.state,
       decisions:Object.freeze([...runtime.decisions]),
       finalCoreComplete:runtime.coreComplete,
       finalEvidenceComplete:runtime.evidenceComplete,
@@ -232,7 +513,8 @@ export async function runLinkBlackoutDrill(): Promise<LinkBlackoutResult> {
       proofBundle,
     });
   } finally {
-    database.close();
+    deferredDatabase?.close();
+    proxyDatabase.close();
     rmSync(dir,{recursive:true,force:true});
   }
 }
