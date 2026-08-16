@@ -1,0 +1,12 @@
+{
+  "name": "zungun-order083-worker",
+  "version": "0.0.0-order083",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/worker.mjs && node --test test/*.test.mjs",
+    "wrangler:types": "npx --yes wrangler@4.114.0 types",
+    "dry-run": "npx --yes wrangler@4.114.0 deploy --dry-run --outdir .dist-dry-run",
+    "migrate:remote": "npx --yes wrangler@4.114.0 d1 migrations apply DB --remote"
+  }
+}

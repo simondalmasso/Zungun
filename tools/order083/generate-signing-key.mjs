@@ -1,0 +1,11 @@
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+const out = process.argv[2];
+if (!out) throw new Error('OUT_DIR_REQUIRED');
+fs.mkdirSync(out,{recursive:true,mode:0o700});
+const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1',privateKeyEncoding:{type:'pkcs8',format:'der'},publicKeyEncoding:{type:'spki',format:'pem'}});
+const keyId=`order083-${randomUUID()}`;
+fs.writeFileSync(`${out}/private.b64`,Buffer.from(privateKey).toString('base64')+'\n',{mode:0o600});
+fs.writeFileSync(`${out}/public.pem`,publicKey,{mode:0o600});
+fs.writeFileSync(`${out}/key-id.txt`,keyId+'\n',{mode:0o600});
+console.log(JSON.stringify({keyId,privateKeySerializedToStdout:false,algorithm:'ECDSA_P256_SHA256'}));
