@@ -1,9 +1,9 @@
 import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
 const root=path.resolve(process.argv[2]||'.');const out=path.resolve(process.argv[3]||'evidence/order083/local');
-const roots=['cloudflare','android/app','android/settings.gradle.kts','tools/order083','tools/browser/order083-product-e2e.py','tools/browser/order083-android-browser-e2e.py','.github/workflows/order-083-product.yml'];
-const ignored=new Set(['node_modules','.dist-dry-run','build','.gradle']);
+const roots=['.'];
+const ignored=new Set(['.git','node_modules','.dist-dry-run','build','.gradle','dist','.artifacts','.tmp','coverage','evidence']);
 function walk(p){const st=fs.statSync(p);if(st.isFile())return[p];const files=[];for(const e of fs.readdirSync(p,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){if(ignored.has(e.name))continue;const q=path.join(p,e.name);if(e.isDirectory())files.push(...walk(q));else if(e.isFile())files.push(q)}return files}
-let files=[];for(const r of roots){const p=path.join(root,r);if(fs.existsSync(p))files.push(...walk(p))}files=files.map(p=>path.relative(root,p).split(path.sep).join('/')).filter(p=>!p.startsWith('evidence/')).sort();
+let files=[];for(const r of roots){const p=path.join(root,r);if(fs.existsSync(p))files.push(...walk(p))}files=files.map(p=>path.relative(root,p).split(path.sep).join('/')).filter(p=>p&& !p.startsWith('evidence/')).sort();
 const entries=files.map(p=>{const b=fs.readFileSync(path.join(root,p));return{path:p,size:b.length,sha256:crypto.createHash('sha256').update(b).digest('hex')}});
 const canonical=entries.map(e=>`${e.sha256}  ${e.size}  ${e.path}\n`).join('');const source=crypto.createHash('sha256').update(canonical).digest('hex');
 const staticEntries=entries.filter(e=>e.path.startsWith('cloudflare/public/'));const staticCanonical=staticEntries.map(e=>`${e.sha256}  ${e.size}  ${e.path}\n`).join('');const staticSha=crypto.createHash('sha256').update(staticCanonical).digest('hex');
