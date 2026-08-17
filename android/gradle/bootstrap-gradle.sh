@@ -20,7 +20,7 @@ if [ ! -x "$home/bin/gradle" ]; then
   rmdir "$cache/gradle-$version.tmp"
 fi
 backup=""
-if [ -f "$supplement" ]; then
+if [ -f "$supplement" ] && [ -f "$metadata" ]; then
   backup="$(mktemp)"
   cp "$metadata" "$backup"
   restore_metadata() {
