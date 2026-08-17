@@ -1,4 +1,4 @@
-name: Order 083 deterministic not-sent production-first R11
+name: Order 083 safe network-wake production-first R12
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: 22.16.0
           package-manager-cache: false
-      - name: Materialize exact deterministic candidate
+      - name: Materialize exact safe-wake candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -49,18 +49,26 @@ jobs:
             android/runtime/src/main/java/com/zungun/runtime/network/ReceiverTransportClient.kt
             android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt
             android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt
+            android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt
+            android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt
             android/runtime/src/main/java/com/zungun/runtime/db/LinkDao.kt
           )
           for path in "${files[@]}"; do git show "origin/bootstrap/order-083-production-first:$path" > "$path"; done
           chmod +x tools/order083/android-field-recovery-e2e.sh
           git diff --check
-          test "$(git status --porcelain=v1 | wc -l)" -eq 8
+          test "$(git status --porcelain=v1 | wc -l)" -eq 10
           printf '%s\n' "${files[@]}" | sort > "$RUNNER_TEMP/expected"
           git diff --name-only | sort > "$RUNNER_TEMP/actual"
           cmp "$RUNNER_TEMP/expected" "$RUNNER_TEMP/actual"
           grep -Fq "const roots=['.'];" tools/order083/generate-manifests.mjs
           grep -Fq '@Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun plan' android/runtime/src/main/java/com/zungun/runtime/db/LinkDao.kt
           grep -Fq 'persistInterruptedAttemptAsUnknown' android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt
+          grep -Fq 'replaceProvenNotSentBackoff' android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt
+          grep -Fq 'operation.state==OperationState.QUEUED.name' android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt
+          grep -Fq 'it.status=="NOT_SENT"&&it.completedAtMs!=null' android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt
+          grep -Fq 'it.status=="STARTED"&&it.completedAtMs==null' android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt
+          grep -Fq 'ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP' android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt
+          grep -Fq 'recoverPending(replaceProvenNotSentBackoff=true)' android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt
           grep -Fq 'LinkNetworkWakeRegistry.ensure(this)' android/app/src/main/java/com/zungun/app/ZungunApplication.kt
           grep -Fq 'waitProvenNotSent' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
           grep -Fq 'PROCESS_DEATH_AFTER_PROVEN_NOT_SENT=PROVEN' tools/order083/android-field-recovery-e2e.sh
@@ -81,6 +89,8 @@ jobs:
           node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/m2"
           cmp "$RUNNER_TEMP/m1/result.json" "$RUNNER_TEMP/m2/result.json"
           grep -Fq 'android/runtime/src/main/java/com/zungun/runtime/db/LinkDao.kt' "$RUNNER_TEMP/m1/SOURCE_MANIFEST.sha256"
+          grep -Fq 'android/runtime/src/main/java/com/zungun/runtime/delivery/CriticalOperationRuntime.kt' "$RUNNER_TEMP/m1/SOURCE_MANIFEST.sha256"
+          grep -Fq 'android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt' "$RUNNER_TEMP/m1/SOURCE_MANIFEST.sha256"
           grep -Fq 'packages/' "$RUNNER_TEMP/m1/SOURCE_MANIFEST.sha256"
           grep -Fq 'services/' "$RUNNER_TEMP/m1/SOURCE_MANIFEST.sha256"
           grep -Fq 'tests/' "$RUNNER_TEMP/m1/SOURCE_MANIFEST.sha256"
@@ -97,15 +107,15 @@ jobs:
           yes | "$sdkmanager" --licenses >/dev/null || true
           "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0' emulator 'system-images;android-35;google_apis;x86_64'
           export ANDROID_USER_HOME="$RUNNER_TEMP/android-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/android-home" ANDROID_AVD_HOME="$RUNNER_TEMP/android-home/avd"; mkdir -p "$ANDROID_AVD_HOME"
-          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-r11 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-r12 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
           sudo chmod 666 /dev/kvm || true
-          nohup "$sdkroot/emulator/emulator" -avd order083-r11 -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          nohup "$sdkroot/emulator/emulator" -avd order083-r12 -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
           printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
           printf '%s\n' "$sdkroot/platform-tools" >> "$GITHUB_PATH"
           timeout 180s "$sdkroot/platform-tools/adb" wait-for-device
           for _ in $(seq 1 120); do [[ "$("$sdkroot/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" == 1 ]] && exit 0; sleep 2; done
           cat "$RUNNER_TEMP/emulator.log"; exit 1
-      - name: Gate44 Field deterministic production-first proof
+      - name: Gate44 Field safe-wake production-first proof
         env:
           ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/field-predeploy
         run: tools/order083/android-field-recovery-e2e.sh
@@ -125,12 +135,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/seal"
           cp "$RUNNER_TEMP/candidate.json" "$RUNNER_TEMP/seal/candidate.json"
           cp "$RUNNER_TEMP/field-predeploy/result.json" "$RUNNER_TEMP/seal/field-result.json"
-          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nFULL_SOURCE_IDENTITY=PASS\nGATE44_FIELD=PASS\nB_NOT_SENT_BEFORE_PROCESS_DEATH=PASS\nB_BACKEND_ZERO_BEFORE_RECOVERY=PASS\nB_BACKEND_EXACTLY_ONE_AFTER_RECOVERY=PASS\nC_NOT_SENT_BEFORE_FAULT=PASS\nC_BACKEND_ZERO_BEFORE_FAULT=PASS\nC_UNKNOWN_DURABLE=PASS\nPROCESS_DEATH_AFTER_UNKNOWN=PASS\nC_RECONCILIATION_BEFORE_RETRY=PASS\nC_BACKEND_EXACTLY_ONE=PASS\nDETERMINISTIC_PLAN_PERSISTENCE=IDEMPOTENT\nLIVE_IDENTITY=PASS\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
+          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nFULL_SOURCE_IDENTITY=PASS\nGATE44_FIELD=PASS\nSAFE_NOT_SENT_WAKE_BACKOFF_BYPASS=PASS\nB_NOT_SENT_BEFORE_PROCESS_DEATH=PASS\nB_BACKEND_ZERO_BEFORE_RECOVERY=PASS\nB_BACKEND_EXACTLY_ONE_AFTER_RECOVERY=PASS\nC_NOT_SENT_BEFORE_FAULT=PASS\nC_BACKEND_ZERO_BEFORE_FAULT=PASS\nC_UNKNOWN_DURABLE=PASS\nPROCESS_DEATH_AFTER_UNKNOWN=PASS\nC_RECONCILIATION_BEFORE_RETRY=PASS\nC_BACKEND_EXACTLY_ONE=PASS\nDETERMINISTIC_PLAN_PERSISTENCE=IDEMPOTENT\nLIVE_IDENTITY=PASS\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
           find "$RUNNER_TEMP/seal" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/seal/MANIFEST.sha256"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: order083-production-first-r11-${{ github.run_id }}
+          name: order083-production-first-r12-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/candidate.json
             ${{ runner.temp }}/before.json
