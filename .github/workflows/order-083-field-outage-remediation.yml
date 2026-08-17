@@ -1,4 +1,4 @@
-name: Order 083 application-traffic outage production-first R4
+name: Order 083 application-traffic outage production-first R5
 
 on:
   push:
@@ -60,8 +60,8 @@ jobs:
           git diff --name-only | sort > "$RUNNER_TEMP/actual-diff"
           cmp "$RUNNER_TEMP/expected-diff" "$RUNNER_TEMP/actual-diff"
           grep -Fq 'phaseTrafficProbeOffline' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
-          grep -Fq 'phase6ObserveDurableUnknown' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
-          grep -Fq 'phase7VerifyUnknownThenReconciled' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq '@Test fun phase6ObserveDurableUnknown(){runBlocking' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq '@Test fun phase7VerifyUnknownThenReconciled(){runBlocking' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
           grep -Fq 'assertEquals("UNKNOWN",Zungun.status(context,op)!!.semanticState)' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
           grep -Fq 'APPLICATION_TRAFFIC_UNEXPECTED_HTTP_RESPONSE' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
           grep -Fq 'connectTimeout=3000' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
@@ -137,7 +137,7 @@ jobs:
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: order083-field-outage-r4-${{ github.run_id }}
+          name: order083-field-outage-r5-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/candidate.json
             ${{ runner.temp }}/before.json
