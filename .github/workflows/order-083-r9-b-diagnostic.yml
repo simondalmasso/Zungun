@@ -1,4 +1,4 @@
-name: Order 083 R9 B recovery diagnostic
+name: Order 083 hardened B startup recovery diagnostic
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
           ref: ${{ env.PR_BRANCH }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Overlay exact R9 runtime candidate
+      - name: Overlay exact current bootstrap candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -58,13 +58,13 @@ jobs:
         run: |
           set -euo pipefail
           sdkroot="$ANDROID_SDK_ROOT";export ANDROID_USER_HOME="$RUNNER_TEMP/android-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/android-home" ANDROID_AVD_HOME="$RUNNER_TEMP/android-home/avd";mkdir -p "$ANDROID_AVD_HOME"
-          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-r9b -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-hardened-b -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
           sudo chmod 666 /dev/kvm || true
-          nohup "$sdkroot/emulator/emulator" -avd order083-r9b -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          nohup "$sdkroot/emulator/emulator" -avd order083-hardened-b -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
           timeout 180s adb wait-for-device
           for _ in $(seq 1 120);do [[ "$(adb shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" == 1 ]]&&exit 0;sleep 2;done
           cat "$RUNNER_TEMP/emulator.log";exit 1
-      - name: Execute only B and preserve terminal state
+      - name: Execute hardened B and preserve recovery state
         shell: bash
         run: |
           set -euo pipefail
@@ -87,19 +87,22 @@ jobs:
           run_test phase1SetupOnline
           restore; block "$IPT"; block "$IP6T"; run_test phaseTrafficProbeOffline
           run_test phase2QueueOffline
+          OP="$(adb shell run-as com.zungun.app cat files/order083-b-operation-id.txt | tr -d '\r\n')"; test -n "$OP"; printf '%s\n' "$OP" > "$RUNNER_TEMP/diag/OPERATION_ID"
+          curl --fail --silent --show-error -H "x-zungun-order083-key: $ZUNGUN_PILOT_TOKEN" "$ZUNGUN_ORIGIN/api/v1/_order083/diagnostics/$OP" | tee "$RUNNER_TEMP/diag/backend-before.json"
+          jq -e '.fieldOperationCount==0 and .fieldEffectCount==0' "$RUNNER_TEMP/diag/backend-before.json" >/dev/null
           adb shell am force-stop com.zungun.app
           restore; run_test phaseTrafficProbeOnline
           adb shell monkey -p com.zungun.app -c android.intent.category.LAUNCHER 1 >/dev/null
           sleep 2
           set +e
-          adb shell am instrument -w -r -e class "com.zungun.app.Order083FieldRecoveryInstrumentedTest#phase3VerifyRecovered" "$RUNNER" | tee "$RUNNER_TEMP/field/phase3VerifyRecovered.log"
+          timeout 35s adb shell am instrument -w -r -e class "com.zungun.app.Order083FieldRecoveryInstrumentedTest#phase3VerifyRecovered" "$RUNNER" | tee "$RUNNER_TEMP/field/phase3VerifyRecovered.log"
           rc=${PIPESTATUS[0]}
           set -e
           printf '%s\n' "$rc" > "$RUNNER_TEMP/diag/phase3-instrumentation-rc"
           adb logcat -d -v threadtime > "$RUNNER_TEMP/diag/logcat.txt" 2>&1 || true
-          grep -Ei 'WorkManager|WorkerWrapper|LinkDeliveryWorker|DeliveryWorker|HttpURLConnection|Exception|Throwable|zungun' "$RUNNER_TEMP/diag/logcat.txt" > "$RUNNER_TEMP/diag/logcat-focused.txt" || true
+          grep -Ei 'WorkManager|WorkerWrapper|LinkWake|LinkDeliveryWorker|DeliveryWorker|HttpURLConnection|Exception|Throwable|zungun' "$RUNNER_TEMP/diag/logcat.txt" > "$RUNNER_TEMP/diag/logcat-focused.txt" || true
           trap - EXIT INT TERM; restore
-      - name: Snapshot B Room WorkManager and backend
+      - name: Snapshot hardened B Room WorkManager backend
         shell: bash
         run: |
           set -euo pipefail
@@ -110,25 +113,28 @@ jobs:
             adb exec-out run-as com.zungun.app cat "databases/androidx.work.workdb${suffix}" > "$RUNNER_TEMP/diag/androidx.work.workdb.database-path${suffix}" 2>/dev/null || true
           done
           adb exec-out run-as com.zungun.app cat shared_prefs/order083-field-recovery.xml > "$RUNNER_TEMP/diag/shared-prefs.xml" 2>/dev/null || true
-          DB="$RUNNER_TEMP/diag/zungun-critical-operations.db"
-          sqlite3 -header -column "$DB" "SELECT operationId,state,attempts,lastError,createdAtMs,updatedAtMs FROM operations ORDER BY createdAtMs;" | tee "$RUNNER_TEMP/diag/operations.txt"
-          OP="$(sqlite3 "$DB" "SELECT operationId FROM operations ORDER BY createdAtMs DESC LIMIT 1;")"; test -n "$OP"; printf '%s\n' "$OP" | tee "$RUNNER_TEMP/diag/OPERATION_ID"
+          DB="$RUNNER_TEMP/diag/zungun-critical-operations.db"; OP="$(cat "$RUNNER_TEMP/diag/OPERATION_ID")"
+          sqlite3 -header -column "$DB" "SELECT operationId,state,attempts,lastError,createdAtMs,updatedAtMs FROM operations WHERE operationId='$OP';" | tee "$RUNNER_TEMP/diag/operations.txt"
           sqlite3 -header -column "$DB" "SELECT id,source,kind,occurredAtMs,reference,payloadJson FROM evidence WHERE operationId='$OP' ORDER BY id;" | tee "$RUNNER_TEMP/diag/evidence.txt"
           sqlite3 -header -column "$DB" "SELECT attemptId,attemptNumber,startedAtMs,completedAtMs,status,httpStatus,errorCode FROM transport_attempts WHERE operationId='$OP' ORDER BY startedAtMs;" | tee "$RUNNER_TEMP/diag/attempts.txt"
           sqlite3 -header -column "$DB" "SELECT retryContract,latestSnapshotId,latestPlanId,automaticRetryBlocked,nextEligibilityAtMs,updatedAtMs FROM link_operation_state WHERE operationId='$OP';" | tee "$RUNNER_TEMP/diag/link-state.txt"
           sqlite3 -header -column "$DB" "SELECT planId,decision,reconcileFirst,nextEligibilityAtMs,createdAtMs FROM transmission_plans WHERE operationId='$OP' ORDER BY createdAtMs;" | tee "$RUNNER_TEMP/diag/plans.txt"
-          curl --fail --silent --show-error -H "x-zungun-order083-key: $ZUNGUN_PILOT_TOKEN" "$ZUNGUN_ORIGIN/api/v1/_order083/diagnostics/$OP" | tee "$RUNNER_TEMP/diag/backend.json"
+          curl --fail --silent --show-error -H "x-zungun-order083-key: $ZUNGUN_PILOT_TOKEN" "$ZUNGUN_ORIGIN/api/v1/_order083/diagnostics/$OP" | tee "$RUNNER_TEMP/diag/backend-after.json"
           for WDB in "$RUNNER_TEMP/diag/androidx.work.workdb" "$RUNNER_TEMP/diag/androidx.work.workdb.database-path"; do
             if [[ -s "$WDB" ]]; then
-              sqlite3 -header -column "$WDB" "SELECT id,state,worker_class_name,run_attempt_count,schedule_requested_at FROM workspec ORDER BY period_start_time;" > "$WDB.workspec.txt" || true
+              sqlite3 -header -column "$WDB" "SELECT id,state,worker_class_name,run_attempt_count,schedule_requested_at,last_enqueue_time FROM workspec ORDER BY last_enqueue_time;" > "$WDB.workspec.txt" || true
+              sqlite3 -header -column "$WDB" "SELECT * FROM workname;" > "$WDB.workname.txt" || true
+              sqlite3 -header -column "$WDB" "SELECT * FROM dependency;" > "$WDB.dependency.txt" || true
             fi
           done
           adb shell dumpsys jobscheduler com.zungun.app > "$RUNNER_TEMP/diag/jobscheduler.txt" || true
+          cat "$RUNNER_TEMP/diag/operations.txt"; cat "$RUNNER_TEMP/diag/evidence.txt"; cat "$RUNNER_TEMP/diag/attempts.txt"; cat "$RUNNER_TEMP/diag/link-state.txt"; cat "$RUNNER_TEMP/diag/plans.txt"; cat "$RUNNER_TEMP/diag/backend-after.json"
+          for f in "$RUNNER_TEMP"/diag/*.workspec.txt "$RUNNER_TEMP"/diag/*.workname.txt; do [[ -f "$f" ]] && { echo "--- $f"; cat "$f"; }; done
           tail -n 300 "$RUNNER_TEMP/diag/logcat-focused.txt" || true
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: order083-r9-b-diagnostic-${{ github.run_id }}
+          name: order083-hardened-b-diagnostic-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/diag
             ${{ runner.temp }}/field
