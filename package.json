@@ -1,0 +1,49 @@
+{
+  "name": "zungun",
+  "version": "1.0.0-order076",
+  "private": true,
+  "type": "module",
+  "description": "Application-level critical-operation system for unstable connectivity with explicit ambiguity and verifiable execution evidence.",
+  "scripts": {
+    "clean": "rm -rf dist .artifacts .tmp coverage",
+    "format:check": "node tools/quality/check-format.mjs",
+    "lint": "node tools/quality/lint.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.json && node tools/build/copy-static.mjs",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "test:core": "npm run build && node --test dist/tests/protocol-core.test.js dist/tests/oracle-differential.test.js",
+    "test:receiver": "npm run build && node --test dist/tests/receiver-integration.test.js dist/tests/migrations.test.js",
+    "test:security": "npm run build && node --test dist/tests/receipts.test.js dist/tests/security-boundaries.test.js",
+    "test:reconciliation": "npm run build && node --test dist/tests/reconciliation.test.js",
+    "test:e2e": "npm run build && node --test dist/tests/field-service-e2e.test.js",
+    "test:resilience": "npm run build && node dist/tools/resilience-lab/src/run.js",
+    "verify:oracle": "node tools/quality/verify-oracle.mjs",
+    "verify:no-placeholders": "node tools/quality/no-placeholders.mjs",
+    "verify:secrets": "node tools/quality/secret-scan.mjs",
+    "verify:docs": "node tools/docs/build-and-check.mjs",
+    "verify:pack": "npm run build && node tools/quality/pack-consumer.mjs",
+    "verify:security-evidence": "node tools/security/generate-evidence.mjs",
+    "verify:deep": "npm run format:check && npm run lint && npm run typecheck && npm run verify:oracle && npm test && npm run test:resilience && npm run verify:pack && npm run verify:docs && npm run verify:no-placeholders && npm run verify:secrets && npm run verify:security-evidence",
+    "start:receiver": "npm run build && node dist/services/receiver/src/server.js",
+    "demo:field-service": "npm run build && node dist/examples/field-service/src/demo.js",
+    "verify:order076-baseline": "node tools/quality/order076-baseline-regressions.mjs",
+    "audit:osv": "node tools/security/osv-audit.mjs",
+    "test:witness": "npm run build && node --test dist/tests/witness.test.js dist/tests/witness-receiver.test.js dist/tests/witness-verifier-cli.test.js dist/tests/server-api.test.js",
+    "verify:witness-bundle": "npm run build && node --test dist/tests/witness-verifier-cli.test.js",
+    "generate:witness-fixture": "npm run build && node dist/tools/resilience-lab/src/emit-proof-fixture.js",
+    "test:link": "npm run build && node --test dist/tests/link-*.test.js",
+    "test:link-security": "npm run build && node --test dist/tests/link-security-negative.test.js dist/tests/link-proxy.test.js",
+    "test:link-blackout": "npm run build && node --test dist/tests/link-blackout.test.js",
+    "doctor:link": "npm run build && node dist/tools/link-doctor/src/cli.js",
+    "generate:link-proof": "npm run build && node dist/tools/resilience-lab/src/emit-link-proof-fixture.js",
+    "demo:link": "npm run build && node dist/examples/link-quickstart/src/demo.js",
+    "verify:link-vectors": "npm run build && node tools/link-vectors/generate.mjs .tmp/link-planner-v1.vectors && cmp .tmp/link-planner-v1.vectors testdata/link-planner-v1.vectors",
+    "test:link-resilience": "npm run build && node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js"
+  },
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3"
+  }
+}

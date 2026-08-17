@@ -1,0 +1,20 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import { canonicalize,commitmentFor,envelopeCommitment,negotiateVersion,sha256Hex,stableOperationId,validateEnvelope,validateOperationPolicy } from '../packages/protocol-core/src/index.js';
+import { makeEnvelope,BASE_TIME } from './helpers.js';
+
+test('canonical serialization sorts keys recursively',()=>assert.equal(canonicalize({z:1,a:{y:2,x:3}}),'{"a":{"x":3,"y":2},"z":1}'));
+test('canonical serialization preserves array order',()=>assert.equal(canonicalize([3,2,1]),'[3,2,1]'));
+test('canonical serialization rejects negative zero',()=>assert.throws(()=>canonicalize(-0),/negative zero/));
+test('sha256 helper is stable',()=>assert.equal(sha256Hex('abc'),'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'));
+test('commitment has explicit algorithm prefix',()=>assert.match(commitmentFor({a:1}),/^sha256:[0-9a-f]{64}$/));
+test('operation identity is deterministic',()=>{const i={tenantId:'t',deviceId:'d',localSequence:7,createdAtMs:11};assert.equal(stableOperationId(i),stableOperationId(i));});
+test('operation identity changes with sequence',()=>assert.notEqual(stableOperationId({tenantId:'t',deviceId:'d',localSequence:1,createdAtMs:11}),stableOperationId({tenantId:'t',deviceId:'d',localSequence:2,createdAtMs:11})));
+test('operation identity validates inputs',()=>assert.throws(()=>stableOperationId({tenantId:'bad space',deviceId:'d',localSequence:1,createdAtMs:1}),/tenantId/));
+test('policy validates deadline',()=>assert.throws(()=>validateOperationPolicy({priority:1,createdAtMs:2,expiresAtMs:2,retryBudget:1,cancellationAllowed:true,semanticRevalidationRequired:true,maxPayloadBytes:1}),/deadline/));
+test('version negotiation picks highest common version',()=>assert.equal(negotiateVersion({minimum:1,maximum:3},{minimum:1,maximum:2}),2));
+test('version negotiation rejects no overlap',()=>assert.throws(()=>negotiateVersion({minimum:1,maximum:1},{minimum:1,maximum:0}),/UNSUPPORTED/));
+test('valid envelope passes and freezes policy',()=>{const e=validateEnvelope(makeEnvelope(),BASE_TIME+1);assert.equal(e.protocol,'zungun.operation.v1');assert.ok(Object.isFrozen(e.policy));});
+test('expired envelope fails closed',()=>assert.throws(()=>validateEnvelope(makeEnvelope(),BASE_TIME+3_600_001),/TTL_EXPIRED/));
+test('unknown envelope fields fail closed',()=>assert.throws(()=>validateEnvelope({...makeEnvelope(),surprise:true},BASE_TIME+1),/INVALID_WIRE/));
+test('payload size is enforced',()=>{const e=makeEnvelope({payloadBase64:Buffer.from('abcd').toString('base64'),policy:{...makeEnvelope().policy,maxPayloadBytes:3}});assert.throws(()=>validateEnvelope(e,BASE_TIME+1),/INVALID_WIRE/);});
+test('envelope commitment is deterministic and mutation sensitive',()=>{const a=makeEnvelope();const b=makeEnvelope({workOrderId:'WO-2842'});assert.equal(envelopeCommitment(a),envelopeCommitment(a));assert.notEqual(envelopeCommitment(a),envelopeCommitment(b));});

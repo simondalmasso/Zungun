@@ -1,0 +1,221 @@
+name: ZEP order 057 release candidate
+
+"on":
+  push:
+    branches: [feat/zep-remote-release-candidate-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zep-order057-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  WRANGLER_SEND_METRICS: "false"
+  EXPECTED_BASE_SHA: 13d6745217672da16985d815c427aa4c953de227
+  EXPECTED_BASE_TREE: 1c07132b326026afd39ca855b7c710cf96578fe8
+  EXPECTED_REF: refs/heads/feat/zep-remote-release-candidate-v1
+  EXPECTED_LOCK_SHA256: c894790ca37a703f17ed9f190d078c0499578568d4284f4aae6162633eaa47e2
+
+jobs:
+  candidate:
+    name: candidate-full-matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      worker_sha256: ${{ steps.result.outputs.worker_sha256 }}
+      candidate_tree: ${{ steps.result.outputs.candidate_tree }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: canary/zep-core-canary
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Freeze exact head and initialize evidence
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "$EXPECTED_REF"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE_SHA"
+          test "$(git rev-parse "$EXPECTED_BASE_SHA^{tree}")" = "$EXPECTED_BASE_TREE"
+          test "$(git rev-list --count "$EXPECTED_BASE_SHA..HEAD")" = 1
+          test "$(git diff --name-only "$EXPECTED_BASE_SHA..HEAD")" = ".github/workflows/zep-order057-release-candidate.yml"
+          test -z "$(git status --porcelain)"
+          git diff --check "$EXPECTED_BASE_SHA..HEAD"
+          rm -rf evidence-order057 node_modules package-lock.json dist dist-worker-a dist-worker-b build-a build-b .wrangler worker-configuration.d.ts vendor/zep-core/dist
+          mkdir -p evidence-order057/commands
+          printf 'HEAD=%s\nREF=%s\nBASE=%s\nBASE_TREE=%s\nRUNNER=%s\n' "$GITHUB_SHA" "$GITHUB_REF" "$EXPECTED_BASE_SHA" "$EXPECTED_BASE_TREE" "$RUNNER_OS" > evidence-order057/context.txt
+          node --version > evidence-order057/toolchain.txt
+          npm --version >> evidence-order057/toolchain.txt
+          git rev-parse HEAD^{tree} > evidence-order057/candidate-tree.txt
+          git diff --name-status "$EXPECTED_BASE_SHA..HEAD" > evidence-order057/changed-paths.txt
+          cat > evidence-order057/record.mjs <<'NODE'
+          import crypto from 'node:crypto'; import fs from 'node:fs'; import {spawnSync} from 'node:child_process';
+          const [name,cmd,...args]=process.argv.slice(2); if(!name||!cmd)process.exit(64);
+          const start=process.hrtime.bigint(); const r=spawnSync(cmd,args,{encoding:null,maxBuffer:128*1024*1024,env:process.env}); const end=process.hrtime.bigint();
+          const out=r.stdout??Buffer.alloc(0),err=r.stderr??Buffer.alloc(0),framed=Buffer.concat([Buffer.from('STDOUT\n'),out,Buffer.from('\nSTDERR\n'),err]);
+          process.stdout.write(out); process.stderr.write(err); const file=`evidence-order057/commands/${name}.log`; fs.writeFileSync(file,framed);
+          fs.appendFileSync('evidence-order057/results.jsonl',JSON.stringify({name,argv:[cmd,...args],exitCode:r.status??127,signal:r.signal??null,durationMs:Number(end-start)/1e6,outputBytes:framed.length,outputSha256:crypto.createHash('sha256').update(framed).digest('hex'),log:file})+'\n');
+          if(r.error)console.error(r.error.message); process.exit(r.status??127);
+          NODE
+          node --check evidence-order057/record.mjs
+      - name: Generate and verify exact dependency lock
+        run: |
+          set -euo pipefail
+          node evidence-order057/record.mjs lock npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          test "$(sha256sum package-lock.json|cut -d' ' -f1)" = "$EXPECTED_LOCK_SHA256"
+          cp package-lock.json evidence-order057/package-lock.json
+          sha256sum package.json package-lock.json > evidence-order057/dependency-inputs.sha256
+          node evidence-order057/record.mjs npm-ci npm ci --ignore-scripts --no-audit --no-fund
+          node evidence-order057/record.mjs npm-ls npm ls --all --json
+          test "$(node -p "require('./node_modules/typescript/package.json').version")" = 5.8.3
+          test "$(node -p "require('./node_modules/wrangler/package.json').version")" = 4.114.0
+          npx --no-install wrangler --version | tee -a evidence-order057/toolchain.txt
+      - name: Security privacy lint format and configuration gates
+        run: |
+          set -euo pipefail
+          node evidence-order057/record.mjs config node tools/verify-config.mjs
+          node - <<'NODE' | tee evidence-order057/security-privacy.json
+          const fs=require('fs'),path=require('path'),crypto=require('crypto'); const root=path.resolve('../..'),issues=[],files=[];
+          const ignored=new Set(['.git','node_modules','.wrangler','dist','dist-worker-a','dist-worker-b','build-a','build-b','evidence-order057']);
+          function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){if(ignored.has(e.name))continue;const p=path.join(d,e.name);if(e.isSymbolicLink())issues.push('SYMLINK:'+path.relative(root,p));else if(e.isDirectory())walk(p);else if(/\.(?:ts|mjs|json|jsonc|ya?ml|md|txt)$/.test(e.name))files.push(p);else if(/\.(?:png|jpe?g|gif|webp)$/i.test(e.name))issues.push('IMAGE:'+path.relative(root,p));}}
+          walk(root); const pats=[['PRIVATE_KEY',/-{5}BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-{5}/],['GH_TOKEN',/gh[pousr]_[A-Za-z0-9_]{20,}/],['OPENAI_KEY',/sk-(?:proj-)?[A-Za-z0-9_-]{20,}/],['AWS_KEY',/AKIA[0-9A-Z]{16}/],['CF_VALUE',/CLOUDFLARE_(?:API_TOKEN|API_KEY)\s*[:=]\s*[^\s$][^\s]*/]];
+          const manifest=[]; for(const f of files.sort()){const b=fs.readFileSync(f),t=b.toString('utf8'),rel=path.relative(root,f).split(path.sep).join('/'); if(b.includes(0))issues.push('NUL:'+rel); if(!t.endsWith('\n'))issues.push('NO_NEWLINE:'+rel); t.split('\n').forEach((l,i)=>{if(/[ \t]+$/.test(l))issues.push(`TRAILING:${rel}:${i+1}`)}); for(const [n,p] of pats)if(p.test(t))issues.push(`SECRET:${n}:${rel}`); manifest.push({path:rel,size:b.length,sha256:crypto.createHash('sha256').update(b).digest('hex')});}
+          const wf=fs.readFileSync(path.join(root,'.github/workflows/zep-order057-release-candidate.yml'),'utf8'); if(/\$\{\{\s*secrets\./.test(wf))issues.push('WORKFLOW_SECRET'); if(/\bgit\s+push\b/.test(wf))issues.push('GIT_PUSH'); if(/wrangler\s+deploy(?![^\n]*--dry-run)/.test(wf))issues.push('DEPLOY_WITHOUT_DRY_RUN');
+          const result={ok:issues.length===0,scannedFiles:manifest.length,issues,manifest}; console.log(JSON.stringify(result)); if(!result.ok)process.exit(1);
+          NODE
+          test -z "$(git diff --name-only)"
+      - name: Full canary and core test matrix
+        run: |
+          set -euo pipefail
+          node evidence-order057/record.mjs canary-typecheck npm run typecheck
+          node evidence-order057/record.mjs canary-tests npm test
+          node evidence-order057/record.mjs canary-fuzz npm run fuzz
+          rm -rf vendor/zep-core/dist
+          node evidence-order057/record.mjs core-typecheck npx --no-install tsc -p vendor/zep-core/tsconfig.json --noEmit
+          node evidence-order057/record.mjs core-build npx --no-install tsc -p vendor/zep-core/tsconfig.json
+          node evidence-order057/record.mjs core-tests node --test vendor/zep-core/dist/test/adversarial.test.js vendor/zep-core/dist/test/properties.test.js vendor/zep-core/dist/test/semantic-vectors.test.js
+          node evidence-order057/record.mjs core-fuzz node vendor/zep-core/tools/fuzz-public-boundaries.mjs
+      - name: Deterministic TypeScript and Wrangler double build
+        env:
+          WRANGLER_OUTPUT_FILE_DIRECTORY: ${{ github.workspace }}/canary/zep-core-canary/evidence-order057/wrangler-output
+        run: |
+          set -euo pipefail
+          node evidence-order057/record.mjs build-a npx --no-install tsc -p tsconfig.json --outDir build-a
+          node evidence-order057/record.mjs build-b npx --no-install tsc -p tsconfig.json --outDir build-b
+          diff -qr build-a build-b | tee evidence-order057/typescript-build-diff.txt
+          node evidence-order057/record.mjs wrangler-types npm run wrangler:types
+          test -s worker-configuration.d.ts; cp worker-configuration.d.ts evidence-order057/worker-configuration.d.ts
+          node evidence-order057/record.mjs wrangler-a npx --no-install wrangler deploy --dry-run --outdir dist-worker-a --metafile dist-worker-a/bundle-meta.json
+          rm -rf .wrangler
+          node evidence-order057/record.mjs wrangler-b npx --no-install wrangler deploy --dry-run --outdir dist-worker-b --metafile dist-worker-b/bundle-meta.json
+          test -f dist-worker-a/worker.js -a -f dist-worker-b/worker.js
+          a="$(sha256sum dist-worker-a/worker.js|cut -d' ' -f1)"; b="$(sha256sum dist-worker-b/worker.js|cut -d' ' -f1)"; test "$a" = "$b"
+          printf '%s  worker.js\n' "$a" > evidence-order057/worker.sha256
+          if find ../.. -path '*/.wrangler/deploy/config.json' -print -quit | grep -q .; then exit 1; fi
+          if grep -RIEq '(Successfully published|Successfully deployed|Uploaded .* Worker|workers\.dev)' evidence-order057/commands/wrangler-*.log; then exit 1; fi
+      - name: Produce candidate evidence
+        id: result
+        run: |
+          set -euo pipefail
+          worker="$(cut -d' ' -f1 evidence-order057/worker.sha256)"; tree="$(git rev-parse HEAD^{tree})"
+          printf 'worker_sha256=%s\ncandidate_tree=%s\n' "$worker" "$tree" >> "$GITHUB_OUTPUT"
+          printf '{"ok":true,"head":"%s","base":"%s","tree":"%s","workerSha256":"%s","securityPrivacy":"PASS","releaseTechnicallyApproved":false,"deploy":false,"release":false,"productionChange":false}\n' "$GITHUB_SHA" "$EXPECTED_BASE_SHA" "$tree" "$worker" > evidence-order057/result.json
+          find evidence-order057 dist-worker-a dist-worker-b -type f ! -path 'evidence-order057/file-inventory.txt' ! -path 'evidence-order057/SHA256SUMS.txt' -printf '%p\n' | LC_ALL=C sort > evidence-order057/file-inventory.txt
+          while IFS= read -r f; do sha256sum "$f"; done < evidence-order057/file-inventory.txt > evidence-order057/SHA256SUMS.txt
+          tar --format=ustar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner -cf order057-candidate.tar evidence-order057 dist-worker-a dist-worker-b
+          gzip -n -6 -f order057-candidate.tar
+          sha256sum order057-candidate.tar.gz > order057-candidate.tar.gz.sha256
+      - name: Upload candidate evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: zungun-order057-candidate-${{ github.run_id }}
+          path: canary/zep-core-canary/order057-candidate.tar.gz*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  reproduce:
+    name: independent-clean-checkout
+    needs: candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: canary/zep-core-canary
+    steps:
+      - name: Checkout exact candidate head independently
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Set up pinned Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Reproduce from clean checkout
+        env:
+          EXPECTED_WORKER_SHA256: ${{ needs.candidate.outputs.worker_sha256 }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "$EXPECTED_REF"; test "$(git rev-parse HEAD)" = "$GITHUB_SHA"; test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE_SHA"
+          test -z "$(git status --porcelain)"
+          rm -rf evidence-reproduce node_modules package-lock.json dist dist-worker .wrangler worker-configuration.d.ts vendor/zep-core/dist
+          mkdir -p evidence-reproduce
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund 2>&1 | tee evidence-reproduce/lock.log
+          test "$(sha256sum package-lock.json|cut -d' ' -f1)" = "$EXPECTED_LOCK_SHA256"
+          npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee evidence-reproduce/npm-ci.log
+          npm run typecheck 2>&1 | tee evidence-reproduce/typecheck.log
+          npm test 2>&1 | tee evidence-reproduce/tests.log
+          npm run fuzz 2>&1 | tee evidence-reproduce/fuzz.log
+          npx --no-install tsc -p vendor/zep-core/tsconfig.json --noEmit 2>&1 | tee evidence-reproduce/core-typecheck.log
+          npx --no-install tsc -p vendor/zep-core/tsconfig.json 2>&1 | tee evidence-reproduce/core-build.log
+          node --test vendor/zep-core/dist/test/adversarial.test.js vendor/zep-core/dist/test/properties.test.js vendor/zep-core/dist/test/semantic-vectors.test.js 2>&1 | tee evidence-reproduce/core-tests.log
+          node vendor/zep-core/tools/fuzz-public-boundaries.mjs 2>&1 | tee evidence-reproduce/core-fuzz.log
+          npm run wrangler:types 2>&1 | tee evidence-reproduce/wrangler-types.log
+          npx --no-install wrangler deploy --dry-run --outdir dist-worker --metafile dist-worker/bundle-meta.json 2>&1 | tee evidence-reproduce/wrangler.log
+          worker="$(sha256sum dist-worker/worker.js|cut -d' ' -f1)"; test "$worker" = "$EXPECTED_WORKER_SHA256"
+          printf '{"ok":true,"head":"%s","tree":"%s","workerSha256":"%s","matchesCandidate":true}\n' "$GITHUB_SHA" "$(git rev-parse HEAD^{tree})" "$worker" > evidence-reproduce/result.json
+          find evidence-reproduce dist-worker -type f ! -path 'evidence-reproduce/file-inventory.txt' ! -path 'evidence-reproduce/SHA256SUMS.txt' -printf '%p\n' | LC_ALL=C sort > evidence-reproduce/file-inventory.txt
+          while IFS= read -r f; do sha256sum "$f"; done < evidence-reproduce/file-inventory.txt > evidence-reproduce/SHA256SUMS.txt
+          tar --format=ustar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner -cf order057-reproduce.tar evidence-reproduce dist-worker
+          gzip -n -6 -f order057-reproduce.tar
+          sha256sum order057-reproduce.tar.gz > order057-reproduce.tar.gz.sha256
+      - name: Upload reproduction evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: zungun-order057-reproduce-${{ github.run_id }}
+          path: canary/zep-core-canary/order057-reproduce.tar.gz*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  gate:
+    name: exact-head-release-candidate-gate
+    needs: [candidate, reproduce]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Assert exact-head gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "$EXPECTED_REF"
+          test -n "${{ needs.candidate.outputs.worker_sha256 }}"
+          test -n "${{ needs.candidate.outputs.candidate_tree }}"
+          printf 'ORDER_ID=ZUNGUN-ARQ-ZEP-REMOTE-RELEASE-CANDIDATE-20260729-057\nHEAD=%s\nTREE=%s\nWORKER_SHA256=%s\nREPRODUCIBILITY=PASS\nSECURITY_PRIVACY=PASS\nDEPLOY=0\nRELEASE=0\nPRODUCTION_CHANGE=0\n' "$GITHUB_SHA" "${{ needs.candidate.outputs.candidate_tree }}" "${{ needs.candidate.outputs.worker_sha256 }}"

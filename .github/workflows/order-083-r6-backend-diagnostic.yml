@@ -1,0 +1,30 @@
+name: Order 083 R6 backend diagnostic
+
+on:
+  push:
+    branches: [bootstrap/order-083-production-first]
+    paths: [.github/workflows/order-083-r6-backend-diagnostic.yml]
+
+permissions:
+  contents: read
+
+env:
+  ZUNGUN_ORIGIN: https://zungun.simondalmasso44.workers.dev
+  SUBJECT_ID: op_14f582c99fdefd998d6e958e97c10be1d2b2d3a3
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+    steps:
+      - name: Query durable backend effect for failed R6 operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ZUNGUN_PILOT_TOKEN"
+          curl --fail --silent --show-error \
+            -H "x-zungun-order083-key: $ZUNGUN_PILOT_TOKEN" \
+            "$ZUNGUN_ORIGIN/api/v1/_order083/diagnostics/$SUBJECT_ID" | tee diagnostic.json
+          jq -e '.ok==true and .subjectId==env.SUBJECT_ID' diagnostic.json
