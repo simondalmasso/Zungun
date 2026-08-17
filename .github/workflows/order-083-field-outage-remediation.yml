@@ -1,4 +1,4 @@
-name: Order 083 application-traffic outage production-first R6
+name: Order 083 application-traffic outage production-first R7
 
 on:
   push:
@@ -47,16 +47,18 @@ jobs:
             android/app/src/main/java/com/zungun/app/ZungunApplication.kt \
             android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt \
             android/runtime/src/main/java/com/zungun/runtime/network/ReceiverTransportClient.kt \
-            android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt; do
+            android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt \
+            android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt; do
             git show "origin/bootstrap/order-083-production-first:$path" > "$path"
           done
           chmod +x tools/order083/android-field-recovery-e2e.sh
           git diff --check
-          test "$(git status --porcelain=v1 | wc -l)" -eq 5
+          test "$(git status --porcelain=v1 | wc -l)" -eq 6
           printf '%s\n' \
             android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt \
             android/app/src/main/java/com/zungun/app/ZungunApplication.kt \
             android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt \
+            android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt \
             android/runtime/src/main/java/com/zungun/runtime/network/ReceiverTransportClient.kt \
             tools/order083/android-field-recovery-e2e.sh | sort > "$RUNNER_TEMP/expected-diff"
           git diff --name-only | sort > "$RUNNER_TEMP/actual-diff"
@@ -71,6 +73,10 @@ jobs:
           grep -Fq 'catch (error: ConnectException)' android/runtime/src/main/java/com/zungun/runtime/network/ReceiverTransportClient.kt
           grep -Fq 'TRANSPORT_NOT_SENT' android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt
           grep -Fq 'OperationState.QUEUED.name' android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt
+          grep -Fq 'persistInterruptedAttemptAsUnknown' android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt
+          grep -Fq 'INTERRUPTED_TRANSPORT_OUTCOME_UNPROVEN' android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt
+          grep -Fq 'it.status=="STARTED"&&it.completedAtMs==null' android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt
+          grep -Fq 'OperationState.UNKNOWN.name' android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt
           grep -Fq 'LinkNetworkWakeRegistry.ensure(this)' android/app/src/main/java/com/zungun/app/ZungunApplication.kt
           grep -Fq 'run phase6ObserveDurableUnknown;adb shell am force-stop com.zungun.app' tools/order083/android-field-recovery-e2e.sh
           grep -Fq 'PROCESS_DEATH_AFTER_UNKNOWN=PROVEN' tools/order083/android-field-recovery-e2e.sh
@@ -136,11 +142,11 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/seal"
           jq -r .sourceBundleSha256 "$RUNNER_TEMP/candidate.json" > "$RUNNER_TEMP/seal/SOURCE_BUNDLE_SHA256"
-          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nAPPLICATION_TRAFFIC_OUTAGE=YES\nOUTAGE_ORACLE=REAL_APP_HTTPS\nPREDEPLOY_GATE44_FIELD=PASS\nPROVEN_NOT_SENT_CLASSIFICATION=YES\nPROCESS_RESTART_WAKE_REARM=YES\nAMBIGUOUS_UNKNOWN_BEFORE_PROCESS_DEATH=YES\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
+          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nAPPLICATION_TRAFFIC_OUTAGE=YES\nOUTAGE_ORACLE=REAL_APP_HTTPS\nPREDEPLOY_GATE44_FIELD=PASS\nPROVEN_NOT_SENT_CLASSIFICATION=YES\nPROCESS_RESTART_WAKE_REARM=YES\nINTERRUPTED_TRANSPORT_UNKNOWN_BOUNDARY=YES\nAMBIGUOUS_UNKNOWN_BEFORE_PROCESS_DEATH=YES\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: order083-field-outage-r6-${{ github.run_id }}
+          name: order083-field-outage-r7-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/candidate.json
             ${{ runner.temp }}/before.json
