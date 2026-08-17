@@ -1,4 +1,4 @@
-name: Order 083 application-traffic outage production-first R3
+name: Order 083 application-traffic outage production-first R4
 
 on:
   push:
@@ -60,12 +60,17 @@ jobs:
           git diff --name-only | sort > "$RUNNER_TEMP/actual-diff"
           cmp "$RUNNER_TEMP/expected-diff" "$RUNNER_TEMP/actual-diff"
           grep -Fq 'phaseTrafficProbeOffline' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'phase6ObserveDurableUnknown' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'phase7VerifyUnknownThenReconciled' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'assertEquals("UNKNOWN",Zungun.status(context,op)!!.semanticState)' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
           grep -Fq 'APPLICATION_TRAFFIC_UNEXPECTED_HTTP_RESPONSE' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
           grep -Fq 'connectTimeout=3000' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
           grep -Fq 'RetryableNotSent' android/runtime/src/main/java/com/zungun/runtime/network/ReceiverTransportClient.kt
           grep -Fq 'catch (error: ConnectException)' android/runtime/src/main/java/com/zungun/runtime/network/ReceiverTransportClient.kt
           grep -Fq 'TRANSPORT_NOT_SENT' android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt
           grep -Fq 'OperationState.QUEUED.name' android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt
+          grep -Fq 'run phase6ObserveDurableUnknown;adb shell am force-stop com.zungun.app' tools/order083/android-field-recovery-e2e.sh
+          grep -Fq 'PROCESS_DEATH_AFTER_UNKNOWN=PROVEN' tools/order083/android-field-recovery-e2e.sh
           grep -Fq 'adb root' tools/order083/android-field-recovery-e2e.sh
           grep -Fq 'iptables' tools/order083/android-field-recovery-e2e.sh
           grep -Fq 'ROOT_IPTABLES_TCP_443_REJECT' tools/order083/android-field-recovery-e2e.sh
@@ -128,11 +133,11 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/seal"
           jq -r .sourceBundleSha256 "$RUNNER_TEMP/candidate.json" > "$RUNNER_TEMP/seal/SOURCE_BUNDLE_SHA256"
-          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nAPPLICATION_TRAFFIC_OUTAGE=YES\nOUTAGE_ORACLE=REAL_APP_HTTPS\nPREDEPLOY_GATE44_FIELD=PASS\nPROVEN_NOT_SENT_CLASSIFICATION=YES\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
+          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nAPPLICATION_TRAFFIC_OUTAGE=YES\nOUTAGE_ORACLE=REAL_APP_HTTPS\nPREDEPLOY_GATE44_FIELD=PASS\nPROVEN_NOT_SENT_CLASSIFICATION=YES\nAMBIGUOUS_UNKNOWN_BEFORE_PROCESS_DEATH=YES\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: order083-field-outage-r3-${{ github.run_id }}
+          name: order083-field-outage-r4-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/candidate.json
             ${{ runner.temp }}/before.json
