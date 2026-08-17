@@ -42,14 +42,14 @@ jobs:
           cp android/gradle/verification-metadata.xml "$previous"
           rm android/gradle/verification-metadata.xml
           printf 'PREVIOUS_VERIFICATION=%s\n' "$previous" >> "$GITHUB_ENV"
-      - name: Resolve dependency graph and generate locks
+      - name: Resolve root dependency graph and generate locks
         shell: bash
         run: |
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             --write-locks --write-verification-metadata sha256 \
-            :runtime:dependencies :sample:dependencies :external-consumer:dependencies
+            :runtime:dependencies :sample:dependencies
       - name: Clean Android build outputs before production
         shell: bash
         run: |
@@ -57,8 +57,8 @@ jobs:
           export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             --write-locks --write-verification-metadata sha256 \
-            :runtime:clean :sample:clean :external-consumer:clean
-      - name: Build producer AAR and verify SHA-256
+            :runtime:clean :sample:clean
+      - name: Build producer AAR, publish coordinate, and verify SHA-256
         shell: bash
         run: |
           set -euo pipefail
@@ -66,25 +66,35 @@ jobs:
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             --write-locks --write-verification-metadata sha256 \
             :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
-            :runtime:testDebugUnitTest :sample:assembleDebug
+            :runtime:testDebugUnitTest :sample:assembleDebug \
+            :runtime:publishReleasePublicationToOrder080Repository
           aar=android/runtime/build/outputs/aar/runtime-release.aar
+          repo="$GITHUB_WORKSPACE/android/runtime/build/order080-repo"
+          published="$repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar"
           test -s "$aar"
+          test -s "$published"
           sha256sum "$aar" | tee "$RUNNER_TEMP/runtime-release.aar.sha256"
-      - name: Compile external consumer from declared producer artifact
+          test "$(sha256sum "$aar" | awk '{print $1}')" = "$(sha256sum "$published" | awk '{print $1}')"
+          printf 'ZUNGUN_RUNTIME_REPO=%s\n' "$repo" >> "$GITHUB_ENV"
+      - name: Resolve and compile standalone external consumer from declared producer artifact
         shell: bash
         run: |
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+          test -f android/external-consumer/settings.gradle.kts
+          ! grep -R -F 'project(:runtime)' android/external-consumer android/settings.gradle.kts
+          android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
+            -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" \
             --write-locks --write-verification-metadata sha256 \
-            :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+            dependencies assembleDebug assembleDebugAndroidTest
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
       - name: Complete exact dependency verification metadata
         shell: bash
         run: |
           set -euo pipefail
           test -s android/gradle/verification-metadata.xml
+          test -s android/external-consumer/gradle/verification-metadata.xml
           python tools/android/complete-gradle-verification.py \
             --metadata android/gradle/verification-metadata.xml \
             --merge-from "$PREVIOUS_VERIFICATION" \
@@ -96,7 +106,9 @@ jobs:
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
-            :runtime:clean :sample:clean :external-consumer:clean
+            :runtime:clean :sample:clean
+          android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
+            -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" clean
       - name: Strict producer AAR replay and SHA-256 verification
         shell: bash
         run: |
@@ -104,7 +116,8 @@ jobs:
           export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             :runtime:assembleDebug :runtime:assembleRelease :runtime:lintDebug \
-            :runtime:testDebugUnitTest :sample:assembleDebug
+            :runtime:testDebugUnitTest :sample:assembleDebug \
+            :runtime:publishReleasePublicationToOrder080Repository
           aar=android/runtime/build/outputs/aar/runtime-release.aar
           test -s "$aar"
           sha256sum "$aar" | tee "$RUNNER_TEMP/runtime-release.aar.sha256"
@@ -114,11 +127,13 @@ jobs:
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
-            :external-consumer:assembleDebug :external-consumer:assembleDebugAndroidTest
+          android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
+            -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" \
+            assembleDebug assembleDebugAndroidTest
           sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
           find android -type f \( -name 'gradle.lockfile' -o -path '*/gradle/verification-metadata.xml' \) -print | LC_ALL=C sort
           test -s android/gradle/verification-metadata.xml
+          test -s android/external-consumer/gradle/verification-metadata.xml
           test "$(find android -type f -name gradle.lockfile | wc -l)" -ge 3
       - name: Archive bootstrap evidence
         shell: bash
@@ -133,7 +148,10 @@ jobs:
           cp android/runtime/build/outputs/aar/runtime-release.aar "$out/zungun-runtime-release.aar"
           cp "$RUNNER_TEMP/runtime-release.aar.sha256" "$out/zungun-runtime-release.aar.sha256"
           cp android/sample/build/outputs/apk/debug/sample-debug.apk "$out/sample-debug.apk"
-          cp android/external-consumer/build/outputs/apk/debug/external-consumer-debug.apk "$out/external-consumer-debug.apk"
+          consumer_apk="$(find android/external-consumer/build/outputs/apk/debug -maxdepth 1 -type f -name '*-debug.apk' -print -quit)"
+          test -n "$consumer_apk"
+          test -s "$consumer_apk"
+          cp "$consumer_apk" "$out/external-consumer-debug.apk"
           find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
