@@ -1,4 +1,4 @@
-name: Order 083 R6 local state diagnostic
+name: Order 083 R6 local state diagnostic R2
 
 on:
   push:
@@ -72,9 +72,13 @@ jobs:
           ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/field
         run: |
           set +e
+          adb logcat -c
           tools/order083/android-field-recovery-e2e.sh
           rc=$?
           echo "$rc" > "$RUNNER_TEMP/harness-rc"
+          mkdir -p "$RUNNER_TEMP/diag"
+          adb logcat -d -v threadtime > "$RUNNER_TEMP/diag/logcat.txt" 2>&1 || true
+          grep -Ei 'WorkManager|WorkerWrapper|LinkDeliveryWorker|DeliveryWorker|HttpURLConnection|Exception|Throwable|zungun' "$RUNNER_TEMP/diag/logcat.txt" > "$RUNNER_TEMP/diag/logcat-focused.txt" || true
           exit 0
       - name: Snapshot local Room and WorkManager state
         shell: bash
@@ -97,9 +101,10 @@ jobs:
           curl --fail --silent --show-error -H "x-zungun-order083-key: $ZUNGUN_PILOT_TOKEN" "$ZUNGUN_ORIGIN/api/v1/_order083/diagnostics/$OP" | tee "$RUNNER_TEMP/diag/backend.json"
           adb shell dumpsys jobscheduler com.zungun.app > "$RUNNER_TEMP/diag/jobscheduler.txt" || true
           cp "$RUNNER_TEMP/harness-rc" "$RUNNER_TEMP/diag/"
+          tail -n 250 "$RUNNER_TEMP/diag/logcat-focused.txt" || true
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: order083-r6-local-diagnostic-${{ github.run_id }}
+          name: order083-r6-local-diagnostic-r2-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/diag
             ${{ runner.temp }}/field
