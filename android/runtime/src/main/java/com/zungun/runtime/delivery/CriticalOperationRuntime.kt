@@ -29,7 +29,17 @@ class CriticalOperationRuntime(private val context:Context,private val database:
         }
         if(profile!=null)LinkNetworkWakeRegistry.ensure(context);schedule(operationId,profile!=null);return operationId
     }
-    fun schedule(operationId:String,linkEnabled:Boolean=false,initialDelayMs:Long=0){val builder=(if(linkEnabled)OneTimeWorkRequestBuilder<LinkDeliveryWorker>() else OneTimeWorkRequestBuilder<DeliveryWorker>()).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setInputData(workDataOf("operationId" to operationId)).setBackoffCriteria(BackoffPolicy.EXPONENTIAL,10,TimeUnit.SECONDS).addTag("zungun:$operationId");if(initialDelayMs>0)builder.setInitialDelay(initialDelayMs,TimeUnit.MILLISECONDS);WorkManager.getInstance(context).enqueueUniqueWork("zungun:$operationId",ExistingWorkPolicy.KEEP,builder.build())}
+    fun schedule(operationId:String,linkEnabled:Boolean=false,initialDelayMs:Long=0,existingWorkPolicy:ExistingWorkPolicy=ExistingWorkPolicy.KEEP){val builder=(if(linkEnabled)OneTimeWorkRequestBuilder<LinkDeliveryWorker>() else OneTimeWorkRequestBuilder<DeliveryWorker>()).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setInputData(workDataOf("operationId" to operationId)).setBackoffCriteria(BackoffPolicy.EXPONENTIAL,10,TimeUnit.SECONDS).addTag("zungun:$operationId");if(initialDelayMs>0)builder.setInitialDelay(initialDelayMs,TimeUnit.MILLISECONDS);WorkManager.getInstance(context).enqueueUniqueWork("zungun:$operationId",existingWorkPolicy,builder.build())}
     suspend fun cancel(operationId:String,nowMs:Long):Boolean{val cancelled=database.operations().cancel(operationId,nowMs)==1;if(cancelled)WorkManager.getInstance(context).cancelUniqueWork("zungun:$operationId");return cancelled}
-    suspend fun recoverPending():Int{val pending=database.link().recoverableOperations();pending.forEach{schedule(it.operationId,database.link().state(it.operationId)!=null)};return pending.size}
+    suspend fun recoverPending(replaceProvenNotSentBackoff:Boolean=false):Int{
+        val pending=database.link().recoverableOperations();val dao=database.operations()
+        pending.forEach{operation->
+            val attempts=if(replaceProvenNotSentBackoff&&operation.state==OperationState.QUEUED.name)dao.attemptsFor(operation.operationId)else emptyList()
+            val noTransportInFlight=attempts.none{it.status=="STARTED"&&it.completedAtMs==null}
+            val provenNotSent=attempts.lastOrNull()?.let{it.status=="NOT_SENT"&&it.completedAtMs!=null}==true
+            val policy=if(replaceProvenNotSentBackoff&&noTransportInFlight&&provenNotSent)ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
+            schedule(operation.operationId,database.link().state(operation.operationId)!=null,existingWorkPolicy=policy)
+        }
+        return pending.size
+    }
 }

@@ -7,9 +7,12 @@ import com.zungun.runtime.receipt.VerificationKey
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.NoRouteToHostException
 import java.net.URI
 import java.net.URL
+import java.net.UnknownHostException
 import java.security.MessageDigest
 
 sealed interface TransportResult {
@@ -26,6 +29,9 @@ sealed interface TransportResult {
         val httpStatus: Int,
         val responseSha256: String,
     ) : TransportResult
+
+    /** Failure proven to have happened before a receiver connection was established; receiver acceptance is impossible. */
+    data class RetryableNotSent(val code: String) : TransportResult
 
     data class AmbiguousFailure(val code: String) : TransportResult
 }
@@ -125,6 +131,12 @@ class HttpReceiverTransportClient : ReceiverTransportClient {
             } else {
                 TransportResult.AmbiguousFailure("HTTP_${response.status}")
             }
+        } catch (error: ConnectException) {
+            TransportResult.RetryableNotSent(error.javaClass.simpleName)
+        } catch (error: NoRouteToHostException) {
+            TransportResult.RetryableNotSent(error.javaClass.simpleName)
+        } catch (error: UnknownHostException) {
+            TransportResult.RetryableNotSent(error.javaClass.simpleName)
         } catch (error: IOException) {
             TransportResult.AmbiguousFailure(error.javaClass.simpleName)
         }
