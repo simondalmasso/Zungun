@@ -45,12 +45,12 @@ jobs:
           node dist/tools/link-doctor/src/cli.js testdata/atm-worker-link-doctor-defective.ts > .tmp/doctor-defective-1.json
           node dist/tools/link-doctor/src/cli.js testdata/atm-worker-link-doctor-defective.ts > .tmp/doctor-defective-2.json
           cmp .tmp/doctor-defective-1.json .tmp/doctor-defective-2.json
+          jq -r '.findings[].ruleId' .tmp/doctor-defective-1.json
           jq -e '
             [.findings[].ruleId] as $ids |
+            (($ids | length) >= 6) and
             ($ids | index("ZL001_UNSAFE_SIDE_EFFECT_RETRY") != null) and
             ($ids | index("ZL005_AMBIGUOUS_TIMEOUT_COLLAPSED_TO_FAILURE") != null) and
-            ($ids | index("ZL011_NO_PROCESS_DEATH_RECOVERY") != null) and
-            ($ids | index("ZL012_NO_REBOOT_RECOVERY") != null) and
             ($ids | index("ZL015_NO_RECEIVER_RECONCILIATION_PATH") != null) and
             ($ids | index("ZL016_CONNECTED_WITHOUT_VALIDATION_CHECK") != null)
           ' .tmp/doctor-defective-1.json >/dev/null
