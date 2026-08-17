@@ -1,4 +1,4 @@
-name: Order 083 deterministic emulator outage production-first
+name: Order 083 application-traffic outage production-first R2
 
 on:
   push:
@@ -44,13 +44,20 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"; test -n "$CLOUDFLARE_API_TOKEN"; test -n "$ZUNGUN_PILOT_TOKEN"
           git show origin/bootstrap/order-083-production-first:tools/order083/android-field-recovery-e2e.sh > tools/order083/android-field-recovery-e2e.sh
           chmod +x tools/order083/android-field-recovery-e2e.sh
+          git show origin/bootstrap/order-083-production-first:android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt > android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
           git diff --check
-          test "$(git status --porcelain=v1 | wc -l)" -eq 1
-          test "$(git diff --name-only)" = tools/order083/android-field-recovery-e2e.sh
-          grep -Fq "adb root" tools/order083/android-field-recovery-e2e.sh
-          grep -Fq 'ip link set dev "$NET_IF" down' tools/order083/android-field-recovery-e2e.sh
-          grep -Fq 'ip link set dev "$NET_IF" up' tools/order083/android-field-recovery-e2e.sh
+          test "$(git status --porcelain=v1 | wc -l)" -eq 2
+          printf '%s\n' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt tools/order083/android-field-recovery-e2e.sh | sort > "$RUNNER_TEMP/expected-diff"
+          git diff --name-only | sort > "$RUNNER_TEMP/actual-diff"
+          cmp "$RUNNER_TEMP/expected-diff" "$RUNNER_TEMP/actual-diff"
+          grep -Fq 'phaseTrafficProbeOffline' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'APPLICATION_TRAFFIC_UNEXPECTED_HTTP_RESPONSE' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'connectTimeout=3000' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'adb root' tools/order083/android-field-recovery-e2e.sh
+          grep -Fq 'iptables' tools/order083/android-field-recovery-e2e.sh
+          grep -Fq 'ROOT_IPTABLES_TCP_443_REJECT' tools/order083/android-field-recovery-e2e.sh
           grep -Fq 'trap restore_network EXIT INT TERM' tools/order083/android-field-recovery-e2e.sh
+          ! grep -Fq 'dumpsys connectivity' tools/order083/android-field-recovery-e2e.sh
       - name: Source regression and candidate manifest
         shell: bash
         run: |
@@ -86,7 +93,7 @@ jobs:
           timeout 180s adb wait-for-device
           for _ in $(seq 1 120);do [[ "$(adb shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" == 1 ]]&&exit 0;sleep 2;done
           cat "$RUNNER_TEMP/emulator.log";exit 1
-      - name: Pre-deploy Gate44 Field with deterministic outage candidate
+      - name: Pre-deploy Gate44 Field with application-traffic outage candidate
         shell: bash
         env:
           ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/field-predeploy
@@ -108,11 +115,11 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/seal"
           jq -r .sourceBundleSha256 "$RUNNER_TEMP/candidate.json" > "$RUNNER_TEMP/seal/SOURCE_BUNDLE_SHA256"
-          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nDETERMINISTIC_EMULATOR_OUTAGE=YES\nPREDEPLOY_GATE44_FIELD=PASS\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
+          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nAPPLICATION_TRAFFIC_OUTAGE=YES\nOUTAGE_ORACLE=REAL_APP_HTTPS\nPREDEPLOY_GATE44_FIELD=PASS\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: order083-field-outage-${{ github.run_id }}
+          name: order083-field-outage-r2-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/candidate.json
             ${{ runner.temp }}/before.json
