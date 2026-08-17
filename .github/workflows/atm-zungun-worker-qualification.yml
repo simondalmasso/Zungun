@@ -1,0 +1,66 @@
+name: ATM Zungun Worker Qualification
+
+"on":
+  pull_request:
+    branches: [recovery/remote-toolchain-v1]
+  push:
+    branches: [bootstrap/order-083-production-first]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atm-zungun-worker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Install exact lockfile
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck and build
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run build
+      - name: Deterministic reliability qualification
+        run: |
+          set -euo pipefail
+          node --test dist/tests/link-doctor.test.js dist/tests/link-blackout.test.js dist/tests/persistence-recovery.test.js
+          node --test dist/tests/reconciliation.test.js dist/tests/link-resilience-matrix.test.js
+          mkdir -p .tmp
+          node dist/tools/link-doctor/src/cli.js --openapi testdata/link-doctor-openapi.yaml --format json > .tmp/doctor-1.json || test "$?" -eq 2
+          node dist/tools/link-doctor/src/cli.js --openapi testdata/link-doctor-openapi.yaml --format json > .tmp/doctor-2.json || test "$?" -eq 2
+          cmp .tmp/doctor-1.json .tmp/doctor-2.json
+      - name: Secret and placeholder guards
+        run: |
+          set -euo pipefail
+          npm run verify:secrets
+          npm run verify:no-placeholders
+      - name: Android zero-cost compile and unit contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0'
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:testDebugUnitTest --tests com.zungun.runtime.link.LinkPlannerGoldenTest
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleDebug
+      - name: Zero authority declaration
+        run: |
+          test "${{ github.event.repository.private }}" = "false"
+          echo 'OUTGOING_SPEND_USD=0'
+          echo 'FINANCIAL_AUTHORITY=NO'
+          echo 'OWNER_PC_IN_PRODUCTION_GRAPH=0'
