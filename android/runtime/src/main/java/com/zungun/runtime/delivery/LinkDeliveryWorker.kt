@@ -1,6 +1,7 @@
 package com.zungun.runtime.delivery
 
 import android.content.Context
+import androidx.room.withTransaction
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -18,7 +19,7 @@ class LinkDeliveryWorker(context:Context,private val parameters:WorkerParameters
         try{val operation=database.operations().get(operationId)?:return Result.failure();if(operation.state in TERMINAL_STATES)return Result.success();val now=System.currentTimeMillis();val plan=LinkCoordinator(applicationContext,database).createPlan(operation,now)?:return Result.retry();evidence(database,operationId,"TRANSMISSION_PLAN_CREATED",now,plan.planId,"decision=${plan.decision.name};adapter=${plan.adapterId?:"none"};reasons=${plan.reasonCodes.joinToString(",")}")
             when(plan.decision){
                 LinkDecision.SEND_FULL_NOW,LinkDecision.SEND_CRITICAL_CORE_NOW,LinkDecision.SEND_DELTA_NOW->{database.link().setRetryGate(operationId,false,plan.nextEligibilityAtMs,now);if(plan.decision==LinkDecision.SEND_CRITICAL_CORE_NOW)evidence(database,operationId,"CRITICAL_CORE_SEND_AUTHORIZED",now,plan.planId,"plannedBytes=${plan.plannedBytes}");delegate=true}
-                LinkDecision.RECONCILE_BEFORE_RETRY->{if(!reconcileBeforeRetry(database,dependencies,operation,plan.planId,now))return Result.retry();delegate=true}
+                LinkDecision.RECONCILE_BEFORE_RETRY->{if(persistInterruptedAttemptAsUnknown(database,operation,plan.planId,now))return Result.retry();if(!reconcileBeforeRetry(database,dependencies,operation,plan.planId,now))return Result.retry();delegate=true}
                 LinkDecision.PREFETCH_WHEN_GOOD->{LinkPrefetchScheduler.enqueue(applicationContext,operationId);database.link().setRetryGate(operationId,false,plan.nextEligibilityAtMs,now);return Result.retry()}
                 LinkDecision.DEFER_HEAVY->{DeferredTransferScheduler.enqueue(applicationContext,operationId);database.link().setRetryGate(operationId,false,plan.nextEligibilityAtMs,now);evidence(database,operationId,"HEAVY_OBJECT_DEFERRED",now,plan.planId,"plannedBytes=${plan.plannedBytes}");return Result.retry()}
                 LinkDecision.WAIT_FOR_VALIDATED_LINK->{database.link().setRetryGate(operationId,false,plan.nextEligibilityAtMs,now);return Result.retry()}
@@ -27,6 +28,20 @@ class LinkDeliveryWorker(context:Context,private val parameters:WorkerParameters
             }
         }finally{database.close()}
         return if(delegate)DeliveryWorker(applicationContext,parameters).doWork()else Result.retry()
+    }
+    private suspend fun persistInterruptedAttemptAsUnknown(database:com.zungun.runtime.db.ZungunDatabase,operation:OperationEntity,planId:String,now:Long):Boolean{
+        var persisted=false
+        database.withTransaction{
+            val dao=database.operations();val current=dao.get(operation.operationId)?:return@withTransaction
+            val interrupted=dao.attemptsFor(operation.operationId).lastOrNull{it.status=="STARTED"&&it.completedAtMs==null}?:return@withTransaction
+            val code="INTERRUPTED_TRANSPORT_OUTCOME_UNPROVEN"
+            dao.completeTransportAttempt(interrupted.attemptId,now,"UNKNOWN",null,null,code)
+            dao.forceState(operation.operationId,OperationState.UNKNOWN.name,code,now,current.attempts)
+            dao.evidence(EvidenceEntity(operationId=operation.operationId,source="DEVICE",kind="UNKNOWN",occurredAtMs=now,reference=interrupted.attemptId,payloadJson="{\"detail\":${org.json.JSONObject.quote("$code;recoveryPlan=$planId")}}",sha256=EvidenceHasher.sha256("${operation.operationId}|UNKNOWN|$now|${interrupted.attemptId}|$code|$planId")))
+            database.link().setRetryGate(operation.operationId,false,null,now)
+            persisted=true
+        }
+        return persisted
     }
     private suspend fun reconcileBeforeRetry(database:com.zungun.runtime.db.ZungunDatabase,dependencies:DeliveryDependencyProvider,operation:OperationEntity,planId:String,now:Long):Boolean{
         evidence(database,operation.operationId,"RECONCILIATION_STARTED",now,planId,"receiver_query_before_retry")
