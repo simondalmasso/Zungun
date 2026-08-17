@@ -22,7 +22,7 @@ internal object LinkNetworkWakeDispatcher {
             ?: return LinkWakeDispatchResult(0, 0, 0)
         val database = provider.database(context.applicationContext)
         return try {
-            val recovered = CriticalOperationRuntime(context.applicationContext, database).recoverPending()
+            val recovered = CriticalOperationRuntime(context.applicationContext, database).recoverPending(replaceProvenNotSentBackoff=true)
             val deferred = database.link().operationsWithPendingDeferred()
             deferred.forEach { DeferredTransferScheduler.enqueue(context.applicationContext, it) }
             val prefetch = database.link().operationsWithPendingPrefetch()
