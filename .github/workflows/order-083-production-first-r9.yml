@@ -1,4 +1,4 @@
-name: Order 083 final full-source production-first R9
+name: Order 083 deterministic not-sent production-first R10
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: 22.16.0
           package-manager-cache: false
-      - name: Materialize exact final candidate
+      - name: Materialize exact deterministic candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -59,11 +59,17 @@ jobs:
           git diff --name-only | sort > "$RUNNER_TEMP/actual"
           cmp "$RUNNER_TEMP/expected" "$RUNNER_TEMP/actual"
           grep -Fq "const roots=['.'];" tools/order083/generate-manifests.mjs
-          grep -Fq "'android/runtime/src/main/java/com/zungun/runtime/db/LinkDao.kt'" /dev/null || true
           grep -Fq '@Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun plan' android/runtime/src/main/java/com/zungun/runtime/db/LinkDao.kt
           grep -Fq 'persistInterruptedAttemptAsUnknown' android/runtime/src/main/java/com/zungun/runtime/delivery/LinkDeliveryWorker.kt
           grep -Fq 'LinkNetworkWakeRegistry.ensure(this)' android/app/src/main/java/com/zungun/app/ZungunApplication.kt
+          grep -Fq 'waitProvenNotSent' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'ORDER083_B_NOT_SENT_PROVEN:' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'ORDER083_C_PREFAULT_NOT_SENT_PROVEN:' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq 'PROCESS_DEATH_AFTER_PROVEN_NOT_SENT=PROVEN' tools/order083/android-field-recovery-e2e.sh
           grep -Fq 'PROCESS_DEATH_AFTER_UNKNOWN=PROVEN' tools/order083/android-field-recovery-e2e.sh
+          grep -Fq '.fieldOperationCount==0 and .fieldEffectCount==0' tools/order083/android-field-recovery-e2e.sh
+          grep -Fq '.fieldOperationCount==1 and .fieldEffectCount==1' tools/order083/android-field-recovery-e2e.sh
+          ! grep -Fq 'dumpsys connectivity' tools/order083/android-field-recovery-e2e.sh
       - name: Regressions and source identity coverage
         shell: bash
         run: |
@@ -93,15 +99,15 @@ jobs:
           yes | "$sdkmanager" --licenses >/dev/null || true
           "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0' emulator 'system-images;android-35;google_apis;x86_64'
           export ANDROID_USER_HOME="$RUNNER_TEMP/android-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/android-home" ANDROID_AVD_HOME="$RUNNER_TEMP/android-home/avd"; mkdir -p "$ANDROID_AVD_HOME"
-          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-r9 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-r10 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
           sudo chmod 666 /dev/kvm || true
-          nohup "$sdkroot/emulator/emulator" -avd order083-r9 -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          nohup "$sdkroot/emulator/emulator" -avd order083-r10 -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
           printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
           printf '%s\n' "$sdkroot/platform-tools" >> "$GITHUB_PATH"
           timeout 180s "$sdkroot/platform-tools/adb" wait-for-device
           for _ in $(seq 1 120); do [[ "$("$sdkroot/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" == 1 ]] && exit 0; sleep 2; done
           cat "$RUNNER_TEMP/emulator.log"; exit 1
-      - name: Gate44 Field production-first proof
+      - name: Gate44 Field deterministic production-first proof
         env:
           ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/field-predeploy
         run: tools/order083/android-field-recovery-e2e.sh
@@ -120,12 +126,13 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/seal"
           cp "$RUNNER_TEMP/candidate.json" "$RUNNER_TEMP/seal/candidate.json"
-          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nFULL_SOURCE_IDENTITY=PASS\nGATE44_FIELD=PASS\nPROCESS_DEATH=PASS\nUNKNOWN_DURABLE=PASS\nRECONCILIATION_BEFORE_RETRY=PASS\nDETERMINISTIC_PLAN_PERSISTENCE=IDEMPOTENT\nLIVE_IDENTITY=PASS\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
+          cp "$RUNNER_TEMP/field-predeploy/result.json" "$RUNNER_TEMP/seal/field-result.json"
+          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nFULL_SOURCE_IDENTITY=PASS\nGATE44_FIELD=PASS\nB_NOT_SENT_BEFORE_PROCESS_DEATH=PASS\nB_BACKEND_ZERO_BEFORE_RECOVERY=PASS\nB_BACKEND_EXACTLY_ONE_AFTER_RECOVERY=PASS\nC_NOT_SENT_BEFORE_FAULT=PASS\nC_BACKEND_ZERO_BEFORE_FAULT=PASS\nC_UNKNOWN_DURABLE=PASS\nPROCESS_DEATH_AFTER_UNKNOWN=PASS\nC_RECONCILIATION_BEFORE_RETRY=PASS\nC_BACKEND_EXACTLY_ONE=PASS\nDETERMINISTIC_PLAN_PERSISTENCE=IDEMPOTENT\nLIVE_IDENTITY=PASS\nPR16_ADVANCED=NO\nMERGE=NO\nORDER082_STARTED=NO\nORDER084_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
           find "$RUNNER_TEMP/seal" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/seal/MANIFEST.sha256"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: order083-production-first-r9-${{ github.run_id }}
+          name: order083-production-first-r10-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/candidate.json
             ${{ runner.temp }}/before.json
