@@ -1,0 +1,109 @@
+name: Order 083 R6 local state diagnostic
+
+on:
+  push:
+    branches: [bootstrap/order-083-production-first]
+    paths: [.github/workflows/order-083-r6-local-state-diagnostic.yml]
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  ZUNGUN_ORIGIN: https://zungun.simondalmasso44.workers.dev
+  PR_BRANCH: feat/zungun-full-project-v1
+  EXPECTED_PR_HEAD: 98e846a5888a1772ea415412db86e67bc4a2e55a
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.PR_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Overlay exact R6 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PR_HEAD"
+          for path in \
+            tools/order083/android-field-recovery-e2e.sh \
+            android/app/src/main/java/com/zungun/app/ZungunApplication.kt \
+            android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt \
+            android/runtime/src/main/java/com/zungun/runtime/network/ReceiverTransportClient.kt \
+            android/runtime/src/main/java/com/zungun/runtime/delivery/DeliveryWorker.kt; do
+            git show "origin/bootstrap/order-083-production-first:$path" > "$path"
+          done
+          chmod +x tools/order083/android-field-recovery-e2e.sh
+          git diff --check
+      - name: Install Android API35
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}";sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0' emulator 'system-images;android-35;google_apis;x86_64'
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+          printf '%s\n' "$sdkroot/platform-tools" >> "$GITHUB_PATH"
+      - name: Start bounded API35 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="$ANDROID_SDK_ROOT";export ANDROID_USER_HOME="$RUNNER_TEMP/android-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/android-home" ANDROID_AVD_HOME="$RUNNER_TEMP/android-home/avd";mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-diag -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          sudo chmod 666 /dev/kvm || true
+          nohup "$sdkroot/emulator/emulator" -avd order083-diag -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          timeout 180s adb wait-for-device
+          for _ in $(seq 1 120);do [[ "$(adb shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" == 1 ]]&&exit 0;sleep 2;done
+          cat "$RUNNER_TEMP/emulator.log";exit 1
+      - name: Execute R6 field scenario and preserve failure state
+        shell: bash
+        env:
+          ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/field
+        run: |
+          set +e
+          tools/order083/android-field-recovery-e2e.sh
+          rc=$?
+          echo "$rc" > "$RUNNER_TEMP/harness-rc"
+          exit 0
+      - name: Snapshot local Room and WorkManager state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/diag"
+          OP="$(adb shell run-as com.zungun.app cat files/order083-ambiguous-operation-id.txt 2>/dev/null | tr -d '\r\n')"
+          test -n "$OP"
+          printf '%s\n' "$OP" | tee "$RUNNER_TEMP/diag/OPERATION_ID"
+          adb shell am force-stop com.zungun.app || true
+          for suffix in '' '-wal' '-shm'; do
+            adb exec-out run-as com.zungun.app cat "databases/zungun-critical-operations.db${suffix}" > "$RUNNER_TEMP/diag/zungun-critical-operations.db${suffix}" 2>/dev/null || true
+          done
+          sqlite3 "$RUNNER_TEMP/diag/zungun-critical-operations.db" '.tables' | tee "$RUNNER_TEMP/diag/tables.txt"
+          sqlite3 -header -column "$RUNNER_TEMP/diag/zungun-critical-operations.db" "SELECT operationId,state,attempts,lastError,updatedAtMs FROM operations WHERE operationId='$OP';" | tee "$RUNNER_TEMP/diag/operation.txt"
+          sqlite3 -header -column "$RUNNER_TEMP/diag/zungun-critical-operations.db" "SELECT id,source,kind,occurredAtMs,reference FROM evidence WHERE operationId='$OP' ORDER BY id;" | tee "$RUNNER_TEMP/diag/evidence.txt"
+          sqlite3 -header -column "$RUNNER_TEMP/diag/zungun-critical-operations.db" "SELECT attemptId,attemptNumber,startedAtMs,completedAtMs,status,httpStatus,errorCode FROM transport_attempts WHERE operationId='$OP' ORDER BY startedAtMs;" | tee "$RUNNER_TEMP/diag/attempts.txt"
+          sqlite3 -header -column "$RUNNER_TEMP/diag/zungun-critical-operations.db" "SELECT retryContract,automaticRetryBlocked,nextEligibilityAtMs,updatedAtMs FROM link_operation_state WHERE operationId='$OP';" | tee "$RUNNER_TEMP/diag/link-state.txt"
+          sqlite3 -header -column "$RUNNER_TEMP/diag/zungun-critical-operations.db" "SELECT decision,reconcileFirst,nextEligibilityAtMs,createdAtMs FROM transmission_plans WHERE operationId='$OP' ORDER BY createdAtMs;" | tee "$RUNNER_TEMP/diag/plans.txt"
+          curl --fail --silent --show-error -H "x-zungun-order083-key: $ZUNGUN_PILOT_TOKEN" "$ZUNGUN_ORIGIN/api/v1/_order083/diagnostics/$OP" | tee "$RUNNER_TEMP/diag/backend.json"
+          adb shell dumpsys jobscheduler com.zungun.app > "$RUNNER_TEMP/diag/jobscheduler.txt" || true
+          cp "$RUNNER_TEMP/harness-rc" "$RUNNER_TEMP/diag/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order083-r6-local-diagnostic-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/diag
+            ${{ runner.temp }}/field
+            ${{ runner.temp }}/emulator.log
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
