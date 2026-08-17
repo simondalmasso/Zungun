@@ -9,7 +9,7 @@ import androidx.room.Query
 interface LinkDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun linkState(value: LinkOperationStateEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun observation(value: LinkObservationEntity)
-    @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun plan(value: TransmissionPlanEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun plan(value: TransmissionPlanEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun deferred(value: DeferredObjectEntity)
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun dependency(value: OperationDependencyEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun checkpoint(value: LinkTransferCheckpointEntity)
