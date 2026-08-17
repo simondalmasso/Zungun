@@ -3,7 +3,7 @@
 
 const isConnected = true;
 
-export async function sendCriticalMutation(payload: unknown): Promise<void> {
+export async function sendCriticalMutation(payload: any): Promise<void> {
   if (!isConnected) return;
   console.log('authorization payload', payload);
   try {
@@ -16,10 +16,10 @@ export async function sendCriticalMutation(payload: unknown): Promise<void> {
   }
 }
 
-export function scheduleBackgroundUpload(payload: unknown): void {
+export function scheduleBackgroundUpload(payload: any): void {
   WorkManager.enqueue({ upload: true, body: payload });
 }
 
-declare function post(path: string, value: unknown): Promise<unknown>;
+declare function post(path: string, value: any): Promise<any>;
 declare function retry(): void;
-declare const WorkManager: { enqueue(value: unknown): void };
+declare const WorkManager: { enqueue(value: any): void };
