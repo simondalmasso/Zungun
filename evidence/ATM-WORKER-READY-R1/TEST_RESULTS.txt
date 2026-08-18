@@ -1,0 +1,24 @@
+ORDER-WR-001 test plan committed with source.
+Authoritative PASS/FAIL is the final exact-head GitHub Actions execution, not this static planning record.
+
+Required gates:
+- npm ci --ignore-scripts --no-audit --no-fund
+- npm run format:check
+- npm run lint
+- npm run typecheck
+- npm run build
+- npm run test:worker-adapter
+- npm run verify:secrets
+- npm test
+- npm run test:reconciliation
+- npm run test:link-blackout
+- npm run test:link-resilience
+- npm run test:link
+- npm run test:link-security
+- npm run verify:no-placeholders
+- npm run verify:deep
+- Android :runtime:testDebugUnitTest LinkPlannerGoldenTest
+- Android :runtime:assembleDebug
+- evidence manifest verification
+
+The final completion job replaces/extends this file inside the uploaded ATM-WORKER-READY-R1 artifact with exact-head job results.
