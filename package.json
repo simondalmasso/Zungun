@@ -40,7 +40,7 @@
     "verify:link-vectors": "npm run build && node tools/link-vectors/generate.mjs .tmp/link-planner-v1.vectors && cmp .tmp/link-planner-v1.vectors testdata/link-planner-v1.vectors",
     "test:link-resilience": "npm run build && node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js",
     "worker:zungun": "node dist/tools/worker-adapter/src/cli.js",
-    "test:worker-adapter": "node --test dist/tests/worker-adapter.test.js",
+    "test:worker-adapter": "node --test dist/tests/worker-adapter.test.js dist/tests/worker-readiness-shadow.test.js",
     "verify:worker-adapter": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test:worker-adapter"
   },
   "engines": {"node": ">=22.16.0"},
