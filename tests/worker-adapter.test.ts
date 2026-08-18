@@ -519,7 +519,7 @@ for (const outcome of ['UNKNOWN', 'AMBIGUOUS'] as const) {
   test(`${outcome} target evidence is preserved and never silently converted to success`, () => {
     const target = makeTarget((root) => {
       writeFileSync(join(root, 'src', 'reliability-client.ts'), 'export function stable(): boolean { return true; }\n');
-      writeFileSync(join(root, 'evidence', 'outcome.json'), JSON.stringify({ schema: 'EXTERNAL_RELIABILITY_OBSERVATION_V1', outcome }) + '\n');
+      writeFileSync(join(root, 'evidence', 'outcome.bin'), JSON.stringify({ schema: 'EXTERNAL_RELIABILITY_OBSERVATION_V1', outcome }) + '\n');
     });
     const state = mkdtempSync(join(tmpdir(), `zungun-worker-${outcome.toLowerCase()}-`));
     try {
