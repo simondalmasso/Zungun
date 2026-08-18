@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zungun.dev/schemas/zungun-atm-worker-job-v1.schema.json",
+  "title": "Zungun ATM Worker Job Envelope V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "execution_job_id", "job_spec_hash", "worker_id", "worker_source_sha", "execution_budget_ms", "worker_job_spec", "work_lease"],
+  "properties": {
+    "schema": {"const": "ZUNGUN_ATM_WORKER_JOB_V1"},
+    "execution_job_id": {"type": "string", "pattern": "^exec_[0-9a-f]{40}$"},
+    "job_spec_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "worker_id": {"const": "zungun"},
+    "worker_source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "execution_budget_ms": {"type": "integer", "minimum": 1000, "maximum": 7200000},
+    "worker_job_spec": {"$ref": "#/$defs/workerJobSpec"},
+    "work_lease": {"$ref": "#/$defs/workLease"}
+  },
+  "$defs": {
+    "workerJobSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "canonical_opportunity_id", "external_source", "external_url", "task_type", "frozen_acceptance_criteria", "repository_or_input", "deadline", "scope_hash", "max_spend_usd", "required_capabilities", "structured_requirements", "target_base_sha", "allowed_paths", "expected_deliverable", "deterministic_checks"],
+      "properties": {
+        "job_id": {"type": "string", "minLength": 1},
+        "canonical_opportunity_id": {"type": "string", "minLength": 1},
+        "external_source": {"type": "string", "minLength": 1},
+        "external_url": {"type": "string", "pattern": "^https://"},
+        "task_type": {"type": "string", "minLength": 1},
+        "frozen_acceptance_criteria": {"type": "array", "items": {"type": "string"}},
+        "repository_or_input": {"type": "string", "pattern": "^https://github\\.com/"},
+        "deadline": {"type": ["string", "null"], "format": "date-time"},
+        "scope_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "max_spend_usd": {"enum": [0, "0", "0.0", "0.00"]},
+        "required_capabilities": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "structured_requirements": {"type": "array", "items": {"type": "string"}},
+        "target_base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "allowed_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "expected_deliverable": {"type": ["string", "null"]},
+        "deterministic_checks": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "workLease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "canonical_opportunity_id", "worker_id", "scope_hash", "acquired_at", "expires_at", "heartbeat_at", "terminal_state"],
+      "properties": {
+        "lease_id": {"type": "string", "minLength": 1},
+        "canonical_opportunity_id": {"type": "string", "minLength": 1},
+        "worker_id": {"const": "zungun"},
+        "scope_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "acquired_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "heartbeat_at": {"type": "string", "format": "date-time"},
+        "terminal_state": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

@@ -23,6 +23,7 @@
     "services/**/*.ts",
     "tools/resilience-lab/**/*.ts",
     "tools/link-doctor/**/*.ts",
+    "tools/worker-adapter/**/*.ts",
     "examples/**/*.ts",
     "tests/**/*.ts"
   ],

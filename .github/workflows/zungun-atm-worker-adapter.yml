@@ -1,0 +1,112 @@
+name: Zungun ATM Worker Adapter
+
+"on":
+  pull_request:
+    branches: [recovery/remote-toolchain-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zungun-atm-worker-adapter-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-adapter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Exact head and lockfile
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Worker adapter exact entrypoint qualification
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run build
+          npm run test:worker-adapter
+          npm run verify:worker-adapter
+      - name: Authority fence
+        run: |
+          set -euo pipefail
+          test -s dist/tools/worker-adapter/src/cli.js
+          test "${{ github.event.repository.private }}" = "false"
+          echo 'OUTGOING_SPEND_USD=0'
+          echo 'ATM_REPO_MUTATED=NO'
+          echo 'FINANCIAL_AUTHORITY=NO'
+          echo 'CLAIM_AUTHORITY=NO'
+          echo 'SUBMISSION_AUTHORITY=NO'
+
+  standalone-regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Existing standalone product gates
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run lint
+          npm run typecheck
+          npm run build
+          npm test
+          npm run test:reconciliation
+          npm run test:link-blackout
+          npm run test:link-resilience
+          npm run test:link
+          npm run test:link-security
+          npm run verify:no-placeholders
+          npm run verify:secrets
+          npm run verify:deep
+
+  android-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Android reliability/unit qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0'
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:testDebugUnitTest --tests com.zungun.runtime.link.LinkPlannerGoldenTest
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleDebug
+
+  completion:
+    if: always()
+    needs: [worker-adapter, standalone-regressions, android-regression]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Exact-head completion seal
+        run: |
+          test "${{ needs.worker-adapter.result }}" = success
+          test "${{ needs.standalone-regressions.result }}" = success
+          test "${{ needs.android-regression.result }}" = success
