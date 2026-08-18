@@ -1,0 +1,33 @@
+{
+  "cases": [
+    {
+      "classification": "CAN_HANDLE",
+      "expected_result": "Zungun ACK + >=2 progress + UNKNOWN WorkerResult + content hashes",
+      "local_fixture": "testdata/worker-shadow-hermes-13566",
+      "observed_state": "OPEN",
+      "reason": "transient delivery timeout, persisted output, retry/idempotency/reconciliation gap",
+      "runtime_hashes": "printed in exact-head CI as SHADOW_CAN_HANDLE_RESULT_HASH and SHADOW_CAN_HANDLE_ARTIFACT_HASHES",
+      "source": "https://github.com/NousResearch/hermes-agent/issues/13566",
+      "worker_test": "public Hermes #13566 is CAN_HANDLE and executes end-to-end as bounded local shadow"
+    },
+    {
+      "classification": "CANNOT_HANDLE",
+      "expected_result": "REJECTED / UNSUPPORTED_CAPABILITY",
+      "local_fixture": "testdata/worker-shadow-opencode-33376",
+      "observed_state": "OPEN",
+      "reason": "model context-window overflow classification/auto-compaction belongs to provider/session model runtime, not Zungun network reliability",
+      "runtime_evidence": "printed in exact-head CI as SHADOW_CANNOT_HANDLE_REASON",
+      "source": "https://github.com/anomalyco/opencode/issues/33376",
+      "worker_test": "public OpenCode #33376 is honest CANNOT_HANDLE for model context-window management"
+    }
+  ],
+  "observed_date": "2026-08-18",
+  "rules": [
+    "no claim",
+    "no bid",
+    "no submission",
+    "no outreach",
+    "no third-party remote mutation"
+  ],
+  "schema": "ZUNGUN_REAL_WORLD_SHADOW_R1"
+}
