@@ -1,0 +1,61 @@
+{
+  "durable_identity": [
+    "execution_job_id",
+    "job_spec_hash",
+    "lease_id",
+    "scope_hash",
+    "worker_source_sha",
+    "target_base_sha",
+    "allowed_paths"
+  ],
+  "entrypoint": "node dist/tools/worker-adapter/src/cli.js run --job <job.json> --target-root <exact-target-checkout> --state-root <isolated-state>",
+  "forbidden_authority": [
+    "financial",
+    "claim",
+    "submission",
+    "payment_truth",
+    "wallet",
+    "signing",
+    "ATM_lifecycle",
+    "WorkLease_mint_or_renew",
+    "worker_selection",
+    "skill_promotion",
+    "external_acceptance"
+  ],
+  "input_bindings": [
+    "execution_job_id",
+    "job_spec_hash",
+    "worker_source_sha",
+    "job_id",
+    "canonical_opportunity_id",
+    "work_lease.lease_id",
+    "scope_hash",
+    "target_repository",
+    "target_base_sha",
+    "allowed_paths",
+    "required_capabilities",
+    "frozen_acceptance_criteria",
+    "deterministic_checks",
+    "max_spend_usd=0"
+  ],
+  "lifecycle": [
+    "RECEIVE",
+    "VALIDATE",
+    "ACK",
+    "TARGET_BOUNDARY_AUDIT",
+    "SPECIALIST_ANALYSIS",
+    "RESULT_READY",
+    "FINALIZE_RESULT"
+  ],
+  "network_policy": "LOCAL_ONLY_V1",
+  "outgoing_spend_usd": 0,
+  "output_schemas": [
+    "ZUNGUN_WORKER_ACK_V1",
+    "ZUNGUN_WORKER_PROGRESS_V1",
+    "ZUNGUN_WORKER_RESULT_V1"
+  ],
+  "schema": "ZUNGUN_WORKER_READINESS_CONTRACT_EVIDENCE_V1",
+  "target_effects": "READ_ONLY_V1",
+  "worker_id": "zungun",
+  "worker_protocol_version": "ZUNGUN_ATM_WORKER_JOB_V1"
+}
