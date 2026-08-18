@@ -7,6 +7,7 @@ declare const process: {
   execPath: string;
   stdout: { write(value: string): void };
   on(event: string, listener: (...args: any[]) => void): void;
+  kill(pid: number, signal?: string): boolean;
 };
 declare const Buffer: {
   from(value: string | ArrayBuffer | Uint8Array, encoding?: string): any;
