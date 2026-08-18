@@ -1,4 +1,5 @@
 {
+  "authoritative_result": "exact-head worker-adapter CI log",
   "blackout_business_effect_invariant": "existing Resilience Lab proof requires one business effect and zero second-side-effect send",
   "cancellation": "durable cooperative CANCELLED result; ATM remains hard-kill authority",
   "crash_points": [
@@ -21,6 +22,5 @@
   "duplicate_dispatch": "identical immutable envelope returns stored ACK/state/result without new checkpoint",
   "schema": "ZUNGUN_CRASH_RECOVERY_R1",
   "target_side_effects_v1": 0,
-  "test_hook_guard": "NODE_ENV=test only",
-  "authoritative_result": "exact-head worker-adapter CI log"
+  "test_hook_guard": "NODE_ENV=test only"
 }
