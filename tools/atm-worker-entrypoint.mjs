@@ -30,6 +30,11 @@ function git(args, cwd) {
   if (run.status !== 0) fail(String(run.stderr || run.stdout || 'git_failed'), 29);
   return String(run.stdout || '').trim();
 }
+function normalizeRepo(value) {
+  let text = String(value || '').trim();
+  if (text.endsWith('.git')) text = text.slice(0, -4);
+  return text.replace(/\/$/, '');
+}
 
 try {
   const specPath = required('ATM_JOB_SPEC_PATH');
@@ -49,8 +54,11 @@ try {
   if (spec.scope_hash !== scopeHash) fail('atm_scope_hash_mismatch', 24);
   if (String(spec.max_spend_usd) !== '0') fail('atm_nonzero_spend', 25);
   if (!String(spec.task_type || '').startsWith('zungun_')) fail('unsupported_atm_task_type', 26);
-  if (spec.target_base_sha !== sourceSha) fail('target_base_must_equal_pinned_worker_source_for_integration_fixture', 27);
-  if (spec.repository_or_input !== 'https://github.com/simonkey888/Zungun') fail('integration_fixture_target_mismatch', 28);
+  const targetRepository = String(spec.repository_or_input || '').trim();
+  const targetBaseSha = String(spec.target_base_sha || '').trim();
+  if (!targetRepository.startsWith('https://github.com/')) fail('target_repository_must_be_public_github_https', 27);
+  if (!/^[0-9a-f]{40}$/.test(targetBaseSha)) fail('target_base_sha_required_exact', 28);
+  if (!Array.isArray(spec.allowed_paths) || spec.allowed_paths.length === 0) fail('allowed_paths_required', 29);
 
   const now = Date.now();
   const lease = {
@@ -83,13 +91,16 @@ try {
   const nativeJobPath = join(nativeRoot, 'job.json');
   writeFileSync(nativeJobPath, canonicalJson(envelope) + '\n', { encoding: 'utf8', flag: 'wx' });
 
-  git(['clone', '--no-checkout', '--filter=blob:none', String(spec.repository_or_input), targetRoot], ioRoot);
-  git(['fetch', '--depth=1', 'origin', sourceSha], targetRoot);
-  git(['checkout', '--detach', sourceSha], targetRoot);
-  if (git(['rev-parse', 'HEAD'], targetRoot) !== sourceSha) fail('zungun_target_source_mismatch', 29);
+  git(['clone', '--no-checkout', '--filter=blob:none', targetRepository, targetRoot], ioRoot);
+  git(['fetch', '--depth=1', 'origin', targetBaseSha], targetRoot);
+  git(['checkout', '--detach', targetBaseSha], targetRoot);
+  const checkedOutHead = git(['rev-parse', 'HEAD'], targetRoot);
+  if (checkedOutHead !== targetBaseSha) fail('zungun_target_base_mismatch', 30);
+  const checkedOutRemote = normalizeRepo(git(['config', '--get', 'remote.origin.url'], targetRoot));
+  if (checkedOutRemote !== normalizeRepo(targetRepository)) fail('zungun_target_repository_mismatch', 31);
 
   const cliPath = join(process.cwd(), 'dist', 'tools', 'worker-adapter', 'src', 'cli.js');
-  if (!existsSync(cliPath)) fail('native_zungun_cli_missing_after_prepare', 30);
+  if (!existsSync(cliPath)) fail('native_zungun_cli_missing_after_prepare', 32);
   const run = spawnSync(
     process.execPath,
     [cliPath, 'run', '--job', nativeJobPath, '--target-root', targetRoot, '--state-root', stateRoot],
@@ -97,19 +108,22 @@ try {
   );
   if (run.status !== 0) {
     process.stderr.write(String(run.stderr || run.stdout || 'zungun_native_worker_failed') + '\n');
-    process.exit(run.status || 31);
+    process.exit(run.status || 33);
   }
   const rows = String(run.stdout || '').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
   const nativeResult = [...rows].reverse().find((row) => row && row.schema === 'ZUNGUN_WORKER_RESULT_V1');
-  if (!nativeResult) fail('zungun_native_result_missing', 32);
-  if (nativeResult.worker_id !== WORKER_ID || nativeResult.worker_source_sha !== sourceSha) fail('zungun_native_source_binding_mismatch', 33);
-  if (nativeResult.execution_job_id !== executionJobId || nativeResult.work_lease_id !== workLeaseId) fail('zungun_native_execution_binding_mismatch', 34);
-  if (nativeResult.scope_hash !== scopeHash || nativeResult.job_spec_hash !== jobSpecHash) fail('zungun_native_scope_binding_mismatch', 35);
-  if (nativeResult.target_base_sha !== sourceSha || nativeResult.final_target_sha !== sourceSha) fail('zungun_native_target_binding_mismatch', 36);
-  if (!Array.isArray(nativeResult.changed_paths) || nativeResult.changed_paths.length !== 0) fail('zungun_native_target_mutated', 37);
-  if (nativeResult.outgoing_spend_usd !== 0) fail('zungun_native_nonzero_spend', 38);
+  if (!nativeResult) fail('zungun_native_result_missing', 34);
+  if (nativeResult.worker_id !== WORKER_ID || nativeResult.worker_source_sha !== sourceSha) fail('zungun_native_source_binding_mismatch', 35);
+  if (nativeResult.execution_job_id !== executionJobId || nativeResult.work_lease_id !== workLeaseId) fail('zungun_native_execution_binding_mismatch', 36);
+  if (nativeResult.scope_hash !== scopeHash || nativeResult.job_spec_hash !== jobSpecHash) fail('zungun_native_scope_binding_mismatch', 37);
+  if (normalizeRepo(nativeResult.target_repository) !== normalizeRepo(targetRepository)) fail('zungun_native_target_repository_mismatch', 38);
+  if (nativeResult.target_base_sha !== targetBaseSha || nativeResult.final_target_sha !== targetBaseSha) fail('zungun_native_target_binding_mismatch', 39);
+  if (canonicalJson(nativeResult.allowed_paths) !== canonicalJson(spec.allowed_paths)) fail('zungun_native_allowed_paths_mismatch', 40);
+  if (!Array.isArray(nativeResult.changed_paths) || nativeResult.changed_paths.length !== 0) fail('zungun_native_target_mutated', 41);
+  if (nativeResult.outgoing_spend_usd !== 0) fail('zungun_native_nonzero_spend', 42);
 
-  const inputBytes = Buffer.from(String(spec.repository_or_input), 'utf8');
+  const targetIdentity = `${normalizeRepo(targetRepository)}@${targetBaseSha}`;
+  const inputBytes = Buffer.from(targetIdentity, 'utf8');
   const taskResult = {
     schema: 'ATM_TASK_RESULT_V1',
     execution_job_id: executionJobId,
@@ -124,6 +138,12 @@ try {
       native_entrypoint: 'dist/tools/worker-adapter/src/cli.js',
       native_protocol: 'ZUNGUN_ATM_WORKER_JOB_V1',
     },
+    bridge_target: {
+      repository: normalizeRepo(targetRepository),
+      target_base_sha: targetBaseSha,
+      checked_out_head: checkedOutHead,
+      allowed_paths: [...spec.allowed_paths],
+    },
     native_contract_hash: sha256Json(envelope),
     native_worker_result_hash: sha256Json(nativeResult),
     native_worker_result: nativeResult,
@@ -137,5 +157,5 @@ try {
   writeFileSync(resultPath, canonicalJson(taskResult) + '\n', { encoding: 'utf8', flag: 'wx' });
   process.exit(0);
 } catch (error) {
-  fail(error instanceof Error ? error.message : String(error), 40);
+  fail(error instanceof Error ? error.message : String(error), 50);
 }
