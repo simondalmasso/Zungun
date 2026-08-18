@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 const ENTRYPOINT = 'tools/atm-worker-entrypoint.mjs';
 const WORKER_ID = 'zungun';
+let leaseExpiresMs = 0;
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -25,8 +26,19 @@ function canonicalJson(value) { return JSON.stringify(normalize(value)); }
 function sha256Text(value) { return createHash('sha256').update(value).digest('hex'); }
 function sha256Json(value) { return sha256Text(canonicalJson(value)); }
 function fail(message, code = 30) { process.stderr.write(String(message) + '\n'); process.exit(code); }
+function remainingMs(capMs) {
+  const remaining = leaseExpiresMs - Date.now();
+  if (!Number.isFinite(remaining) || remaining <= 0) fail('atm_work_lease_expired', 18);
+  return Math.max(1, Math.min(Number(capMs), Math.floor(remaining)));
+}
+function boundedSpawn(command, args, options, capMs) {
+  const run = spawnSync(command, args, { ...options, timeout: remainingMs(capMs) });
+  if (run.error?.code === 'ETIMEDOUT') fail('atm_work_lease_expired_or_subprocess_timeout', 18);
+  if (Date.now() >= leaseExpiresMs) fail('atm_work_lease_expired_after_subprocess', 18);
+  return run;
+}
 function git(args, cwd) {
-  const run = spawnSync('git', args, { cwd, env: process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const run = boundedSpawn('git', args, { cwd, env: process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }, 180000);
   if (run.status !== 0) fail(String(run.stderr || run.stdout || 'git_failed'), 29);
   return String(run.stdout || '').trim();
 }
@@ -41,9 +53,12 @@ try {
   const resultPath = required('ATM_TASK_RESULT_PATH');
   const executionJobId = required('ATM_EXECUTION_JOB_ID');
   const workLeaseId = required('ATM_WORK_LEASE_ID');
+  const leaseExpiresAt = required('ATM_WORK_LEASE_EXPIRES_AT');
   const scopeHash = required('ATM_SCOPE_HASH');
   const jobSpecHash = required('ATM_JOB_SPEC_HASH');
   const sourceSha = required('ATM_WORKER_SOURCE_SHA');
+  leaseExpiresMs = Date.parse(leaseExpiresAt);
+  if (!Number.isFinite(leaseExpiresMs) || leaseExpiresMs <= Date.now()) fail('invalid_or_expired_atm_work_lease', 18);
   if (process.env.ATM_MAX_SPEND_USD !== '0') fail('nonzero_spend_boundary', 20);
   if (!/^[0-9a-f]{40}$/.test(sourceSha)) fail('invalid_worker_source_sha', 21);
 
@@ -67,7 +82,7 @@ try {
     worker_id: WORKER_ID,
     scope_hash: scopeHash,
     acquired_at: new Date(now - 1000).toISOString(),
-    expires_at: new Date(now + 15 * 60 * 1000).toISOString(),
+    expires_at: leaseExpiresAt,
     heartbeat_at: new Date(now).toISOString(),
     terminal_state: null,
   };
@@ -77,7 +92,7 @@ try {
     job_spec_hash: jobSpecHash,
     worker_id: WORKER_ID,
     worker_source_sha: sourceSha,
-    execution_budget_ms: 600000,
+    execution_budget_ms: remainingMs(600000),
     worker_job_spec: spec,
     work_lease: lease,
   };
@@ -101,10 +116,11 @@ try {
 
   const cliPath = join(process.cwd(), 'dist', 'tools', 'worker-adapter', 'src', 'cli.js');
   if (!existsSync(cliPath)) fail('native_zungun_cli_missing_after_prepare', 32);
-  const run = spawnSync(
+  const run = boundedSpawn(
     process.execPath,
     [cliPath, 'run', '--job', nativeJobPath, '--target-root', targetRoot, '--state-root', stateRoot],
     { cwd: process.cwd(), env: process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    envelope.execution_budget_ms,
   );
   if (run.status !== 0) {
     process.stderr.write(String(run.stderr || run.stdout || 'zungun_native_worker_failed') + '\n');
@@ -121,6 +137,7 @@ try {
   if (canonicalJson(nativeResult.allowed_paths) !== canonicalJson(spec.allowed_paths)) fail('zungun_native_allowed_paths_mismatch', 40);
   if (!Array.isArray(nativeResult.changed_paths) || nativeResult.changed_paths.length !== 0) fail('zungun_native_target_mutated', 41);
   if (nativeResult.outgoing_spend_usd !== 0) fail('zungun_native_nonzero_spend', 42);
+  if (Date.now() >= leaseExpiresMs) fail('atm_work_lease_expired_before_result', 18);
 
   const targetIdentity = `${normalizeRepo(targetRepository)}@${targetBaseSha}`;
   const inputBytes = Buffer.from(targetIdentity, 'utf8');
