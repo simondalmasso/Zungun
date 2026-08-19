@@ -24,16 +24,23 @@ jobs:
         run: |
           set -euo pipefail
           runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${TARGET_HEAD}&per_page=100")"
-          row="$(jq -c --arg name "$TARGET_NAME" '[.workflow_runs[] | select(.name==$name)] | sort_by(.id) | last // empty' <<<"$runs")"
-          test -n "$row"
-          run_id="$(jq -r .id <<<"$row")"
-          status="$(jq -r .status <<<"$row")"
-          conclusion="$(jq -r '.conclusion // "PENDING"' <<<"$row")"
+          row="$(jq -c --arg name "$TARGET_NAME" '[.workflow_runs[] | select(.name==$name)] | sort_by(.id) | last // null' <<<"$runs")"
+          if [[ "$row" == null ]]; then
+            target_run_id=NOT_FOUND
+            target_status=NOT_FOUND
+            target_conclusion=NOT_FOUND
+          else
+            target_run_id="$(jq -r .id <<<"$row")"
+            target_status="$(jq -r .status <<<"$row")"
+            target_conclusion="$(jq -r '.conclusion // "PENDING"' <<<"$row")"
+          fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/10/comments" -f body="ORDER083_FINAL_CARRIER_POINTER
 
 \`\`\`text
-RUN_ID=$run_id
-HEAD=$TARGET_HEAD
-STATUS=$status
-CONCLUSION=$conclusion
+OBSERVER_RUN_ID=${GITHUB_RUN_ID}
+OBSERVER_HEAD=${GITHUB_SHA}
+TARGET_RUN_ID=$target_run_id
+TARGET_HEAD=$TARGET_HEAD
+TARGET_STATUS=$target_status
+TARGET_CONCLUSION=$target_conclusion
 \`\`\`"
