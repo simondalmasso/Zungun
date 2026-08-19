@@ -20,7 +20,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Fail closed and cancel only the stale canonical run
+      - name: Fail closed and force-cancel only the unresponsive canonical run
         shell: bash
         run: |
           set -euo pipefail
@@ -29,8 +29,8 @@ jobs:
           test "$(jq -r .path <<<"$run")" = ".github/workflows/order-083-product.yml"
           status="$(jq -r .status <<<"$run")"
           if [[ "$status" == in_progress || "$status" == queued || "$status" == waiting ]]; then
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/cancel"
-            echo "CANCEL_REQUESTED=YES"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/force-cancel"
+            echo "FORCE_CANCEL_REQUESTED=YES"
           else
-            echo "CANCEL_REQUESTED=NO STATUS=$status"
+            echo "FORCE_CANCEL_REQUESTED=NO STATUS=$status"
           fi
