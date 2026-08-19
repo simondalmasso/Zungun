@@ -1,0 +1,39 @@
+name: Order 083 final carrier observer
+
+on:
+  push:
+    branches: [bootstrap/order-083-production-first]
+    paths: [.github/workflows/order-083-final-run-observer.yml]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: 8b89ba7735468891ad93ac0c270849116ceec653
+      TARGET_NAME: Order 083 final exact production reconciliation
+    steps:
+      - name: Locate target carrier and publish pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${TARGET_HEAD}&per_page=100")"
+          row="$(jq -c --arg name "$TARGET_NAME" '[.workflow_runs[] | select(.name==$name)] | sort_by(.id) | last // empty' <<<"$runs")"
+          test -n "$row"
+          run_id="$(jq -r .id <<<"$row")"
+          status="$(jq -r .status <<<"$row")"
+          conclusion="$(jq -r '.conclusion // "PENDING"' <<<"$row")"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/10/comments" -f body="ORDER083_FINAL_CARRIER_POINTER
+
+\`\`\`text
+RUN_ID=$run_id
+HEAD=$TARGET_HEAD
+STATUS=$status
+CONCLUSION=$conclusion
+\`\`\`"
