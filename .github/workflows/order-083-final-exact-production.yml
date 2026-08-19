@@ -114,11 +114,9 @@ jobs:
           ORDER084_STARTED=NO
           ORDER082_STARTED=NO
           EOF
-          gh api --method POST repos/${{ github.repository }}/issues/10/comments -f body="ORDER083_FINAL_EXACT_PRODUCTION_RECONCILIATION
-
-\`\`\`text
-$(cat "$RUNNER_TEMP/RESULT")
-\`\`\`"
+          body="$(printf 'ORDER083_FINAL_EXACT_PRODUCTION_RECONCILIATION\n\n```text\n%s\n```' "$(cat "$RUNNER_TEMP/RESULT")")"
+          jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/10/comments" --input "$RUNNER_TEMP/comment.json"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
