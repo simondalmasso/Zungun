@@ -104,7 +104,7 @@ class Order076RealReceiverInstrumentedTest {
             val attempts = database.operations().attemptsFor(OPERATION_ID)
             assertTrue(operation.attempts > attemptsBeforeProxyDelivery)
             assertEquals(OperationState.UNKNOWN.name, operation.state)
-            assertTrue(attempts.count { it.status == "UNKNOWN" } >= 2)
+            assertEquals(1, attempts.count { it.status == "UNKNOWN" })
             assertEquals(null, database.operations().receiptFor(OPERATION_ID))
         } finally {
             database.close()
