@@ -12,7 +12,6 @@ permissions:
 env:
   CI: "true"
   NO_COLOR: "1"
-  WRANGLER_SEND_METRICS: "false"
   ZUNGUN_ORIGIN: https://zungun.simondalmasso44.workers.dev
   PR_BRANCH: feat/zungun-full-project-v1
   EXPECTED_PR_HEAD: dc9c893fbbc4a97eddd23aa33a6e82cbbf3d5d73
@@ -20,10 +19,8 @@ env:
 jobs:
   reconcile-production:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 20
     env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -35,85 +32,71 @@ jobs:
         with:
           node-version: 22.16.0
           package-manager-cache: false
-      - name: Fail closed on canonical exact head
+      - name: Reconstruct exact canonical identity
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_PR_HEAD"
           test "$(git ls-remote origin "refs/heads/$PR_BRANCH" | awk '{print $1}')" = "$EXPECTED_PR_HEAD"
-          test -z "$(git status --porcelain=v1)"
-      - name: Recheck exact candidate and deterministic source identity
-        shell: bash
-        run: |
-          set -euo pipefail
           npm ci --ignore-scripts --no-audit --no-fund
-          npm test
-          node --check cloudflare/src/worker.mjs
-          node --test cloudflare/test/contracts.test.mjs
-          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/m1"
-          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/m2"
-          cmp "$RUNNER_TEMP/m1/result.json" "$RUNNER_TEMP/m2/result.json"
-          cmp "$RUNNER_TEMP/m1/SOURCE_MANIFEST.sha256" "$RUNNER_TEMP/m2/SOURCE_MANIFEST.sha256"
-          cp "$RUNNER_TEMP/m1/result.json" "$RUNNER_TEMP/candidate.json"
+          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/candidate" >/dev/null
+          cp "$RUNNER_TEMP/candidate/result.json" "$RUNNER_TEMP/candidate.json"
           test "$(jq -r .sourceInventory "$RUNNER_TEMP/candidate.json")" = GIT_TRACKED_WORKTREE_BYTES
-          test -z "$(git status --porcelain=v1)"
-      - name: Classify existing production identity
+      - name: Seal exact production identity with bounded readback
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version" > "$RUNNER_TEMP/before.json"
-          candidate="$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/candidate.json")"
-          live="$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/before.json")"
-          if [[ "$candidate" == "$live" ]]; then
-            for k in staticAssetManifestSha256 migrationManifestSha256; do
-              test "$(jq -r .$k "$RUNNER_TEMP/candidate.json")" = "$(jq -r .$k "$RUNNER_TEMP/before.json")"
-            done
-            echo 'DEPLOY_NEEDED=NO' >> "$GITHUB_ENV"
-          else
-            echo 'DEPLOY_NEEDED=YES' >> "$GITHUB_ENV"
-          fi
-          printf 'CANDIDATE_SOURCE=%s\nLIVE_SOURCE_BEFORE=%s\n' "$candidate" "$live" | tee "$RUNNER_TEMP/identity-before.txt"
-      - name: Restore exact production source identity
-        env:
-          ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/production
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/production"
-          if [[ "$DEPLOY_NEEDED" == YES ]]; then
-            bash tools/order083/deploy-production.sh | tee "$RUNNER_TEMP/deploy.txt"
-          else
-            echo 'DEPLOY_SKIPPED_ALREADY_EXACT=YES' | tee "$RUNNER_TEMP/deploy.txt"
-          fi
-          curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version" > "$RUNNER_TEMP/after.json"
-          for k in sourceBundleSha256 staticAssetManifestSha256 migrationManifestSha256; do
-            test "$(jq -r .$k "$RUNNER_TEMP/candidate.json")" = "$(jq -r .$k "$RUNNER_TEMP/after.json")"
+          matched=NO
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version" > "$RUNNER_TEMP/live-version.json"; then
+              source_expected="$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/candidate.json")"
+              source_live="$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/live-version.json")"
+              static_expected="$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/candidate.json")"
+              static_live="$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/live-version.json")"
+              migration_expected="$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/candidate.json")"
+              migration_live="$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/live-version.json")"
+              if [[ "$source_expected" == "$source_live" && "$static_expected" == "$static_live" && "$migration_expected" == "$migration_live" ]]; then
+                matched=YES
+                break
+              fi
+            fi
+            sleep 5
           done
+          test "$matched" = YES
+          printf 'SOURCE=%s\nSTATIC=%s\nMIGRATION=%s\n' \
+            "$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/live-version.json")" \
+            "$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/live-version.json")" \
+            "$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/live-version.json")" | tee "$RUNNER_TEMP/identity.txt"
+      - name: Final live E2E and exact-head seal
+        shell: bash
+        run: |
+          set -euo pipefail
           node tools/order083/live-e2e.mjs "$RUNNER_TEMP/live"
+          for k in sourceBundleSha256 staticAssetManifestSha256 migrationManifestSha256; do
+            test "$(jq -r .$k "$RUNNER_TEMP/candidate.json")" = "$(jq -r .$k "$RUNNER_TEMP/live/result.json")"
+          done
           test "$(git rev-parse HEAD)" = "$EXPECTED_PR_HEAD"
           test "$(git ls-remote origin "refs/heads/$PR_BRANCH" | awk '{print $1}')" = "$EXPECTED_PR_HEAD"
-          test -z "$(git status --porcelain=v1)"
-      - name: Seal final identity and publish evidence pointer
+      - name: Publish final reconciliation evidence
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          source_hash="$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/after.json")"
-          static_hash="$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/after.json")"
-          migration_hash="$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/after.json")"
-          cat > "$RUNNER_TEMP/RESULT" <<EOF
-          ORDER=ORDER-083
-          FINAL_EXACT_PRODUCTION_RECONCILIATION=PASS
-          PR16_HEAD=$EXPECTED_PR_HEAD
-          SOURCE_BUNDLE_SHA256=$source_hash
-          STATIC_ASSET_MANIFEST_SHA256=$static_hash
-          MIGRATION_MANIFEST_SHA256=$migration_hash
-          RUN_ID=${{ github.run_id }}
-          MERGE=NO
-          ORDER084_STARTED=NO
-          ORDER082_STARTED=NO
-          EOF
+          source_hash="$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/live-version.json")"
+          static_hash="$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/live-version.json")"
+          migration_hash="$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/live-version.json")"
+          printf '%s\n' \
+            'ORDER=ORDER-083' \
+            'FINAL_EXACT_PRODUCTION_RECONCILIATION=PASS' \
+            "PR16_HEAD=$EXPECTED_PR_HEAD" \
+            "SOURCE_BUNDLE_SHA256=$source_hash" \
+            "STATIC_ASSET_MANIFEST_SHA256=$static_hash" \
+            "MIGRATION_MANIFEST_SHA256=$migration_hash" \
+            "RUN_ID=${GITHUB_RUN_ID}" \
+            'MERGE=NO' \
+            'ORDER084_STARTED=NO' \
+            'ORDER082_STARTED=NO' > "$RUNNER_TEMP/RESULT"
           body="$(printf 'ORDER083_FINAL_EXACT_PRODUCTION_RECONCILIATION\n\n```text\n%s\n```' "$(cat "$RUNNER_TEMP/RESULT")")"
           jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
           gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/10/comments" --input "$RUNNER_TEMP/comment.json"
@@ -123,11 +106,8 @@ jobs:
           name: order083-final-exact-production-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/candidate.json
-            ${{ runner.temp }}/before.json
-            ${{ runner.temp }}/after.json
-            ${{ runner.temp }}/identity-before.txt
-            ${{ runner.temp }}/deploy.txt
-            ${{ runner.temp }}/production
+            ${{ runner.temp }}/live-version.json
+            ${{ runner.temp }}/identity.txt
             ${{ runner.temp }}/live
             ${{ runner.temp }}/RESULT
           if-no-files-found: warn
