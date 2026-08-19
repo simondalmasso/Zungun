@@ -17,6 +17,7 @@ const bodyOf = async (req) => {
   return Buffer.concat(chunks);
 };
 const prefix = /^\/negative\/(missing|tampered|mismatch|future|expired|revoked)(\/.*)$/;
+const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
 function upstreamCall(method, pathname, headers, body) {
   return new Promise((resolveCall, rejectCall) => {
@@ -106,6 +107,9 @@ const server = createServer(async (req, res) => {
           if (durable.ok) {
             writeFileSync(resolve(stateDir, 'drop-observed'), `${parsed.operationId}\t${Date.now()}\n`, { flag: 'a' });
             writeFileSync(resolve(stateDir, 'drop-readback.json'), JSON.stringify(durable.detail));
+            // The Android fixture uses a 5s read timeout. Silence the response long enough
+            // to create a deterministic post-accept ambiguity, then close the client socket.
+            await sleep(7_000);
             req.socket.destroy();
             return;
           }
