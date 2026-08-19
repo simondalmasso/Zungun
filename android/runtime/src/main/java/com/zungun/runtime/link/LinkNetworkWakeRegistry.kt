@@ -46,6 +46,7 @@ object LinkNetworkWakeRegistry {
         val app = context.applicationContext
         observer = LinkNetworkObserver(app) { snapshot -> acceptSnapshot(app, snapshot) }
             .also { it.start() }
+        requestWake(app)
     }
 
     internal fun acceptSnapshot(
@@ -54,6 +55,13 @@ object LinkNetworkWakeRegistry {
         enqueue: (Context) -> Unit = ::enqueueRuntimeWake,
     ): Boolean {
         latestSnapshot = snapshot
+        return requestWake(context.applicationContext, enqueue)
+    }
+
+    private fun requestWake(
+        context: Context,
+        enqueue: (Context) -> Unit = ::enqueueRuntimeWake,
+    ): Boolean {
         if (!wakeOutstanding.compareAndSet(false, true)) return false
         return try {
             enqueue(context.applicationContext)
