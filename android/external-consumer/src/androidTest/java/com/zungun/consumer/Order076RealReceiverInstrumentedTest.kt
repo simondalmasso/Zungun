@@ -50,12 +50,17 @@ class Order076RealReceiverInstrumentedTest {
         ConsumerApplication.configure(context, endpoint, token, receiverId)
         val operationId = CriticalOperationRuntime(context).enqueue(request(), CREATED_AT_MS)
         assertEquals(OPERATION_ID, operationId)
-        waitFor("offline attempt persisted as UNKNOWN", 90_000) {
-            snapshot()?.let { it.state == OperationState.UNKNOWN.name && it.attempts >= 1 } == true
+        waitFor("offline proven-not-sent remains QUEUED", 90_000) {
+            snapshot()?.let {
+                it.state == OperationState.QUEUED.name &&
+                    it.attempts >= 1 &&
+                    it.lastError == "ConnectException"
+            } == true
         }
         val value = snapshot() ?: error("operation not persisted")
-        assertEquals(OperationState.UNKNOWN.name, value.state)
+        assertEquals(OperationState.QUEUED.name, value.state)
         assertTrue(value.attempts >= 1)
+        assertEquals("ConnectException", value.lastError)
         println("ORDER076_OPERATION_ID=$operationId")
     }
 
