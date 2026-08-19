@@ -1,0 +1,36 @@
+name: Order 083 cancel stale exact-head product run
+
+on:
+  push:
+    branches: [bootstrap/order-083-production-first]
+    paths: [.github/workflows/order-083-cancel-stale-product-run.yml]
+
+permissions:
+  actions: write
+  contents: read
+
+env:
+  TARGET_RUN_ID: "32268791467"
+  EXPECTED_HEAD: dc9c893fbbc4a97eddd23aa33a6e82cbbf3d5d73
+
+jobs:
+  cancel-stale:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Fail closed and cancel only the stale canonical run
+        shell: bash
+        run: |
+          set -euo pipefail
+          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}")"
+          test "$(jq -r .head_sha <<<"$run")" = "$EXPECTED_HEAD"
+          test "$(jq -r .path <<<"$run")" = ".github/workflows/order-083-product.yml"
+          status="$(jq -r .status <<<"$run")"
+          if [[ "$status" == in_progress || "$status" == queued || "$status" == waiting ]]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/cancel"
+            echo "CANCEL_REQUESTED=YES"
+          else
+            echo "CANCEL_REQUESTED=NO STATUS=$status"
+          fi
