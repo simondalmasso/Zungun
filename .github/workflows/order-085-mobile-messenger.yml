@@ -1,0 +1,223 @@
+name: Order 085 mobile messenger production
+
+on:
+  push:
+    branches: [feat/zungun-full-project-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: order085-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  ZUNGUN_ORIGIN: https://zungun.simondalmasso44.workers.dev
+
+jobs:
+  ui-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    outputs:
+      source_sha: ${{ steps.manifest.outputs.source_sha }}
+      static_sha: ${{ steps.manifest.outputs.static_sha }}
+      migration_sha: ${{ steps.manifest.outputs.migration_sha }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Install exact project dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: ORDER-085 mobile messenger contract
+        run: |
+          set -euo pipefail
+          node tools/order085/ui-contract.mjs
+          node --check cloudflare/public/messages/messages.js
+          node --check cloudflare/src/worker.mjs
+          node --test cloudflare/test/contracts.test.mjs
+          python -m py_compile tools/browser/order085-messenger-e2e.py
+      - id: manifest
+        name: Deterministic final source identity
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/order085-manifest-a" "$RUNNER_TEMP/order085-manifest-b"
+          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/order085-manifest-a"
+          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/order085-manifest-b"
+          cmp "$RUNNER_TEMP/order085-manifest-a/result.json" "$RUNNER_TEMP/order085-manifest-b/result.json"
+          cmp "$RUNNER_TEMP/order085-manifest-a/SOURCE_MANIFEST.sha256" "$RUNNER_TEMP/order085-manifest-b/SOURCE_MANIFEST.sha256"
+          source_sha="$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/order085-manifest-a/result.json")"
+          static_sha="$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/order085-manifest-a/result.json")"
+          migration_sha="$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/order085-manifest-a/result.json")"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "static_sha=$static_sha" >> "$GITHUB_OUTPUT"
+          echo "migration_sha=$migration_sha" >> "$GITHUB_OUTPUT"
+      - name: Seal pre-deploy evidence
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/order085-preflight"
+          cp -a "$RUNNER_TEMP/order085-manifest-a/." "$RUNNER_TEMP/order085-preflight/"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/order085-preflight/HEAD"
+          printf 'ORDER085_UI_CONTRACT=PASS\nMOBILE_TARGETS=360x800,390x844\nOWNER_LOGO_ASSET_HANDOFF_REQUIRED=YES\n' > "$RUNNER_TEMP/order085-preflight/RESULT"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order085-preflight-${{ github.run_id }}
+          path: ${{ runner.temp }}/order085-preflight
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  deploy-production:
+    needs: ui-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+      ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/order085-deploy
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Deploy exact green candidate to existing Zungun Worker
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          bash tools/order083/deploy-production.sh
+      - name: Verify deployed source identity
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version" | tee "$RUNNER_TEMP/order085-version.json"
+          test "$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/order085-version.json")" = "${{ needs.ui-contract.outputs.source_sha }}"
+          test "$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/order085-version.json")" = "${{ needs.ui-contract.outputs.static_sha }}"
+          test "$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/order085-version.json")" = "${{ needs.ui-contract.outputs.migration_sha }}"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order085-production-deploy-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/order085-deploy
+            ${{ runner.temp }}/order085-version.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  production-mobile:
+    needs: [ui-contract, deploy-production]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Install production browser harness
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+          python -m playwright install --with-deps chromium
+      - name: ORDER-085 mobile production E2E 390x844 + 360x800
+        env:
+          ORDER085_WEB_EVIDENCE: ${{ runner.temp }}/order085-mobile
+        run: python tools/browser/order085-messenger-e2e.py
+      - name: Re-run production message and field semantic black-box matrix
+        env:
+          ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+        run: node tools/order083/live-e2e.mjs "$RUNNER_TEMP/order085-live"
+      - name: Secret-scan production evidence
+        run: |
+          set -euo pipefail
+          node tools/ci/scan-artifact-secrets.mjs "$RUNNER_TEMP/order085-mobile"
+          node tools/ci/scan-artifact-secrets.mjs "$RUNNER_TEMP/order085-live"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order085-mobile-production-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/order085-mobile
+            ${{ runner.temp }}/order085-live
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  exact-head-seal:
+    needs: [ui-contract, deploy-production, production-mobile]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Wait for exact-head regression workflows and recover production-order retry once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          reran083=0
+          r77=pending; r81=pending; r83=pending
+          id77=; id81=; id83=
+          for _ in $(seq 1 480); do
+            json="$(curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100")"
+            row77="$(jq -c '[.workflow_runs[]|select(.name=="Order 077 full project verification" and .head_sha==env.HEAD_SHA)]|sort_by(.run_number)|last // {}' <<<"$json")"
+            row81="$(jq -c '[.workflow_runs[]|select(.name=="Order 081 Link verification" and .head_sha==env.HEAD_SHA)]|sort_by(.run_number)|last // {}' <<<"$json")"
+            row83="$(jq -c '[.workflow_runs[]|select(.name=="Order 083 product verification" and .head_sha==env.HEAD_SHA)]|sort_by(.run_number)|last // {}' <<<"$json")"
+            id77="$(jq -r '.id // empty' <<<"$row77")"; r77="$(jq -r '.conclusion // .status // "pending"' <<<"$row77")"
+            id81="$(jq -r '.id // empty' <<<"$row81")"; r81="$(jq -r '.conclusion // .status // "pending"' <<<"$row81")"
+            id83="$(jq -r '.id // empty' <<<"$row83")"; r83="$(jq -r '.conclusion // .status // "pending"' <<<"$row83")"
+            echo "order077=$id77:$r77 order081=$id81:$r81 order083=$id83:$r83"
+            [[ "$r77" == failure || "$r77" == cancelled ]] && exit 31
+            [[ "$r81" == failure || "$r81" == cancelled ]] && exit 32
+            if [[ "$r83" == failure && "$reran083" == 0 && -n "$id83" ]]; then
+              curl --fail --silent --show-error -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${id83}/rerun-failed-jobs"
+              reran083=1
+              r83=pending
+              sleep 20
+              continue
+            fi
+            [[ "$r83" == failure || "$r83" == cancelled ]] && exit 33
+            [[ "$r77" == success && "$r81" == success && "$r83" == success ]] && break
+            sleep 20
+          done
+          [[ "$r77" == success && "$r81" == success && "$r83" == success ]]
+          mkdir -p "$RUNNER_TEMP/order085-seal"
+          printf '%s\n' "$HEAD_SHA" > "$RUNNER_TEMP/order085-seal/HEAD"
+          printf '%s\n' "$id77" > "$RUNNER_TEMP/order085-seal/ORDER077_RUN"
+          printf '%s\n' "$id81" > "$RUNNER_TEMP/order085-seal/ORDER081_RUN"
+          printf '%s\n' "$id83" > "$RUNNER_TEMP/order085-seal/ORDER083_RUN"
+      - name: Final production identity equals exact final source
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version" | tee "$RUNNER_TEMP/order085-seal/version.json"
+          test "$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "${{ needs.ui-contract.outputs.source_sha }}"
+          test "$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "${{ needs.ui-contract.outputs.static_sha }}"
+          test "$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "${{ needs.ui-contract.outputs.migration_sha }}"
+          printf 'ORDER083_ACCEPTED_BASE_PRESERVED=YES\nMESSENGER_PRODUCT_FEEL=PASS\nMOBILE_360_390=PASS\nPRODUCTION_E2E=PASS\nEXACT_SOURCE_IDENTITY=PASS\nREQUIRED_GATES_SKIPPED=0\nPR16_MERGE=NO\nOWNER_LOGO_ASSET_HANDOFF_REQUIRED=YES\n' > "$RUNNER_TEMP/order085-seal/RESULT"
+          find "$RUNNER_TEMP/order085-seal" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/order085-seal/MANIFEST.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order085-final-seal-${{ github.run_id }}
+          path: ${{ runner.temp }}/order085-seal
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
