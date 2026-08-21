@@ -16,7 +16,6 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
-      ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/order083-production
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -54,6 +53,8 @@ jobs:
           node tools/order083/generate-manifests.mjs . evidence/order083/local
           cat evidence/order083/local/result.json
       - name: Deploy exact candidate to production first
+        env:
+          ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/order083-production
         run: tools/order083/deploy-production.sh
       - name: Seal production exact identity
         run: |
