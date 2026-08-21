@@ -25,7 +25,7 @@ jobs:
         with:
           ref: ${{ env.EXPECTED_HEAD }}
           persist-credentials: false
-      - name: Fail closed on canonical head and add diagnostic-only explicit recovery
+      - name: Fail closed and apply candidate wake replacement only
         shell: bash
         run: |
           set -euo pipefail
@@ -34,15 +34,17 @@ jobs:
           test "$remote" = "$EXPECTED_HEAD"
           python - <<'PY'
           from pathlib import Path
-          p=Path('android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt')
+          p=Path('android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt')
           s=p.read_text()
-          old='val op=mark.getString("op_b",null)?:error("NO_OP_B");waitCompleted(op);val db=ZungunDatabase.open(context)'
-          new='val op=mark.getString("op_b",null)?:error("NO_OP_B");println("ORDER083_DIAGNOSTIC_BEFORE_EXPLICIT_RECOVERY:"+Zungun.status(context,op));val recovered=CriticalOperationRuntime(context).recoverPending(true);println("ORDER083_DIAGNOSTIC_EXPLICIT_RECOVERED_COUNT:$recovered");waitCompleted(op);val db=ZungunDatabase.open(context)'
-          if old not in s: raise SystemExit('DIAGNOSTIC_PATCH_ANCHOR_MISSING')
+          old='ExistingWorkPolicy.KEEP,\n            OneTimeWorkRequestBuilder<LinkWakeWorker>().build(),'
+          new='ExistingWorkPolicy.REPLACE,\n            OneTimeWorkRequestBuilder<LinkWakeWorker>().build(),'
+          if s.count(old)!=1: raise SystemExit('WAKE_POLICY_PATCH_ANCHOR_COUNT_INVALID')
           p.write_text(s.replace(old,new,1))
           PY
           git diff --check
-          git diff -- android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = "android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt"
+          git diff -- android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt
       - name: Install Android API35
         shell: bash
         run: |
@@ -66,16 +68,16 @@ jobs:
           timeout 180s adb wait-for-device
           for _ in $(seq 1 120); do [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]] && exit 0; sleep 2; done
           cat "$RUNNER_TEMP/order083-emulator.log"; exit 1
-      - name: Run Gate44 field diagnostic
+      - name: Run full Gate44 field candidate without test bypass
         env:
-          ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/order083-field-recovery-diagnostic
+          ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/order083-field-recovery-candidate
         run: tools/order083/android-field-recovery-e2e.sh
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: order083-field-recovery-diagnostic-${{ github.run_id }}
+          name: order083-field-recovery-candidate-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/order083-field-recovery-diagnostic
+            ${{ runner.temp }}/order083-field-recovery-candidate
             ${{ runner.temp }}/order083-emulator.log
           if-no-files-found: warn
           retention-days: 3
