@@ -1,0 +1,82 @@
+name: Order 083 field wake candidate
+on:
+  push:
+    branches: [bootstrap/order-083-production-first]
+    paths: [.github/workflows/order-083-field-wake-candidate.yml]
+permissions:
+  contents: read
+env:
+  EXPECTED_CANONICAL_HEAD: dc9c893fbbc4a97eddd23aa33a6e82cbbf3d5d73
+  ZUNGUN_ORIGIN: https://zungun.simondalmasso44.workers.dev
+jobs:
+  field-wake-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: feat/zungun-full-project-v1
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fail closed on canonical head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANONICAL_HEAD"
+          remote="$(git ls-remote origin refs/heads/feat/zungun-full-project-v1 | cut -f1)"
+          test "$remote" = "$EXPECTED_CANONICAL_HEAD"
+      - name: Apply one-line startup wake candidate
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt')
+          s=p.read_text()
+          old='NETWORK_WAKE_WORK,\n            ExistingWorkPolicy.KEEP,\n            OneTimeWorkRequestBuilder<LinkWakeWorker>().build(),'
+          new='NETWORK_WAKE_WORK,\n            ExistingWorkPolicy.REPLACE,\n            OneTimeWorkRequestBuilder<LinkWakeWorker>().build(),'
+          assert s.count(old)==1, s.count(old)
+          p.write_text(s.replace(old,new))
+          PY
+          git diff --check
+          git diff -- android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt
+      - name: Source regression gates
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: Install Android API35
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"; sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0' emulator 'system-images;android-35;google_apis;x86_64'
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+          printf '%s\n' "$sdkroot/platform-tools" >> "$GITHUB_PATH"
+          test -x "$sdkroot/platform-tools/adb"
+      - name: Start bounded API35 emulator
+        run: |
+          set -euo pipefail; sdkroot="$ANDROID_SDK_ROOT"; export ANDROID_USER_HOME="$RUNNER_TEMP/order083-android-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/order083-android-home" ANDROID_AVD_HOME="$RUNNER_TEMP/order083-android-home/avd"; mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-api35 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          sudo chmod 666 /dev/kvm || true
+          nohup "$sdkroot/emulator/emulator" -avd order083-api35 -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/order083-emulator.log" 2>&1 &
+          timeout 180s adb wait-for-device
+          for _ in $(seq 1 120);do [[ "$(adb shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" == 1 ]]&&exit 0;sleep 2;done
+          cat "$RUNNER_TEMP/order083-emulator.log";exit 1
+      - name: Gate44 Field candidate against real production
+        env:
+          ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/order083-field-recovery
+        run: tools/order083/android-field-recovery-e2e.sh
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order083-field-wake-candidate-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/order083-field-recovery
+            ${{ runner.temp }}/order083-emulator.log
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 0
