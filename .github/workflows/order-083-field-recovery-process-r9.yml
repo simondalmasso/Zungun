@@ -1,0 +1,150 @@
+name: Order 083 Gate44 same-process recovery R9
+
+on:
+  push:
+    branches: [bootstrap/order-083-production-first]
+    paths: [.github/workflows/order-083-field-recovery-process-r9.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  WRANGLER_SEND_METRICS: "false"
+  ZUNGUN_ORIGIN: https://zungun.simondalmasso44.workers.dev
+  PR_BRANCH: feat/zungun-full-project-v1
+  EXPECTED_PR_HEAD: dc9c893fbbc4a97eddd23aa33a6e82cbbf3d5d73
+  CARRIER_SOURCE_COMMIT: 73b8c2819c8d0bfc6aea742fafef881bfa9a8511
+
+jobs:
+  production-first:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.PR_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Overlay exact two-file candidate and fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PR_HEAD"
+          test "$(git ls-remote origin "refs/heads/$PR_BRANCH" | awk '{print $1}')" = "$EXPECTED_PR_HEAD"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"; test -n "$CLOUDFLARE_API_TOKEN"; test -n "$ZUNGUN_PILOT_TOKEN"
+          git fetch --no-tags origin "$CARRIER_SOURCE_COMMIT"
+          files=(
+            tools/order083/android-field-recovery-e2e.sh
+            android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          )
+          for path in "${files[@]}"; do git show "$CARRIER_SOURCE_COMMIT:$path" > "$path"; done
+          chmod +x tools/order083/android-field-recovery-e2e.sh
+          git diff --check
+          printf '%s\n' "${files[@]}" | sort > "$RUNNER_TEMP/expected-diff"
+          git diff --name-only | sort > "$RUNNER_TEMP/actual-diff"
+          cmp "$RUNNER_TEMP/expected-diff" "$RUNNER_TEMP/actual-diff"
+          test "$(git status --porcelain=v1 | wc -l)" -eq 2
+          grep -Fq 'REAL_APP_HTTP_SUCCESS_SAME_RECOVERY_PHASE' tools/order083/android-field-recovery-e2e.sh
+          grep -Fq 'seal_recovery online-b phase3VerifyRecovered' tools/order083/android-field-recovery-e2e.sh
+          grep -Fq 'seal_recovery online-c phase6ObserveDurableUnknown' tools/order083/android-field-recovery-e2e.sh
+          ! grep -Fq 'adb shell monkey' tools/order083/android-field-recovery-e2e.sh
+          grep -Fq '@Test fun phase3VerifyRecovered()=runBlocking{applicationTrafficProbe(true);' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq '@Test fun phase6ObserveDurableUnknown(){runBlocking{applicationTrafficProbe(true);' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+          grep -Fq '@Test fun phase7VerifyUnknownThenReconciled(){runBlocking{applicationTrafficProbe(true);' android/app/src/androidTest/java/com/zungun/app/Order083FieldRecoveryInstrumentedTest.kt
+      - name: Full source regression and deterministic candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          node --check cloudflare/src/worker.mjs
+          node --test cloudflare/test/contracts.test.mjs
+          bash -n tools/order083/android-field-recovery-e2e.sh
+          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/manifest1"
+          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/manifest2"
+          cmp "$RUNNER_TEMP/manifest1/result.json" "$RUNNER_TEMP/manifest2/result.json"
+          cp "$RUNNER_TEMP/manifest1/result.json" "$RUNNER_TEMP/candidate.json"
+          curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version" > "$RUNNER_TEMP/before.json"
+          test "$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/candidate.json")" = "$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/before.json")"
+          test "$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/candidate.json")" = "$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/before.json")"
+          test "$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/candidate.json")" != "$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/before.json")"
+      - name: Install Android API35
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}";sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0' emulator 'system-images;android-35;google_apis;x86_64'
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+          printf '%s\n' "$sdkroot/platform-tools" >> "$GITHUB_PATH"
+          test -x "$sdkroot/platform-tools/adb"
+      - name: Start bounded API35 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="$ANDROID_SDK_ROOT";export ANDROID_USER_HOME="$RUNNER_TEMP/android-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/android-home" ANDROID_AVD_HOME="$RUNNER_TEMP/android-home/avd";mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-r9 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          sudo chmod 666 /dev/kvm || true
+          nohup "$sdkroot/emulator/emulator" -avd order083-r9 -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          timeout 180s adb wait-for-device
+          for _ in $(seq 1 120);do [[ "$(adb shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" == 1 ]]&&exit 0;sleep 2;done
+          cat "$RUNNER_TEMP/emulator.log";exit 1
+      - name: Gate44 Field same-process recovery before deploy
+        shell: bash
+        env:
+          ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/field-predeploy
+        run: tools/order083/android-field-recovery-e2e.sh
+      - name: Deploy exact proven candidate first and verify production
+        shell: bash
+        env:
+          ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/production
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$PR_BRANCH" | awk '{print $1}')" = "$EXPECTED_PR_HEAD"
+          bash tools/order083/deploy-production.sh | tee "$RUNNER_TEMP/deploy.txt"
+          curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version" > "$RUNNER_TEMP/after.json"
+          for k in sourceBundleSha256 staticAssetManifestSha256 migrationManifestSha256; do
+            test "$(jq -r .$k "$RUNNER_TEMP/candidate.json")" = "$(jq -r .$k "$RUNNER_TEMP/after.json")"
+          done
+          node tools/order083/live-e2e.mjs "$RUNNER_TEMP/live"
+          for k in sourceBundleSha256 staticAssetManifestSha256 migrationManifestSha256; do
+            test "$(jq -r .$k "$RUNNER_TEMP/candidate.json")" = "$(jq -r .$k "$RUNNER_TEMP/live/result.json")"
+          done
+          test "$(git ls-remote origin "refs/heads/$PR_BRANCH" | awk '{print $1}')" = "$EXPECTED_PR_HEAD"
+      - name: Seal production-first evidence without advancing PR16
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/seal"
+          cp "$RUNNER_TEMP/candidate.json" "$RUNNER_TEMP/seal/candidate.json"
+          printf 'ORDER=ORDER-083\nPRODUCTION_FIRST=YES\nGATE44_FIELD=PASS\nREAL_APP_OUTAGE=PASS\nRECOVERY_PROBE_SAME_PROCESS=PASS\nPROCESS_DEATH=PASS\nUNKNOWN_DURABLE=PASS\nRECONCILIATION_BEFORE_RETRY=PASS\nLIVE_IDENTITY=PASS\nPR16_ADVANCED=NO\nMERGE=NO\nORDER084_STARTED=NO\nORDER082_STARTED=NO\n' > "$RUNNER_TEMP/seal/RESULT"
+          find "$RUNNER_TEMP/seal" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/seal/MANIFEST.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: order083-gate44-r9-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/candidate.json
+            ${{ runner.temp }}/before.json
+            ${{ runner.temp }}/after.json
+            ${{ runner.temp }}/deploy.txt
+            ${{ runner.temp }}/manifest1
+            ${{ runner.temp }}/field-predeploy
+            ${{ runner.temp }}/production
+            ${{ runner.temp }}/live
+            ${{ runner.temp }}/emulator.log
+            ${{ runner.temp }}/seal
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 0
