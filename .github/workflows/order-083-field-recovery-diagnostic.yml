@@ -25,7 +25,7 @@ jobs:
         with:
           ref: ${{ env.EXPECTED_HEAD }}
           persist-credentials: false
-      - name: Fail closed and apply candidate wake replacement only
+      - name: Fail closed and apply direct startup recovery candidate only
         shell: bash
         run: |
           set -euo pipefail
@@ -36,10 +36,19 @@ jobs:
           from pathlib import Path
           p=Path('android/runtime/src/main/java/com/zungun/runtime/link/LinkNetworkWakeRegistry.kt')
           s=p.read_text()
-          old='ExistingWorkPolicy.KEEP,\n            OneTimeWorkRequestBuilder<LinkWakeWorker>().build(),'
-          new='ExistingWorkPolicy.REPLACE,\n            OneTimeWorkRequestBuilder<LinkWakeWorker>().build(),'
-          if s.count(old)!=1: raise SystemExit('WAKE_POLICY_PATCH_ANCHOR_COUNT_INVALID')
-          p.write_text(s.replace(old,new,1))
+          anchor='import java.util.concurrent.atomic.AtomicBoolean\n'
+          imports='import java.util.concurrent.atomic.AtomicBoolean\nimport kotlinx.coroutines.CoroutineScope\nimport kotlinx.coroutines.Dispatchers\nimport kotlinx.coroutines.SupervisorJob\nimport kotlinx.coroutines.launch\n'
+          if s.count(anchor)!=1: raise SystemExit('IMPORT_ANCHOR_INVALID')
+          s=s.replace(anchor,imports,1)
+          anchor2='    private val wakeOutstanding = AtomicBoolean(false)\n'
+          repl2='    private val wakeOutstanding = AtomicBoolean(false)\n    private val startupRecoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)\n'
+          if s.count(anchor2)!=1: raise SystemExit('SCOPE_ANCHOR_INVALID')
+          s=s.replace(anchor2,repl2,1)
+          anchor3='        observer = LinkNetworkObserver(app) { snapshot -> acceptSnapshot(app, snapshot) }\n            .also { it.start() }\n'
+          repl3='        observer = LinkNetworkObserver(app) { snapshot -> acceptSnapshot(app, snapshot) }\n            .also { it.start() }\n        startupRecoveryScope.launch { LinkNetworkWakeDispatcher.dispatch(app) }\n'
+          if s.count(anchor3)!=1: raise SystemExit('STARTUP_ANCHOR_INVALID')
+          s=s.replace(anchor3,repl3,1)
+          p.write_text(s)
           PY
           git diff --check
           test "$(git diff --name-only | wc -l)" -eq 1
