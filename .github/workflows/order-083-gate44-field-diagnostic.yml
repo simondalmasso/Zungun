@@ -2,8 +2,10 @@ name: Order 083 Gate44 field recovery diagnostic
 
 on:
   push:
-    branches: [bootstrap/order-083-production-first]
-    paths: [.github/workflows/order-083-gate44-field-diagnostic.yml]
+    branches:
+      - bootstrap/order-083-production-first
+    paths:
+      - .github/workflows/order-083-gate44-field-diagnostic.yml
 
 permissions:
   contents: read
@@ -20,14 +22,25 @@ jobs:
       ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
       ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/order083-field-recovery
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Checkout bootstrap diagnostic
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ env.EXPECTED_HEAD }}
+          ref: bootstrap/order-083-production-first
+          path: carrier
           persist-credentials: false
-      - name: Fail closed on exact canonical HEAD
+      - name: Checkout exact canonical source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: dc9c893fbbc4a97eddd23aa33a6e82cbbf3d5d73
+          path: canonical
+          persist-credentials: false
+      - name: Fail closed on canonical HEAD
+        working-directory: canonical
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with: {node-version: 22.16.0, package-manager-cache: false}
+        with:
+          node-version: '22.16.0'
+          package-manager-cache: false
       - name: Install Android API35
         run: |
           set -euo pipefail
@@ -41,41 +54,34 @@ jobs:
         run: |
           set -euo pipefail
           sdkroot="$ANDROID_SDK_ROOT"
-          export ANDROID_USER_HOME="$RUNNER_TEMP/order083-android-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/order083-android-home" ANDROID_AVD_HOME="$RUNNER_TEMP/order083-android-home/avd"
+          export ANDROID_USER_HOME="$RUNNER_TEMP/order083-android-home"
+          export ANDROID_EMULATOR_HOME="$RUNNER_TEMP/order083-android-home"
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/order083-android-home/avd"
           mkdir -p "$ANDROID_AVD_HOME"
           echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-api35 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
           sudo chmod 666 /dev/kvm || true
           nohup "$sdkroot/emulator/emulator" -avd order083-api35 -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/order083-emulator.log" 2>&1 &
           timeout 180s adb wait-for-device
-          for _ in $(seq 1 120); do [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]] && exit 0; sleep 2; done
-          cat "$RUNNER_TEMP/order083-emulator.log"; exit 1
-      - name: Inject diagnostic-only WorkManager readback
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('tools/order083/android-field-recovery-e2e.sh')
-          s=p.read_text()
-          old='on online-b;adb shell monkey -p com.zungun.app -c android.intent.category.LAUNCHER 1 >/dev/null;sleep 2;run phase3VerifyRecovered;diagnostics "$OP_B" "$OUT/b-after-recovery.json"'
-          new='''on online-b;adb shell monkey -p com.zungun.app -c android.intent.category.LAUNCHER 1 >/dev/null;sleep 2;\nmkdir -p "$OUT/workmanager"; adb shell dumpsys jobscheduler com.zungun.app > "$OUT/workmanager/jobscheduler-before-phase3.txt" 2>&1 || true; adb logcat -d -v threadtime | grep -E "WorkManager|WM-|Zungun|zungun" > "$OUT/workmanager/logcat-before-phase3.txt" 2>&1 || true; DB="$(adb shell find /data/user/0/com.zungun.app -name androidx.work.workdb -type f 2>/dev/null | tr -d "\\r" | head -n1)"; printf "%s\\n" "$DB" > "$OUT/workmanager/db-path.txt"; if [[ -n "$DB" ]]; then adb pull "$DB" "$OUT/workmanager/workdb.sqlite" >/dev/null 2>&1 || true; adb pull "$DB-wal" "$OUT/workmanager/workdb.sqlite-wal" >/dev/null 2>&1 || true; adb pull "$DB-shm" "$OUT/workmanager/workdb.sqlite-shm" >/dev/null 2>&1 || true; sqlite3 "$OUT/workmanager/workdb.sqlite" ".schema workspec" > "$OUT/workmanager/workspec-schema.txt" 2>&1 || true; sqlite3 -header -column "$OUT/workmanager/workdb.sqlite" "select id,state,run_attempt_count,schedule_requested_at,initial_delay,backoff_policy,backoff_delay_duration from workspec;" > "$OUT/workmanager/workspec.txt" 2>&1 || true; sqlite3 -header -column "$OUT/workmanager/workdb.sqlite" "select name,work_spec_id from workname;" > "$OUT/workmanager/workname.txt" 2>&1 || true; sqlite3 -header -column "$OUT/workmanager/workdb.sqlite" "select tag,work_spec_id from worktag where tag like 'zungun:%';" > "$OUT/workmanager/worktag.txt" 2>&1 || true; fi; run phase3VerifyRecovered;diagnostics "$OP_B" "$OUT/b-after-recovery.json"'''
-          if old not in s:
-              raise SystemExit('DIAGNOSTIC_PATCH_ANCHOR_MISSING')
-          p.write_text(s.replace(old,new,1))
-          PY
-          bash -n tools/order083/android-field-recovery-e2e.sh
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: Run exact-head Gate44 diagnostic
+          for _ in $(seq 1 120); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/order083-emulator.log"
+          exit 1
+      - name: Run bootstrap-only diagnostic against exact canonical source
         id: gate44
         continue-on-error: true
-        run: tools/order083/android-field-recovery-e2e.sh
+        env:
+          CANONICAL_ROOT: ${{ github.workspace }}/canonical
+        run: bash carrier/tools/order083/android-field-recovery-diagnostic.sh
       - name: Seal diagnostic output
         if: always()
         run: |
-          set -euo pipefail
-          printf 'CANONICAL_HEAD=%s\nGATE44_OUTCOME=%s\nDIAGNOSTIC_ONLY=YES\n' "$EXPECTED_HEAD" '${{ steps.gate44.outcome }}' | tee "$RUNNER_TEMP/order083-gate44-diagnostic.txt"
+          printf 'CANONICAL_HEAD=%s\nGATE44_OUTCOME=%s\nDIAGNOSTIC_ONLY=YES\n' "$EXPECTED_HEAD" '${{ steps.gate44.outcome }}' > "$RUNNER_TEMP/order083-gate44-diagnostic.txt"
           find "$ORDER083_FIELD_RECOVERY_EVIDENCE" -maxdepth 3 -type f -print | sort || true
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - name: Upload diagnostic artifact
         if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: order083-gate44-diagnostic-${{ github.run_id }}
           path: |
@@ -85,6 +91,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
-      - name: Fail if Gate44 still fails
+      - name: Preserve fail-closed result
         if: steps.gate44.outcome != 'success'
         run: exit 1
