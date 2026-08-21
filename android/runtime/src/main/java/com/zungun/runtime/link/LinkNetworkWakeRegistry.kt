@@ -67,7 +67,7 @@ object LinkNetworkWakeRegistry {
     private fun enqueueRuntimeWake(context: Context) {
         WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
             NETWORK_WAKE_WORK,
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<LinkWakeWorker>().build(),
         )
     }
