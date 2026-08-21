@@ -20,7 +20,6 @@ jobs:
     timeout-minutes: 35
     env:
       ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
-      ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/order083-field-recovery
     steps:
       - name: Checkout bootstrap diagnostic
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -73,12 +72,13 @@ jobs:
         continue-on-error: true
         env:
           CANONICAL_ROOT: ${{ github.workspace }}/canonical
+          ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/order083-field-recovery
         run: bash carrier/tools/order083/android-field-recovery-diagnostic.sh
       - name: Seal diagnostic output
         if: always()
         run: |
           printf 'CANONICAL_HEAD=%s\nGATE44_OUTCOME=%s\nDIAGNOSTIC_ONLY=YES\n' "$EXPECTED_HEAD" '${{ steps.gate44.outcome }}' > "$RUNNER_TEMP/order083-gate44-diagnostic.txt"
-          find "$ORDER083_FIELD_RECOVERY_EVIDENCE" -maxdepth 3 -type f -print | sort || true
+          find "$RUNNER_TEMP/order083-field-recovery" -maxdepth 3 -type f -print | sort || true
       - name: Upload diagnostic artifact
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
