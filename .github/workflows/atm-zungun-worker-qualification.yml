@@ -17,7 +17,7 @@ concurrency:
 jobs:
   qualification:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -28,6 +28,8 @@ jobs:
           package-manager-cache: false
       - name: Install exact lockfile
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Complete TypeScript, resilience, security and evidence qualification
+        run: npm run verify:deep
       - name: Typecheck and build
         run: |
           set -euo pipefail
@@ -69,6 +71,8 @@ jobs:
           set -euo pipefail
           npm run verify:secrets
           npm run verify:no-placeholders
+      - name: Public-site SEO and route contract
+        run: node --test cloudflare/test/public-site-seo.test.mjs
       - name: Android zero-cost compile and unit contract
         shell: bash
         run: |
