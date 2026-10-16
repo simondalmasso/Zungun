@@ -59,7 +59,7 @@ jobs:
           echo $! > "$RUNNER_TEMP/order085-local-worker.pid"
           ready=0
           for _ in $(seq 1 60); do
-            if curl --insecure --fail --silent --show-error https://127.0.0.1:8787/health > "$RUNNER_TEMP/order085-local-health.json"; then ready=1; break; fi
+            if curl --insecure --connect-timeout 1 --max-time 3 --fail --silent --show-error https://127.0.0.1:8787/health > "$RUNNER_TEMP/order085-local-health.json"; then ready=1; break; fi
             sleep 2
           done
           if [[ "$ready" != 1 ]]; then cat "$RUNNER_TEMP/order085-local-worker.log"; exit 1; fi
