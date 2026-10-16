@@ -24,10 +24,11 @@ TMP="$(mktemp -d)"; chmod 700 "$TMP"; CFG="$ROOT/cloudflare/.wrangler.order083.r
 node - "$D1_ID" "$SOURCE_SHA" "$STATIC_SHA" "$MIGRATION_SHA" "$CFG" <<'NODE'
 const fs=require('fs');let s=fs.readFileSync('cloudflare/wrangler.jsonc','utf8');s=s.replace('__ORDER083_D1_DATABASE_ID__',process.argv[2]).replace('__SOURCE_BUNDLE_SHA256__',process.argv[3]).replace('__STATIC_ASSET_MANIFEST_SHA256__',process.argv[4]).replace('__MIGRATION_MANIFEST_SHA256__',process.argv[5]);fs.writeFileSync(process.argv[6],s);
 NODE
-node tools/order083/generate-signing-key.mjs "$TMP/key" > "$OUT/signing-key-metadata.json"
-PRIVATE="$(tr -d '\r\n' < "$TMP/key/private.b64")"; KEY_ID="$(tr -d '\r\n' < "$TMP/key/key-id.txt")"; printf '::add-mask::%s\n' "$PRIVATE"
-node - "$ZUNGUN_PILOT_TOKEN" "$PRIVATE" "$KEY_ID" "$TMP/secrets.json" <<'NODE'
-const fs=require('fs');fs.writeFileSync(process.argv[5],JSON.stringify({ZUNGUN_PILOT_TOKEN:process.argv[2],ZUNGUN_SIGNING_PRIVATE_KEY:process.argv[3],ZUNGUN_SIGNING_KEY_ID:process.argv[4]}),{mode:0o600});
+# Preserve the active production signing identity across code-only deployments.
+# Never mint a new key during deploy: it would orphan receipts and trigger Cloudflare secret rollback protection.
+"${WRANGLER[@]}" d1 execute DB --remote --config "$CFG" --command "SELECT key_id,valid_until_ms FROM receipt_keys WHERE revoked_at_ms IS NULL ORDER BY valid_from_ms DESC;" --json > "$OUT/receipt-keys-before.json"
+node - "$OUT/receipt-keys-before.json" <<'NODE'
+const fs=require('fs');const d=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const rows=(Array.isArray(d)?d:[]).flatMap(x=>x.results||[]);if(!rows.some(r=>Number(r.valid_until_ms)>Date.now())){console.error('NO_UNREVOKED_UNEXPIRED_RECEIPT_KEY');process.exit(2)}
 NODE
 REQUIRED_D1_OBJECTS="'conversations','field_operation_apply_effect','field_operation_semantic_guard','field_operations','identities','order083_faults','proof_events','rate_limits','receipt_keys','sessions','work_orders'"
 "${WRANGLER[@]}" d1 execute DB --remote --config "$CFG" --command "SELECT name,type,sql FROM sqlite_master WHERE name IN ($REQUIRED_D1_OBJECTS) ORDER BY name;" --json > "$OUT/d1-schema-before.json"
@@ -40,13 +41,9 @@ NODE
 node - "$OUT/d1-schema-after.json" "$OUT/d1-foreign-key-check.json" "$ROOT/cloudflare/migrations/0001_order083_product.sql" "$OUT/d1-migration-evidence.json" "$D1_ID" "$MIGRATION_SHA" <<'NODE'
 const fs=require('fs'),crypto=require('crypto');const [schemaFile,fkFile,migrationFile,out,d1Id,manifestSha]=process.argv.slice(2);const schema=JSON.parse(fs.readFileSync(schemaFile,'utf8'));const rows=(Array.isArray(schema)?schema:[]).flatMap(x=>x.results||[]);const expected={conversations:'table',field_operation_apply_effect:'trigger',field_operation_semantic_guard:'trigger',field_operations:'table',identities:'table',order083_faults:'table',proof_events:'table',rate_limits:'table',receipt_keys:'table',sessions:'table',work_orders:'table'};const actual=Object.fromEntries(rows.map(x=>[x.name,x.type]));for(const [name,type] of Object.entries(expected))if(actual[name]!==type){console.error(`D1_OBJECT_MISSING_OR_WRONG_TYPE:${name}:${actual[name]||'missing'}`);process.exit(2)}const fk=JSON.parse(fs.readFileSync(fkFile,'utf8'));const fkRows=(Array.isArray(fk)?fk:[]).flatMap(x=>x.results||[]);if(fkRows.length!==0){console.error(`D1_FOREIGN_KEY_CHECK_FAILED:${JSON.stringify(fkRows)}`);process.exit(3)}const migrationBytes=fs.readFileSync(migrationFile);fs.writeFileSync(out,JSON.stringify({ok:true,method:'PINNED_OFFICIAL_WRANGLER_D1_EXECUTE_FILE',wranglerVersion:'4.114.0',databaseName:'zungun-order083-product-v1',databaseId:d1Id,migration:'0001_order083_product.sql',migrationFileSha256:crypto.createHash('sha256').update(migrationBytes).digest('hex'),migrationManifestSha256:manifestSha,objects:Object.keys(expected).sort(),foreignKeyCheck:'PASS'},null,2)+'\n');
 NODE
-node - "$KEY_ID" "$TMP/key/public.pem" "$TMP/key.sql" <<'NODE'
-const fs=require('fs');const id=process.argv[2].replaceAll("'","''");const pem=fs.readFileSync(process.argv[3],'utf8').replaceAll("'","''");const now=Date.now(),until=now+365*86400000;fs.writeFileSync(process.argv[4],`INSERT OR IGNORE INTO receipt_keys(key_id,public_key_pem,valid_from_ms,valid_until_ms) VALUES('${id}','${pem}',${now-1000},${until});\n`);
-NODE
-"${WRANGLER[@]}" d1 execute DB --remote --config "$CFG" --file "$TMP/key.sql" >/dev/null
 (
  cd cloudflare
- npx --yes wrangler@4.114.0 deploy --config "$CFG" --secrets-file "$TMP/secrets.json" --x-provision=false --x-auto-create=false 2>&1 | tee "$OUT/deploy.log"
+ npx --yes wrangler@4.114.0 deploy --config "$CFG" --x-provision=false --x-auto-create=false 2>&1 | tee "$OUT/deploy.log"
 )
 "${WRANGLER[@]}" deployments status --name zungun --json > "$OUT/post-deployment.json"
 CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" ZUNGUN_PILOT_TOKEN="$ZUNGUN_PILOT_TOKEN" ZUNGUN_ORIGIN="$ORIGIN" node tools/order083/live-e2e.mjs "$OUT/live-e2e"
