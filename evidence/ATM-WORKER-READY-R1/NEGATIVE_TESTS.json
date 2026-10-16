@@ -1,0 +1,59 @@
+{
+  "authoritative_result": "exact-head worker-adapter CI log",
+  "cases": [
+    {
+      "expected": "REJECT before ACK",
+      "risk": "wrong/expired/stale/terminal lease"
+    },
+    {
+      "expected": "REJECT before work",
+      "risk": "wrong execution/job/scope/source/base binding"
+    },
+    {
+      "expected": "UNSUPPORTED_CAPABILITY/PROFILE",
+      "risk": "unsupported capability or generic/non-domain work"
+    },
+    {
+      "expected": "REJECT",
+      "risk": "nonzero spend or authority request"
+    },
+    {
+      "expected": "REJECT or QUARANTINED",
+      "risk": "path traversal/symlink/out-of-scope drift"
+    },
+    {
+      "expected": "fail closed before unbounded read",
+      "risk": "oversized job/file/scope or excessive file count"
+    },
+    {
+      "expected": "REJECT before ACK",
+      "risk": "target .env / ambient high-risk secret"
+    },
+    {
+      "expected": "durable QUARANTINED WorkerResult; never second rejected ACK",
+      "risk": "post-ACK acceptance/check failure"
+    },
+    {
+      "expected": "MALFORMED_EXECUTION_JOB_ID before state path",
+      "risk": "malformed lifecycle execution ID"
+    },
+    {
+      "expected": "reuse durable identity/result; no new checkpoints",
+      "risk": "duplicate identical execution"
+    },
+    {
+      "expected": "REJECT",
+      "risk": "conflicting duplicate"
+    },
+    {
+      "expected": "WORKER_RESULT_AUTHORITY_FORBIDDEN",
+      "risk": "forged accepted/checker_pass worker output"
+    },
+    {
+      "expected": "never silently converted to success",
+      "risk": "UNKNOWN/AMBIGUOUS"
+    }
+  ],
+  "schema": "ZUNGUN_NEGATIVE_TESTS_R1",
+  "source": "tests/worker-adapter.test.ts"
+}

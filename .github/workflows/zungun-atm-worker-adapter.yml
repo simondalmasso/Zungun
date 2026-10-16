@@ -1,0 +1,166 @@
+name: Zungun ATM Worker Adapter
+
+"on":
+  pull_request:
+    branches: [recovery/remote-toolchain-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zungun-atm-worker-adapter-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker-adapter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Exact head and lockfile
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Worker adapter exact entrypoint qualification
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run build
+          npm run test:worker-adapter
+          npm run verify:worker-adapter
+          npm run verify:secrets
+      - name: Committed readiness evidence manifest
+        run: |
+          set -euo pipefail
+          cd evidence/ATM-WORKER-READY-R1
+          sha256sum -c MANIFEST.sha256
+      - name: Authority fence
+        run: |
+          set -euo pipefail
+          test -s dist/tools/worker-adapter/src/cli.js
+          test "${{ github.event.repository.private }}" = "false"
+          echo 'OUTGOING_SPEND_USD=0'
+          echo 'ATM_REPO_MUTATED=NO'
+          echo 'FINANCIAL_AUTHORITY=NO'
+          echo 'CLAIM_AUTHORITY=NO'
+          echo 'SUBMISSION_AUTHORITY=NO'
+          echo 'MODEL_AUTHORITY=NO'
+
+  standalone-regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Existing standalone product gates
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run lint
+          npm run typecheck
+          npm run build
+          npm test
+          npm run test:reconciliation
+          npm run test:link-blackout
+          npm run test:link-resilience
+          npm run test:link
+          npm run test:link-security
+          npm run verify:no-placeholders
+          npm run verify:secrets
+          npm run verify:deep
+
+  android-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Android reliability/unit qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0'
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:testDebugUnitTest --tests com.zungun.runtime.link.LinkPlannerGoldenTest
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleDebug
+
+  completion:
+    if: always()
+    needs: [worker-adapter, standalone-regressions, android-regression]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact-head completion seal
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "${{ needs.worker-adapter.result }}" = success
+          test "${{ needs.standalone-regressions.result }}" = success
+          test "${{ needs.android-regression.result }}" = success
+      - name: Materialize final exact-head evidence bundle
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/ATM-WORKER-READY-R1"
+          mkdir -p "$out"
+          cp evidence/ATM-WORKER-READY-R1/* "$out/"
+          cat > "$out/CI_EXACT_HEAD.md" <<EOF
+          # Exact-head CI evidence
+
+          EXACT_HEAD=$(git rev-parse HEAD)
+          WORKFLOW_RUN_ID=$GITHUB_RUN_ID
+          WORKFLOW_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT
+          WORKER_ADAPTER_JOB=${{ needs.worker-adapter.result }}
+          STANDALONE_REGRESSIONS_JOB=${{ needs.standalone-regressions.result }}
+          ANDROID_REGRESSION_JOB=${{ needs.android-regression.result }}
+          MERGE=NO
+          OUTGOING_SPEND_USD=0
+          EOF
+          cat > "$out/TEST_RESULTS.txt" <<EOF
+          EXACT_HEAD=$(git rev-parse HEAD)
+          worker-adapter=${{ needs.worker-adapter.result }}
+          standalone-regressions=${{ needs.standalone-regressions.result }}
+          android-regression=${{ needs.android-regression.result }}
+          completion=SUCCESS
+          required_skips=0
+          OUTGOING_SPEND_USD=0
+          EOF
+          (
+            cd "$out"
+            rm -f MANIFEST.sha256
+            find . -maxdepth 1 -type f ! -name MANIFEST.sha256 -printf '%f\n' | LC_ALL=C sort | while read -r file; do sha256sum "$file"; done > MANIFEST.sha256
+            sha256sum -c MANIFEST.sha256
+          )
+      - name: Upload final exact-head evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ATM-WORKER-READY-R1-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/ATM-WORKER-READY-R1
+          if-no-files-found: error
+          retention-days: 30

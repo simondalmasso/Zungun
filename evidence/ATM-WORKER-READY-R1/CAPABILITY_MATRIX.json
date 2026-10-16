@@ -1,0 +1,80 @@
+{
+  "capabilities": [
+    {
+      "capability": "zungun.network_resilience",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "worker fixture + Resilience Lab blackout drill",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter; npm run test:link-resilience"
+    },
+    {
+      "capability": "zungun.offline_sync",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "worker fixture invokes persisted blackout/deferred recovery proof",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter; npm run test:link-blackout"
+    },
+    {
+      "capability": "zungun.idempotency_retry",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "Link Doctor ZL001/ZL002 + blackout duplicate-effect proof",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter; npm run test:link-blackout"
+    },
+    {
+      "capability": "zungun.ambiguous_timeout",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "Link Doctor ZL005/ZL006 remain UNKNOWN",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter"
+    },
+    {
+      "capability": "zungun.reconciliation",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "Link Doctor ZL015 + reconcile-before-retry blackout proof",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter; npm run test:reconciliation"
+    },
+    {
+      "capability": "zungun.android_background_work",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "Link Doctor WorkManager rules plus canonical Android runtime regression",
+      "status": "PROVEN_WITH_ANDROID_CI_NOT_OEM_PROOF",
+      "test_or_ci": "npm run test:worker-adapter; android :runtime:testDebugUnitTest LinkPlannerGoldenTest; :runtime:assembleDebug"
+    },
+    {
+      "capability": "zungun.resumable_transfer",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "blackout deferred checkpoint/reopen/resume proof",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter; npm run test:link-blackout"
+    },
+    {
+      "capability": "zungun.blackout_testing",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "persisted Resilience Lab blackout drill; one effect / no second side-effect send",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter; npm run test:link-blackout"
+    },
+    {
+      "capability": "zungun.reliability_audit",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "target-specific Link Doctor execution through immutable worker entrypoint",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter"
+    },
+    {
+      "capability": "zungun.evidence_generation",
+      "evidence_ref": "exact-head CI logs and ATM-WORKER-READY-R1 artifact",
+      "executable_proof": "Zungun-origin ACK/progress/result + artifact/content SHA-256",
+      "status": "PROVEN",
+      "test_or_ci": "npm run test:worker-adapter"
+    }
+  ],
+  "limitations": [
+    "Android CI is emulator/unit/build evidence, not exhaustive OEM background-behavior proof.",
+    "Worker V1 is a read-only specialist audit/execution adapter; it does not edit or submit third-party repositories."
+  ],
+  "policy": "manifest label alone is not proof",
+  "schema": "ZUNGUN_CAPABILITY_MATRIX_R1"
+}

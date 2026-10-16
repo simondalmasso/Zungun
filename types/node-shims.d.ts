@@ -5,7 +5,9 @@ declare const process: {
   exitCode?: number;
   pid: number;
   execPath: string;
+  stdout: { write(value: string): void };
   on(event: string, listener: (...args: any[]) => void): void;
+  kill(pid: number, signal?: string): boolean;
 };
 declare const Buffer: {
   from(value: string | ArrayBuffer | Uint8Array, encoding?: string): any;
@@ -24,11 +26,11 @@ declare module 'node:crypto' {
 declare module 'node:fs' {
   export const readFileSync: any; export const writeFileSync: any; export const existsSync: any;
   export const mkdirSync: any; export const chmodSync: any; export const rmSync: any; export const mkdtempSync: any;
-  export const readdirSync: any; export const statSync: any; export const cpSync: any;
+  export const readdirSync: any; export const statSync: any; export const cpSync: any; export const symlinkSync: any;
   export const renameSync: any; export const openSync: any; export const fsyncSync: any;
   export const closeSync: any; export const unlinkSync: any; export const realpathSync: any;
 }
-declare module 'node:path' { export const join: any; export const resolve: any; export const dirname: any; export const basename: any; export const extname: any; export const relative: any; export const sep: any; }
+declare module 'node:path' { export const join: any; export const resolve: any; export const dirname: any; export const basename: any; export const extname: any; export const relative: any; export const sep: any; export const isAbsolute: any; }
 declare module 'node:os' { export const tmpdir: any; }
 declare module 'node:url' { export const fileURLToPath: any; export const URL: any; }
 declare module 'node:http' { export const createServer: any; export const request: any; export type IncomingMessage = any; export type ServerResponse = any; }
