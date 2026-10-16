@@ -1,0 +1,44 @@
+name: GitLab legacy mirror
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitlab-legacy-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: ${{ vars.GITLAB_MIRROR_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Clone canonical GitHub refs
+        run: |
+          set -euo pipefail
+          git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" mirror.git
+          git -C mirror.git remote add gitlab https://gitlab.com/simondalmasso/Zungun.git
+
+      - name: Mirror branches and tags to GitLab
+        env:
+          GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GITLAB_MIRROR_TOKEN}" ]]; then
+            echo "::error::GITLAB_MIRROR_TOKEN is not configured."
+            exit 1
+          fi
+          auth="$(printf 'oauth2:%s' "${GITLAB_MIRROR_TOKEN}" | base64 | tr -d '\n')"
+          git -C mirror.git \
+            -c "http.https://gitlab.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push --atomic --prune gitlab \
+            'refs/heads/*:refs/heads/*' \
+            'refs/tags/*:refs/tags/*'
