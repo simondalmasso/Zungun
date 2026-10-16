@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /health
+Disallow: /version
+
+Sitemap: https://zungun.simondalmasso44.workers.dev/sitemap.xml

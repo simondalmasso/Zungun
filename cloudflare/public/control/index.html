@@ -1,1 +1,27 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Zungun Control</title><link rel="stylesheet" href="/app.css"></head><body><main class="shell"><header class="topbar"><a class="brand" href="/">Zungun</a><nav class="nav" aria-label="Primary"><a data-nav="control" href="/control">Control</a><a data-nav="messages" href="/messages">Messages</a><a data-nav="developers" href="/developers">Developers</a><a href="/ops">Ops</a></nav></header><section class="hero"><div class="eyebrow">Zungun Control</div><h1>Assign work. See proof.</h1><p>Create one bounded work order and watch its persisted outcome without optimistic completion.</p></section><section class="grid"><article class="card"><h2>Account</h2><div id="account"></div></article><article class="card"><h2>New work order</h2><form id="create" class="stack"><input name="title" maxlength="120" required placeholder="Title"><textarea name="description" maxlength="1000" rows="3" placeholder="Short description"></textarea><input name="locationText" maxlength="240" placeholder="Location (optional)"><input name="assigneeCode" maxlength="12" required placeholder="Assignee pairing code"><label class="muted">Expires in <select name="minutes"><option value="60">1 hour</option><option value="240">4 hours</option><option value="1440">1 day</option></select></label><button class="primary">Create work order</button><div id="create-error" class="error"></div></form></article><article class="card full"><div class="row"><h2>Created work</h2><button id="refresh">Refresh</button></div><div id="orders" class="list"></div></article></section></main><script type="module" src="/control/control.js"></script></body></html>
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0b1716">
+<title>Zungun Control — Field Operations Demo</title>
+<meta name="description" content="Create bounded field work orders and inspect persisted outcomes in the Zungun demo. This interactive surface is not intended for search indexing.">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<link rel="canonical" href="https://zungun.simondalmasso44.workers.dev/control">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/app.css">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Zungun">
+<meta property="og:title" content="Zungun Control — Field Operations Demo">
+<meta property="og:description" content="Create bounded field work orders and inspect persisted outcomes in the Zungun demo. This interactive surface is not intended for search indexing.">
+<meta property="og:url" content="https://zungun.simondalmasso44.workers.dev/control">
+<meta property="og:image" content="https://zungun.simondalmasso44.workers.dev/og-card.svg">
+<meta property="og:image:type" content="image/svg+xml">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Zungun — delivery assurance for critical field operations">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Zungun Control — Field Operations Demo">
+<meta name="twitter:description" content="Create bounded field work orders and inspect persisted outcomes in the Zungun demo. This interactive surface is not intended for search indexing.">
+<meta name="twitter:image" content="https://zungun.simondalmasso44.workers.dev/og-card.svg">
+
+</head><body><a class="skip-link" href="#main">Skip to content</a><main id="main" class="shell"><header class="topbar"><a class="brand" href="/">Zungun</a><nav class="nav" aria-label="Primary"><a data-nav="control" href="/control">Control</a><a data-nav="messages" href="/messages">Messages</a><a data-nav="developers" href="/developers">Developers</a><a href="/ops">Ops</a></nav></header><section class="hero"><div class="eyebrow">Zungun Control</div><h1>Assign work. See proof.</h1><p>Create one bounded work order and watch its persisted outcome without optimistic completion.</p></section><section class="grid"><article class="card"><h2>Account</h2><div id="account"></div></article><article class="card"><h2>New work order</h2><form id="create" class="stack"><input name="title" maxlength="120" required placeholder="Title"><textarea name="description" maxlength="1000" rows="3" placeholder="Short description"></textarea><input name="locationText" maxlength="240" placeholder="Location (optional)"><input name="assigneeCode" maxlength="12" required placeholder="Assignee pairing code"><label class="muted">Expires in <select name="minutes"><option value="60">1 hour</option><option value="240">4 hours</option><option value="1440">1 day</option></select></label><button class="primary">Create work order</button><div id="create-error" class="error"></div></form></article><article class="card full"><div class="row"><h2>Created work</h2><button id="refresh">Refresh</button></div><div id="orders" class="list"></div></article></section></main><script type="module" src="/control/control.js"></script></body></html>
