@@ -24,7 +24,9 @@ GitHub is the sole source of truth for source code, branches, issues, pull reque
 
 At the observed snapshot, GitLab's default-branch HEAD is an ancestor of the GitHub canonical history and is behind it. All eleven GitLab branch names exist on GitHub. Ten branch tips match; the GitLab default branch tip is the one that is stale. GitHub also has product branches absent from the GitLab branch list. The checked GitLab repository reports no tags. This is not evidence that every branch or historical artifact has been migrated; it is a bounded comparison of the visible refs and trees.
 
-GitLab's import metadata still points at the old GitHub path https://github.com/simonkey888/Zungun.git. That metadata is not an active migration or synchronization mechanism.\n\nThe current GitHub HEAD after this documentation-only update is recorded by the commit history; the latest combined-status query returned no status checks. No code-test or production-pass claim is made for this update.
+GitLab's import metadata still points at the old GitHub path https://github.com/simonkey888/Zungun.git. That metadata is not an active migration or synchronization mechanism.
+
+The current GitHub HEAD after this documentation-only update is recorded by the commit history; the latest combined-status query returned no status checks. No code-test or production-pass claim is made for this update.
 
 ## Current migration decision
 
