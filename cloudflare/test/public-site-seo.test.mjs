@@ -8,41 +8,11 @@ const publicDir = path.join(root, 'cloudflare/public');
 const origin = 'https://zungun.simondalmasso44.workers.dev';
 
 const pages = [
-  {
-    file: 'index.html',
-    route: '/',
-    title: 'Zungun — Reliable delivery for critical field operations',
-    heading: 'Know what actually happened.',
-    indexable: true,
-  },
-  {
-    file: 'developers/index.html',
-    route: '/developers',
-    title: 'Zungun for Developers — Offline-First Android Delivery SDK',
-    heading: 'Durability without optimistic claims.',
-    indexable: true,
-  },
-  {
-    file: 'control/index.html',
-    route: '/control',
-    title: 'Zungun Control — Field Operations Demo',
-    heading: 'Assign work. See proof.',
-    indexable: false,
-  },
-  {
-    file: 'messages/index.html',
-    route: '/messages',
-    title: 'Zungun Messages — Delivery State Demo',
-    heading: 'Text. No pretend presence.',
-    indexable: false,
-  },
-  {
-    file: 'ops/index.html',
-    route: '/ops',
-    title: 'Zungun Ops — Execution Evidence',
-    heading: 'Inspect what supports the claim.',
-    indexable: false,
-  },
+  { file: 'index.html', route: '/', title: 'Zungun — Reliable delivery for critical field operations', heading: 'Know what actually happened.', indexable: true },
+  { file: 'developers/index.html', route: '/developers', title: 'Zungun for Developers — Offline-First Android Delivery SDK', heading: 'Durability without optimistic claims.', indexable: true },
+  { file: 'control/index.html', route: '/control', title: 'Zungun Control — Field Operations Demo', heading: 'Assign work. See proof.', indexable: false },
+  { file: 'messages/index.html', route: '/messages', title: 'Zungun Messages — Delivery State Demo', heading: 'Text. No pretend presence.', indexable: false },
+  { file: 'ops/index.html', route: '/ops', title: 'Zungun Ops — Execution Evidence', heading: 'Inspect what supports the claim.', indexable: false },
 ];
 
 function metaContent(html, key, selectorAttribute = 'name') {
@@ -78,7 +48,6 @@ for (const page of pages) {
     assert.equal(html.match(/<meta name="viewport"/gi)?.length, 1);
     assert.ok(description, 'description metadata is required');
     assert.ok(description.length >= 70 && description.length <= 165, 'description should be concise');
-    assert.match(html, /<link rel="canonical"/i);
     assert.equal(linkHref(html, 'canonical'), canonical);
     assert.equal(linkHref(html, 'icon'), '/favicon.svg');
     assert.equal(metaContent(html, 'og:title', 'property'), page.title);
@@ -86,10 +55,7 @@ for (const page of pages) {
     assert.equal(metaContent(html, 'og:url', 'property'), canonical);
     assert.equal(metaContent(html, 'og:image', 'property'), origin + '/og-card.svg');
     assert.equal(metaContent(html, 'twitter:card'), 'summary_large_image');
-    assert.equal(
-      metaContent(html, 'robots'),
-      page.indexable ? 'index,follow,max-image-preview:large' : 'noindex,nofollow,noarchive',
-    );
+    assert.equal(metaContent(html, 'robots'), page.indexable ? 'index,follow,max-image-preview:large' : 'noindex,nofollow,noarchive');
   });
 }
 
@@ -104,7 +70,7 @@ test('homepage structured data describes the actual product without invented com
   assert.equal(data.url, origin + '/');
   assert.equal(data.applicationCategory, 'DeveloperApplication');
   assert.ok(data.sameAs.includes('https://github.com/simondalmasso/Zungun'));
-  assert.doesNotMatch(html, /universal exactly-once guarantee/i);
+  assert.doesNotMatch(html, /Zungun guarantees? exactly-once/i);
   assert.match(html, /No universal exactly-once guarantee/i);
 });
 
@@ -115,7 +81,6 @@ test('robots and sitemap expose only indexable public pages', () => {
   assert.match(robots, /Disallow: \/api\//);
   assert.match(robots, /Sitemap: https:\/\/zungun\.simondalmasso44\.workers\.dev\/sitemap\.xml/);
   assert.doesNotMatch(robots, /Disallow: \/(control|messages|ops|developers)/);
-
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((item) => item[1]).sort();
   assert.deepEqual(locations, [origin + '/', origin + '/developers'].sort());
   assert.doesNotMatch(sitemap, /\/(control|messages|ops)(?:<|\/)/);
