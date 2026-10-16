@@ -29,16 +29,18 @@ The GitHub combined-status endpoint returned no status checks for the cutover HE
 
 ## Automated mirror
 
-The workflow [`.github/workflows/gitlab-legacy-mirror.yml`](.github/workflows/gitlab-legacy-mirror.yml) has been added to keep GitLab downstream from GitHub. It mirrors branches and tags only; it does not mirror issues, merge requests, settings, or releases. It uses an atomic, non-force push: if a ref diverges, the job fails rather than overwriting that ref. The workflow is deliberately disabled until its repository variable and secret are configured.
+The workflow [`.github/workflows/gitlab-legacy-mirror.yml`](.github/workflows/gitlab-legacy-mirror.yml) has been added to keep GitLab downstream from GitHub. It mirrors branches and tags only; it does not mirror issues, merge requests, settings, or releases. It uses an atomic, non-force push. Before pushing, it checks that every existing GitLab branch and tag is also present in GitHub, that GitLab branch tips are ancestors of their canonical counterparts, and that same-named tags point to the same object. If a GitLab-only ref or divergence is found, the workflow fails closed and preserves that ref. It never prunes or force-pushes refs; branch/tag deletions require a separate audit.
+
+The workflow is deliberately disabled until its repository variable and secret are configured. This avoids a misleading success or an unauthenticated write attempt before setup.
 
 ### One-time activation
 
-1. In GitLab, create a **fine-grained personal access token** restricted to project `simondalmasso/Zungun`, with only the **Code → Push** permission and an expiry date. If fine-grained tokens are unavailable in the account UI, stop and choose a project-scoped alternative; do not paste a token into chat.
+1. In GitLab, create a **fine-grained personal access token** restricted to project `simondalmasso/Zungun`, with only **Code → Download** and **Code → Push** permissions and an expiry date. Do not grant API access. If fine-grained tokens are unavailable in the account UI, stop and choose a project-scoped alternative; do not paste a token into chat.
 2. In GitHub, open **Settings → Secrets and variables → Actions → Secrets** and add secret `GITLAB_MIRROR_TOKEN` with that token as its value.
 3. In GitHub **Settings → Secrets and variables → Actions → Variables**, add repository variable `GITLAB_MIRROR_ENABLED` with value `true`.
 4. Run **Actions → GitLab legacy mirror → Run workflow** once. Then verify the run succeeds and GitLab's `recovery/remote-toolchain-v1` reaches the current GitHub HEAD, the product directories appear in GitLab's tree, and all shared branch tips match.
 
-Token reference: [GitLab fine-grained personal access tokens](https://docs.gitlab.com/auth/tokens/fine_grained_access_tokens/). The workflow does not need GitHub write permission.
+Token reference: [GitLab fine-grained personal access tokens](https://docs.gitlab.com/auth/tokens/fine_grained_access_tokens/). GitLab's native pull-mirror feature is listed for Premium/Ultimate; this GitHub Actions path avoids that tier dependency. The workflow does not need GitHub write permission.
 
 Until the workflow has completed successfully, GitLab is a stale legacy archive, not a verified live mirror. Do not manually commit to GitLab while it is intended to be downstream.
 
