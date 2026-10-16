@@ -1,36 +1,55 @@
 # Zungun — Delivery Assurance
 
-> **Product hypothesis:** an Android SDK/runtime and receiver contract for durable delivery of critical app operations under intermittent, low-bandwidth, or satellite-enabled connectivity. Backend-agnostic by design; commercial value still requires independent benchmark and buyer evidence.
+> An Android SDK/runtime and receiver contract for critical field operations that must remain explicit and recoverable when mobile connectivity is unreliable.
 
-Zungun is focused on **critical mutations**, not generic offline caching. It persists an operation locally, preserves a stable identity, applies an explicit retry contract, and reconciles ambiguous delivery with receiver evidence before risking another side effect. It keeps transport acceptance, receiver durability, business effect, and final evidence separate.
+Zungun focuses on critical mutations, not generic offline caching. It preserves a stable operation identity, persists pending work, and reconciles ambiguous outcomes with receiver evidence before risking another side effect. Transport acceptance, receiver durability, business effect, and final evidence remain separate states.
 
-The current technical foundation is split into:
+**[Live demo](https://zungun.simondalmasso44.workers.dev/) · [Developer guide](https://zungun.simondalmasso44.workers.dev/developers) · [Architecture](docs/link-architecture.md) · [Strategic assessment](docs/strategy/delivery-assurance-assessment.md)**
 
-- **Zungun Link:** delivery planning under constrained connectivity, priority for critical payloads, deferred/resumable evidence transfer, exact-base delta policy and safe reconciliation.
-- **Witness:** continuity and integrity of operation evidence.
-- **Receiver contract:** durable idempotency and a query/reconciliation path, with stronger assurance only where the receiver can prove it.
-- **Proof and operations tooling:** inspectable receipts, incident bundles, Control Room and reproducible blackout/resilience exercises.
+## What it does
 
-This is not a claim of universal exactly-once execution. The strongest guarantees require receiver participation. Android WorkManager, Firebase offline features, PowerSync, Ditto and Couchbase Lite already solve overlapping parts of scheduling, persistence and offline sync. Zungun must demonstrate incremental value for side-effecting operations across existing backends.
+- **Durable delivery planning:** retain pending critical operations and resume work under constrained connectivity.
+- **Receiver idempotency:** reuse a stable identity so repeated requests can be deduplicated at the receiver's storage boundary.
+- **Reconciliation before retry:** query the receiver when a timeout leaves the business outcome unknown and the receiver supports that contract.
+- **Verifiable evidence:** keep sender, transport, receiver, and business-effect evidence distinct.
+- **Developer and operations tooling:** Link Doctor, the Control demo, proof inspection, and deterministic resilience exercises.
 
-## Start with one critical endpoint
+## How it fits
 
-1. Run Link Doctor locally to inventory OpenAPI writes.
-2. Wrap one mutation with an explicit Link delivery profile.
-3. Split critical core data from deferred attachments where the workflow supports it.
-4. Add the receiver idempotency/reconciliation boundary only where needed.
-5. Compare against a fair Room + WorkManager + backend-outbox baseline under reproducible fault injection.
+    Android operation
+        → durable local state + stable identity
+        → delivery plan and transport attempt
+        → receiver idempotency / reconciliation
+        → inspectable evidence and an explicit outcome
 
-```bash
-npm ci --ignore-scripts --no-audit --no-fund
-npm run demo:link
-```
+Zungun is not a universal exactly-once protocol. Stronger guarantees require receiver participation and a queryable evidence boundary. WorkManager, Firebase offline features, PowerSync, Ditto, and Couchbase Lite solve overlapping parts of scheduling, persistence, and offline sync; Zungun must prove incremental value for side-effecting operations.
 
-The fixture is local evidence, not proof of production-scale behavior, OEM background reliability, customer savings or paid demand.
+## Quick start
 
-## Current commercial stance
+    npm ci --ignore-scripts --no-audit --no-fund
+    npm run demo:link
 
-**CONDITIONAL GO:** validate one high-cost workflow with design partners and publish a reproducible benchmark. Do not claim Zungun is a necessary infrastructure standard, a DOCOMO partner, a certified product, or a proven revenue stream. The current evidence and five go/no-go gates are in [the Delivery Assurance assessment](docs/strategy/delivery-assurance-assessment.md).
+For the deeper local verification suite:
+
+    npm run verify:deep
+
+For public-site SEO and browser checks, see the [public-site guide](docs/guides/public-site.md). These checks are correctness evidence, not proof of production-scale performance, OEM background reliability, customer savings, or willingness to pay.
+
+## Live surfaces
+
+| Route | Purpose | Indexing |
+| --- | --- | --- |
+| / | Product scope and demo entry point | Indexable |
+| /developers | SDK overview and integration boundaries | Indexable |
+| /control | Bounded field-work demo | Noindex |
+| /messages | Honest delivery-state demo | Noindex |
+| /ops | Persisted execution evidence | Noindex |
+
+The deployed public-site source of truth is cloudflare/public/. Its release uses the existing guarded ORDER-083 deployment procedure and verifies the deployed source identity.
+
+## Current product stance
+
+**CONDITIONAL GO:** validate one high-cost workflow with design partners and publish a reproducible benchmark. Do not claim Zungun is a necessary infrastructure standard, a DOCOMO partner, a certified product, or a proven revenue stream. The current evidence and five go/no-go gates are in the [Delivery Assurance assessment](docs/strategy/delivery-assurance-assessment.md).
 
 ## Architecture and verification
 
@@ -48,6 +67,7 @@ The fixture is local evidence, not proof of production-scale behavior, OEM backg
 - [Control Room](docs/guides/control-room.md)
 - [Resilience Lab and Blackout Drill](docs/guides/resilience-lab.md)
 - [Incident Proof Bundle](docs/reference/incident-proof-bundle.md)
+- [Public site, SEO, and production E2E](docs/guides/public-site.md)
 - [Repository authority and migration record](REPOSITORY_AUTHORITY.md)
 
 ## Evidence boundaries

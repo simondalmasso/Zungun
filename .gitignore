@@ -10,3 +10,4 @@ dist/
 android/.gradle/
 android/**/build/
 local.properties
+.e2e/
