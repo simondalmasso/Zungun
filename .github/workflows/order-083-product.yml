@@ -1,7 +1,5 @@
 name: Order 083 product verification
 on:
-  push:
-    branches: [feat/zungun-full-project-v1]
   workflow_dispatch:
 permissions:
   contents: read

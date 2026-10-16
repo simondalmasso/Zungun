@@ -3,11 +3,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
 : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID required}"
 : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN required}"
-: "${ZUNGUN_PILOT_TOKEN:?ZUNGUN_PILOT_TOKEN required}"
 ORIGIN="${ZUNGUN_ORIGIN:-https://zungun.simondalmasso44.workers.dev}"
 OUT="${ORDER083_EVIDENCE_DIR:-$ROOT/evidence/order083/production}"
 mkdir -p "$OUT"; chmod 700 "$OUT"
-for secret in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN" "$ZUNGUN_PILOT_TOKEN"; do printf '::add-mask::%s\n' "$secret"; done
+for secret in "$CLOUDFLARE_ACCOUNT_ID" "$CLOUDFLARE_API_TOKEN"; do printf '::add-mask::%s\n' "$secret"; done
 node tools/order083/generate-manifests.mjs "$ROOT" "$ROOT/evidence/order083/local" >/tmp/order083-manifest.json
 SOURCE_SHA="$(node -p "require('./evidence/order083/local/result.json').sourceBundleSha256")"
 STATIC_SHA="$(node -p "require('./evidence/order083/local/result.json').staticAssetManifestSha256")"
@@ -46,8 +45,9 @@ NODE
  npx --yes wrangler@4.114.0 deploy --config "$CFG" --x-provision=false --x-auto-create=false 2>&1 | tee "$OUT/deploy.log"
 )
 "${WRANGLER[@]}" deployments status --name zungun --json > "$OUT/post-deployment.json"
-CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" ZUNGUN_PILOT_TOKEN="$ZUNGUN_PILOT_TOKEN" ZUNGUN_ORIGIN="$ORIGIN" node tools/order083/live-e2e.mjs "$OUT/live-e2e"
+curl --fail --silent --show-error "$ORIGIN/health" > "$OUT/live-health.json"
+curl --fail --silent --show-error "$ORIGIN/version" > "$OUT/live-version.json"
 node - "$SOURCE_SHA" "$STATIC_SHA" "$MIGRATION_SHA" "$D1_ID" "$OUT" <<'NODE'
-const fs=require('fs');const [source,staticSha,mig,d1,out]=process.argv.slice(2);const live=JSON.parse(fs.readFileSync(`${out}/live-e2e/result.json`));if(live.sourceBundleSha256!==source||live.staticAssetManifestSha256!==staticSha||live.migrationManifestSha256!==mig)throw new Error('PRODUCTION_SOURCE_IDENTITY_MISMATCH');fs.writeFileSync(`${out}/result.json`,JSON.stringify({ok:true,order:'ORDER-083',sourceBundleSha256:source,staticAssetManifestSha256:staticSha,migrationManifestSha256:mig,d1DatabaseId:d1,liveE2E:'PASS'},null,2)+'\n');
+const fs=require('fs');const [source,staticSha,mig,d1,out]=process.argv.slice(2);const health=JSON.parse(fs.readFileSync(`${out}/live-health.json`,'utf8'));const version=JSON.parse(fs.readFileSync(`${out}/live-version.json`,'utf8'));if(health.ok!==true||health.order!=='ORDER-083')throw new Error('PRODUCTION_HEALTH_MISMATCH');if(version.sourceBundleSha256!==source||version.staticAssetManifestSha256!==staticSha||version.migrationManifestSha256!==mig)throw new Error('PRODUCTION_SOURCE_IDENTITY_MISMATCH');fs.writeFileSync(`${out}/result.json`,JSON.stringify({ok:true,order:'ORDER-083',sourceBundleSha256:source,staticAssetManifestSha256:staticSha,migrationManifestSha256:mig,d1DatabaseId:d1,readOnlyProductionSmoke:'PASS',liveE2E:'NOT_RUN_READ_ONLY_POLICY'},null,2)+'\n');
 NODE
-printf 'ORDER083_PRODUCTION_DEPLOY=PASS\nSOURCE_BUNDLE_SHA256=%s\nSTATIC_ASSET_MANIFEST_SHA256=%s\nMIGRATION_MANIFEST_SHA256=%s\nD1_ID=%s\n' "$SOURCE_SHA" "$STATIC_SHA" "$MIGRATION_SHA" "$D1_ID"
+printf 'ORDER083_PRODUCTION_DEPLOY=PASS\nSOURCE_BUNDLE_SHA256=%s\nSTATIC_ASSET_MANIFEST_SHA256=%s\nMIGRATION_MANIFEST_SHA256=%s\nD1_ID=%s\nREAD_ONLY_PRODUCTION_SMOKE=PASS\nLIVE_WRITE_E2E=NOT_RUN\n' "$SOURCE_SHA" "$STATIC_SHA" "$MIGRATION_SHA" "$D1_ID"

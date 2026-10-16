@@ -1,6 +1,7 @@
 from pathlib import Path
 import json, os
 from playwright.sync_api import sync_playwright, expect
+import re
 
 origin=os.environ.get('ZUNGUN_ORIGIN','https://zungun.simondalmasso44.workers.dev').rstrip('/')
 out=Path(os.environ.get('ORDER085_WEB_EVIDENCE','evidence/order085/web'));out.mkdir(parents=True,exist_ok=True)
@@ -9,8 +10,11 @@ def create_identity(page,name):
     page.goto(origin+'/messages',wait_until='networkidle')
     page.get_by_placeholder('Display name').fill(name)
     page.get_by_role('button',name='Create identity').click()
-    expect(page.get_by_text('Pairing code')).to_be_visible(timeout=15000)
-    return page.locator('#account .meta').inner_text().split()[-1]
+    expect(page.locator('#account .meta')).to_be_visible(timeout=15000)
+    pairing_text=page.locator('#account .meta').inner_text()
+    match=re.search(r'Pairing code\\s+([A-Z2-9]{6,12})',pairing_text,re.IGNORECASE)
+    assert match, f'PAIRING_CODE_NOT_RENDERED: {pairing_text!r}'
+    return match.group(1).upper()
 
 def assert_mobile_bounds(page):
     metrics=page.evaluate('''() => ({w:innerWidth,sw:document.documentElement.scrollWidth,composer:(document.querySelector('.composer')?.getBoundingClientRect()||{}),body:document.body.className})''')
@@ -21,16 +25,21 @@ def assert_mobile_bounds(page):
 
 with sync_playwright() as p:
     browser=p.chromium.launch(headless=True,args=['--no-sandbox','--disable-dev-shm-usage'])
-    sender_ctx=browser.new_context(viewport={'width':1280,'height':900},color_scheme='dark')
+    sender_ctx=browser.new_context(viewport={'width':1280,'height':900},color_scheme='dark',ignore_https_errors=True)
     sender=sender_ctx.new_page();sender_code=create_identity(sender,'ORDER085 Sender')
-    recipient_ctx=browser.new_context(viewport={'width':390,'height':844},color_scheme='light')
+    recipient_ctx=browser.new_context(viewport={'width':390,'height':844},color_scheme='light',ignore_https_errors=True)
     recipient=recipient_ctx.new_page();recipient_code=create_identity(recipient,'ORDER085 Recipient')
     expect(recipient.get_by_role('heading',name='Conversations')).to_be_visible()
     recipient.screenshot(path=str(out/'messages-390-list-light.png'))
 
     sender.get_by_placeholder("Another person's pairing code").fill(recipient_code)
     sender.get_by_role('button',name='Start conversation').click()
-    expect(sender.get_by_role('heading',name='ORDER085 Recipient')).to_be_visible(timeout=15000)
+    try:
+        expect(sender.get_by_role('heading',name='ORDER085 Recipient')).to_be_visible(timeout=15000)
+    except AssertionError as exc:
+        pair_error=sender.locator('#pair-error').inner_text().strip()
+        sender_state=sender.locator('#conversations').inner_text().strip()
+        raise AssertionError(f'PAIRING_UI_FAILED: error={pair_error!r}; conversations={sender_state!r}') from exc
     expect(sender.locator('#socket')).to_contain_text('Live',timeout=15000)
 
     recipient.reload(wait_until='networkidle')
