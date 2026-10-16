@@ -27,7 +27,7 @@ jobs:
           git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" mirror.git
           git -C mirror.git remote add gitlab https://gitlab.com/simondalmasso/Zungun.git
 
-      - name: Mirror branches and tags to GitLab
+      - name: Validate legacy refs and mirror branches and tags
         env:
           GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
         run: |
@@ -39,6 +39,36 @@ jobs:
           auth="$(printf 'oauth2:%s' "${GITLAB_MIRROR_TOKEN}" | base64 | tr -d '\n')"
           git -C mirror.git \
             -c "http.https://gitlab.com/.extraheader=AUTHORIZATION: basic ${auth}" \
-            push --atomic --prune gitlab \
+            fetch --no-tags gitlab \
+            '+refs/heads/*:refs/gitlab/heads/*' \
+            '+refs/tags/*:refs/gitlab/tags/*'
+
+          while IFS= read -r ref; do
+            name="${ref#refs/gitlab/heads/}"
+            if ! git -C mirror.git show-ref --verify --quiet "refs/heads/${name}"; then
+              echo "::error::GitLab-only branch '${name}' detected; preserving it and refusing to mirror."
+              exit 1
+            fi
+            if ! git -C mirror.git merge-base --is-ancestor "${ref}" "refs/heads/${name}"; then
+              echo "::error::GitLab branch '${name}' diverges from GitHub; refusing to overwrite it."
+              exit 1
+            fi
+          done < <(git -C mirror.git for-each-ref --format='%(refname)' refs/gitlab/heads)
+
+          while IFS= read -r ref; do
+            name="${ref#refs/gitlab/tags/}"
+            if ! git -C mirror.git show-ref --verify --quiet "refs/tags/${name}"; then
+              echo "::error::GitLab-only tag '${name}' detected; preserving it and refusing to mirror."
+              exit 1
+            fi
+            if [[ "$(git -C mirror.git rev-parse "${ref}")" != "$(git -C mirror.git rev-parse "refs/tags/${name}")" ]]; then
+              echo "::error::Tag '${name}' differs between GitLab and GitHub; refusing to overwrite it."
+              exit 1
+            fi
+          done < <(git -C mirror.git for-each-ref --format='%(refname)' refs/gitlab/tags)
+
+          git -C mirror.git \
+            -c "http.https://gitlab.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push --atomic gitlab \
             'refs/heads/*:refs/heads/*' \
             'refs/tags/*:refs/tags/*'
