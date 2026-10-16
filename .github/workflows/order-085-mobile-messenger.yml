@@ -97,6 +97,8 @@ jobs:
           node-version: 22.16.0
           package-manager-cache: false
       - name: Deploy exact green candidate to existing Zungun Worker
+        env:
+          ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/order085-deploy
         run: |
           set -euo pipefail
           npm ci --ignore-scripts --no-audit --no-fund
