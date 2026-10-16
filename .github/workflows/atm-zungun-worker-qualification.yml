@@ -59,6 +59,8 @@ jobs:
           set -euo pipefail
           npm run verify:secrets
           npm run verify:no-placeholders
+      - name: Public-site SEO and route contract
+        run: node --test cloudflare/test/public-site-seo.test.mjs
       - name: Android zero-cost compile and unit contract
         shell: bash
         run: |

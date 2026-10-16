@@ -14,7 +14,10 @@
     "declaration": true,
     "sourceMap": true,
     "resolveJsonModule": true,
-    "lib": ["ES2022", "DOM"]
+    "lib": [
+      "ES2022",
+      "DOM"
+    ]
   },
   "include": [
     "types/**/*.d.ts",
@@ -26,5 +29,10 @@
     "examples/**/*.ts",
     "tests/**/*.ts"
   ],
-  "exclude": ["dist", "node_modules", "android"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    "android",
+    "tests/**/*.e2e.ts"
+  ]
 }

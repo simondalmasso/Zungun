@@ -1,1 +1,117 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Zungun</title><link rel="stylesheet" href="/app.css"></head><body><main class="shell"><header class="topbar"><a class="brand" href="/">Zungun</a><nav class="nav" aria-label="Primary"><a href="/control">Control</a><a href="/messages">Messages</a><a href="/developers">Developers</a><a href="/ops">Ops</a></nav></header><section class="hero"><div class="eyebrow">Critical operations, unreliable links</div><h1>Know what actually happened.</h1><p>Zungun keeps uncertainty explicit, reconciles before retry, and only claims an outcome when durable evidence supports it.</p><div class="row"><a class="button primary" href="/control">Open Control</a><a class="button" href="/messages">Open Messages</a></div></section><section class="grid"><article class="card"><h2>Field</h2><p class="muted">Assign work. Complete or reject it from Android. Offline actions stay durable and recover without a duplicate business effect.</p></article><article class="card"><h2>Messages</h2><p class="muted">One-to-one text with honest states: saved on device, sent to server, uncertain, or delivered after a durable recipient ACK.</p></article><article class="card full"><h2>Account</h2><div id="account"></div></article></section><footer class="footer">Zungun V1 · No presence, read receipts, E2EE or satellite claims.</footer></main><script type="module" src="/home.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0b1716">
+<title>Zungun — Reliable delivery for critical field operations</title>
+<meta name="description" content="An Android SDK and receiver contract for durable delivery, idempotency, reconciliation, and verifiable evidence when mobile connectivity is unreliable.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="canonical" href="https://zungun.simondalmasso44.workers.dev/">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/app.css">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Zungun">
+<meta property="og:title" content="Zungun — Reliable delivery for critical field operations">
+<meta property="og:description" content="An Android SDK and receiver contract for durable delivery, idempotency, reconciliation, and verifiable evidence when mobile connectivity is unreliable.">
+<meta property="og:url" content="https://zungun.simondalmasso44.workers.dev/">
+<meta property="og:image" content="https://zungun.simondalmasso44.workers.dev/og-card.svg">
+<meta property="og:image:type" content="image/svg+xml">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Zungun — delivery assurance for critical field operations">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Zungun — Reliable delivery for critical field operations">
+<meta name="twitter:description" content="An Android SDK and receiver contract for durable delivery, idempotency, reconciliation, and verifiable evidence when mobile connectivity is unreliable.">
+<meta name="twitter:image" content="https://zungun.simondalmasso44.workers.dev/og-card.svg">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Zungun",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Android, Web",
+  "url": "https://zungun.simondalmasso44.workers.dev/",
+  "description": "An Android SDK and receiver contract for durable delivery, idempotency, reconciliation, and verifiable evidence when mobile connectivity is unreliable.",
+  "sameAs": ["https://github.com/simondalmasso/Zungun"],
+  "featureList": ["Durable critical-operation delivery", "Receiver idempotency and reconciliation", "Verifiable execution evidence"]
+}
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<main id="main" class="shell">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Zungun home">
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <path d="M8 12.5 20 5l12 7.5v15L20 35 8 27.5z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+        <path d="M14 20h12M20 14v12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="20" cy="20" r="3.5" fill="currentColor"/>
+      </svg>
+      <span>Zungun</span>
+    </a>
+    <nav class="nav" aria-label="Primary navigation">
+      <a href="#capabilities">Capabilities</a>
+      <a href="/developers">Developers</a>
+      <a href="/control">Field demo</a>
+      <a href="/messages">Messages</a>
+    </nav>
+  </header>
+  <section class="hero" aria-labelledby="hero-title">
+    <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> Offline-first delivery assurance</p>
+    <h1 id="hero-title">Know what actually happened.</h1>
+    <p class="hero-copy">An Android SDK and receiver contract for critical field operations: preserve operation identity, reconcile ambiguous delivery, and keep proof separate from assumptions.</p>
+    <div class="hero-actions">
+      <a class="button primary" href="/developers">Explore the developer guide</a>
+      <a class="button secondary" href="/control">Open the field demo</a>
+    </div>
+    <p class="hero-note">Built for operations that matter when connectivity does not cooperate.</p>
+  </section>
+  <section id="capabilities" class="section" aria-labelledby="capabilities-title">
+    <header class="section-heading">
+      <p class="eyebrow">Core capabilities</p>
+      <h2 id="capabilities-title">Make uncertainty operational.</h2>
+      <p class="muted">Delivery state should be explicit, recoverable, and tied to evidence—not inferred from a timeout or a green network icon.</p>
+    </header>
+    <div class="grid">
+      <article class="card third"><p class="card-label">01 / Durability</p><h3>Keep the operation</h3><p>Persist pending work with a stable identity so reconnects and process interruption do not erase the sender’s intent.</p></article>
+      <article class="card third"><p class="card-label">02 / Reconciliation</p><h3>Resolve before retry</h3><p>When a response is ambiguous, query the receiver when supported before attempting another side effect.</p></article>
+      <article class="card third"><p class="card-label">03 / Evidence</p><h3>Prove only what is known</h3><p>Keep transport acceptance, receiver durability, business effect, and final evidence as distinct states.</p></article>
+    </div>
+  </section>
+  <section id="flow" class="section" aria-labelledby="flow-title">
+    <header class="section-heading"><p class="eyebrow">Operating model</p><h2 id="flow-title">A clear path from intent to evidence.</h2></header>
+    <div class="grid">
+      <article class="card third"><span class="step-index">01</span><h3>Persist</h3><p>Record the operation and stable idempotency identity before the network attempt.</p></article>
+      <article class="card third"><span class="step-index">02</span><h3>Deliver or reconcile</h3><p>Retry under an explicit contract; use receiver-side idempotency and query semantics where available.</p></article>
+      <article class="card third"><span class="step-index">03</span><h3>Report the evidence</h3><p>Keep UNKNOWN and conflicting evidence visible until the declared outcome can be supported.</p></article>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="boundaries-title">
+    <div class="grid">
+      <article class="card full proof-panel">
+        <p class="eyebrow">Assurance boundaries</p>
+        <h2 id="boundaries-title">Evidence, not optimism.</h2>
+        <p>HTTP success alone does not prove a business effect. Stronger assurance depends on receiver participation, durable idempotency, and an inspectable reconciliation path.</p>
+        <p class="muted">No universal exactly-once guarantee, end-to-end encryption, satellite connectivity, presence, or read-receipt claim is made by this demo.</p>
+        <div class="hero-actions"><a class="button secondary" href="/ops">Inspect execution evidence</a><a class="button secondary" href="https://github.com/simondalmasso/Zungun">View source on GitHub</a></div>
+      </article>
+    </div>
+  </section>
+  <section class="section" aria-labelledby="demo-title">
+    <div class="grid"><article class="card full">
+      <p class="eyebrow">Interactive demo</p><h2 id="demo-title">Try a bounded workflow.</h2>
+      <p class="muted">Create a demo identity to explore field work orders and the product’s persisted state. This demo does not represent a production customer environment.</p>
+      <div id="account"></div>
+    </article></div>
+  </section>
+  <footer class="footer">
+    <span>© 2026 Zungun · Delivery assurance for critical field operations</span>
+    <nav class="footer-links" aria-label="Footer navigation"><a href="/developers">Developers</a><a href="https://github.com/simondalmasso/Zungun">Source code</a><a href="https://github.com/simondalmasso/Zungun/blob/recovery/remote-toolchain-v1/docs/strategy/delivery-assurance-assessment.md">Evidence and limits</a></nav>
+  </footer>
+</main>
+<script type="module" src="/home.js"></script>
+</body>
+</html>
