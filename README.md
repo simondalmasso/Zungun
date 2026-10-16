@@ -1,5 +1,7 @@
 # Zungun
 
+> **Repository authority:** [GitHub is canonical](https://github.com/simondalmasso/Zungun). [GitLab is the legacy mirror target](https://gitlab.com/simondalmasso/Zungun); it was stale at the 2026-10-16 cutover and is **not yet verified as a live mirror**. See [Repository authority and cutover record](REPOSITORY_AUTHORITY.md).
+
 Zungun is an independent evidence and continuity layer for critical operations under unstable connectivity. It preserves explicit ambiguity, separates transport acceptance from receiver durability and business effect, and records only evidence a responsible boundary is allowed to assert.
 
 **Zungun Link** adds a semantic connectivity runtime for existing applications: durable offline mutation queuing, validated-link planning, safe retry after ambiguous timeout, critical-data-first delivery, resumable large evidence transfer, exact-base delta policy, declarative prefetch and receiver reconciliation. It does not replace TCP/QUIC, Android networking, the application backend, or Witness.
