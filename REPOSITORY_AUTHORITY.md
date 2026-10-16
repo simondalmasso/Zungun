@@ -16,15 +16,15 @@ GitHub is the sole source of truth for source code, branches, issues, pull reque
 | Check | GitHub canonical | GitLab legacy snapshot |
 |---|---|---|
 | Default branch | recovery/remote-toolchain-v1 | recovery/remote-toolchain-v1 |
-| HEAD observed on 2026-10-16 | 09f64d238fcfdc9f718b640196e7098982c8f350 | 13d6745217672da16985d815c427aa4c953de227 |
+| HEAD at start of this reconciliation | 09f64d238fcfdc9f718b640196e7098982c8f350 | 13d6745217672da16985d815c427aa4c953de227 |
 | Branches | 21 | 11 |
 | Tags | GitHub branch/tag state not changed by this reconciliation | 0 tags reported |
 | Product tree | Full product tree, including Link, Android runtime, receiver, Witness, proof and verification documentation | Root tree is limited to .github/, canary/, and RECOVERY.md; no root README |
 | GitLab description | Delivery Assurance product direction now documented in canonical README | Older description: Android SDK for durable, idempotent delivery under intermittent/low-bandwidth/satellite networks |
 
-At the observed snapshot, GitLab's default-branch HEAD is an ancestor of the GitHub canonical history and is behind it. Ten of the eleven GitLab branch names exist on GitHub; the remaining default-branch tip is stale. GitHub also has product branches absent from the GitLab branch list. The checked GitLab repository reports no tags. This is not evidence that every branch or historical artifact has been migrated; it is a bounded comparison of the visible refs and trees.
+At the observed snapshot, GitLab's default-branch HEAD is an ancestor of the GitHub canonical history and is behind it. All eleven GitLab branch names exist on GitHub. Ten branch tips match; the GitLab default branch tip is the one that is stale. GitHub also has product branches absent from the GitLab branch list. The checked GitLab repository reports no tags. This is not evidence that every branch or historical artifact has been migrated; it is a bounded comparison of the visible refs and trees.
 
-GitLab's import metadata still points at the old GitHub path https://github.com/simonkey888/Zungun.git. That metadata is not an active migration or synchronization mechanism.
+GitLab's import metadata still points at the old GitHub path https://github.com/simonkey888/Zungun.git. That metadata is not an active migration or synchronization mechanism.\n\nThe current GitHub HEAD after this documentation-only update is recorded by the commit history; the latest combined-status query returned no status checks. No code-test or production-pass claim is made for this update.
 
 ## Current migration decision
 
