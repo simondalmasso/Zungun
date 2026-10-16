@@ -24,6 +24,7 @@ This is not a claim of universal exactly-once execution. The strongest guarantee
 ```bash
 npm ci --ignore-scripts --no-audit --no-fund
 npm run demo:link
+npm run benchmark:assurance
 ```
 
 The fixture is local evidence, not proof of production-scale behavior, OEM background reliability, customer savings or paid demand.
@@ -47,6 +48,7 @@ The fixture is local evidence, not proof of production-scale behavior, OEM backg
 - [Reconciliation](docs/architecture/reconciliation.md)
 - [Control Room](docs/guides/control-room.md)
 - [Resilience Lab and Blackout Drill](docs/guides/resilience-lab.md)
+- [Comparative assurance benchmark](docs/reference/comparative-assurance-benchmark.md)
 - [Incident Proof Bundle](docs/reference/incident-proof-bundle.md)
 - [Repository authority and migration record](REPOSITORY_AUTHORITY.md)
 

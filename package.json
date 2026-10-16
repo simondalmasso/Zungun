@@ -23,7 +23,7 @@
     "verify:docs": "node tools/docs/build-and-check.mjs",
     "verify:pack": "npm run build && node tools/quality/pack-consumer.mjs",
     "verify:security-evidence": "node tools/security/generate-evidence.mjs",
-    "verify:deep": "npm run format:check && npm run lint && npm run typecheck && npm run verify:oracle && npm test && npm run test:resilience && npm run verify:pack && npm run verify:docs && npm run verify:no-placeholders && npm run verify:secrets && npm run verify:security-evidence",
+    "verify:deep": "npm run format:check && npm run lint && npm run typecheck && npm run verify:oracle && npm test && npm run test:resilience && npm run benchmark:assurance && npm run verify:pack && npm run verify:docs && npm run verify:no-placeholders && npm run verify:secrets && npm run verify:security-evidence",
     "start:receiver": "npm run build && node dist/services/receiver/src/server.js",
     "demo:field-service": "npm run build && node dist/examples/field-service/src/demo.js",
     "verify:order076-baseline": "node tools/quality/order076-baseline-regressions.mjs",
@@ -38,7 +38,8 @@
     "generate:link-proof": "npm run build && node dist/tools/resilience-lab/src/emit-link-proof-fixture.js",
     "demo:link": "npm run build && node dist/examples/link-quickstart/src/demo.js",
     "verify:link-vectors": "npm run build && node tools/link-vectors/generate.mjs .tmp/link-planner-v1.vectors && cmp .tmp/link-planner-v1.vectors testdata/link-planner-v1.vectors",
-    "test:link-resilience": "npm run build && node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js"
+    "test:link-resilience": "npm run build && node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js",
+    "benchmark:assurance": "npm run build && node dist/tools/resilience-lab/src/comparative-benchmark.js"
   },
   "engines": {
     "node": ">=22.16.0"
