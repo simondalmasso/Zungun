@@ -40,7 +40,7 @@
     "verify:link-vectors": "npm run build && node tools/link-vectors/generate.mjs .tmp/link-planner-v1.vectors && cmp .tmp/link-planner-v1.vectors testdata/link-planner-v1.vectors",
     "test:link-resilience": "npm run build && node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js",
     "test:seo": "node --test cloudflare/test/public-site-seo.test.mjs",
-    "test:e2e:public": "npx e2e run"
+    "test:e2e:public": "npx e2e run tests/public-site.e2e.ts"
   },
   "engines": {
     "node": ">=22.16.0"
