@@ -6,15 +6,16 @@ test('homepage explains the product and its primary navigation works', async ({ 
   await expect(screen.getByRole('heading', 'Know what actually happened.')).toBeVisible();
   await expect(screen.getByRole('link', 'Explore the developer guide')).toBeVisible();
   await expect(screen.getByRole('link', 'Open the field demo')).toBeVisible();
+  await expect(screen.getByRole('link', 'View source on GitHub')).toBeVisible();
 
   await screen.getByRole('link', 'Explore the developer guide').click();
   await expect(screen.getByRole('heading', 'Durability without optimistic claims.')).toBeVisible();
 });
 
-test('developer guide renders its scope and source link', async ({ app, screen }) => {
+test('developer guide renders its scope and execution-evidence route', async ({ app, screen }) => {
   await app.open('/developers');
   await expect(screen.getByRole('heading', 'Durability without optimistic claims.')).toBeVisible();
-  await expect(screen.getByRole('link', 'View source on GitHub')).toBeVisible();
+  await expect(screen.getByRole('link', 'Open execution evidence')).toBeVisible();
 });
 
 test('interactive surfaces render without submitting forms or creating demo data', async ({ app, screen }) => {
