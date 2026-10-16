@@ -1,4 +1,24 @@
-# Zungun remote toolchain recovery
+# Recovery record — historical and superseded for repository authority
+
+This file is retained for audit continuity. Its original recovery-only flags describe the state at commit `13d6745217672da16985d815c427aa4c953de227`; they are not the current repository-authority policy.
+
+## Current authority
+
+```text
+CANON=https://github.com/simondalmasso/Zungun
+LEGACY=https://gitlab.com/simondalmasso/Zungun
+SOURCE_OF_TRUTH=YES_FOR_REPOSITORY_CONTENT
+DEPLOYMENT_STATUS=NOT_VERIFIED_BY_THIS_FILE
+PRODUCTION=NOT_ASSERTED
+```
+
+The GitHub merge commit `73d400c82fb62015b1710593084e8fe15139f692` promoted the full product checkout as the default checkout. GitLab remains stale and is not yet verified as a live mirror. See [REPOSITORY_AUTHORITY.md](REPOSITORY_AUTHORITY.md) for the cutover comparison and the required GitLab pull-mirror configuration.
+
+This promotion establishes repository authority only. It does not authorize a Cloudflare deployment, certify production behavior, or replace order-specific test and approval gates.
+
+## Preserved original recovery snapshot
+
+The following values are preserved as historical evidence for the earlier recovery-only state:
 
 ```text
 BRANCH=recovery/remote-toolchain-v1
@@ -11,11 +31,9 @@ PRODUCTION=FORBIDDEN
 MERGE=FORBIDDEN_PENDING_AUDIT
 ```
 
-This branch exists only to execute one controlled GitHub Actions toolchain-recovery run against the preserved Phase 0 source artifact.
+At that stage, the branch was intended only to execute one controlled GitHub Actions toolchain-recovery run against the preserved Phase 0 source artifact. Dependency, TypeScript, lint, test, configuration, or audit failures were to be reported before any correction was attempted.
 
-The workflow must not deploy, use secrets, alter Cloudflare, modify `main`, or treat generated outputs as canonical. Its first run is evidence collection only. Dependency, TypeScript, lint, test, configuration, or audit failures must be reported before any correction is attempted.
-
-Expected preserved input artifact:
+Preserved input artifact:
 
 ```text
 zungun-staging-source-0.1.0.tar
