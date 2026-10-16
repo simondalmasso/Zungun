@@ -33,6 +33,12 @@ For the deeper local verification suite:
 
     npm run verify:deep
 
+To run the deterministic comparative assurance benchmark:
+
+    npm run benchmark:assurance
+
+The benchmark compares naive HTTP retry, receiver idempotency, a SQLite outbox baseline, and Zungun Link reconciliation under a deterministic response-loss-after-commit fault. It is a correctness harness, not a real-network or Android/OEM performance benchmark. See the [comparative assurance benchmark](docs/reference/comparative-assurance-benchmark.md).
+
 For public-site SEO and browser checks, see the [public-site guide](docs/guides/public-site.md). These checks are correctness evidence, not proof of production-scale performance, OEM background reliability, customer savings, or willingness to pay.
 
 ## Live surfaces
@@ -66,6 +72,7 @@ The deployed public-site source of truth is cloudflare/public/. Its release uses
 - [Reconciliation](docs/architecture/reconciliation.md)
 - [Control Room](docs/guides/control-room.md)
 - [Resilience Lab and Blackout Drill](docs/guides/resilience-lab.md)
+- [Comparative assurance benchmark](docs/reference/comparative-assurance-benchmark.md)
 - [Incident Proof Bundle](docs/reference/incident-proof-bundle.md)
 - [Public site, SEO, and production E2E](docs/guides/public-site.md)
 - [Repository authority and migration record](REPOSITORY_AUTHORITY.md)

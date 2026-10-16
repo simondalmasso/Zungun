@@ -17,7 +17,7 @@ concurrency:
 jobs:
   qualification:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -28,6 +28,8 @@ jobs:
           package-manager-cache: false
       - name: Install exact lockfile
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Complete TypeScript, resilience, security and evidence qualification
+        run: npm run verify:deep
       - name: Typecheck and build
         run: |
           set -euo pipefail
@@ -38,6 +40,8 @@ jobs:
           set -euo pipefail
           node --test dist/tests/link-doctor.test.js dist/tests/link-blackout.test.js dist/tests/persistence-recovery.test.js
           node --test dist/tests/reconciliation.test.js dist/tests/link-resilience-matrix.test.js
+          node --test dist/tests/comparative-assurance-benchmark.test.js
+          npm run benchmark:assurance
           mkdir -p .tmp
           node dist/tools/link-doctor/src/cli.js --openapi testdata/link-doctor-openapi.yaml > .tmp/doctor-openapi-1.json
           node dist/tools/link-doctor/src/cli.js --openapi testdata/link-doctor-openapi.yaml > .tmp/doctor-openapi-2.json
@@ -54,6 +58,14 @@ jobs:
             ($ids | index("ZL015_NO_RECEIVER_RECONCILIATION_PATH") != null) and
             ($ids | index("ZL016_CONNECTED_WITHOUT_VALIDATION_CHECK") != null)
           ' .tmp/doctor-defective-1.json >/dev/null
+      - name: Upload comparative assurance benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: zungun-assurance-benchmark-${{ github.sha }}
+          path: .artifacts/resilience/comparative-assurance-benchmark.*
+          if-no-files-found: warn
+          retention-days: 30
       - name: Secret and placeholder guards
         run: |
           set -euo pipefail

@@ -1,7 +1,7 @@
 # Repository authority and migration record
 
-**Review date:** 2026-10-16  
-**Authority:** GitHub  
+**Review date:** 2026-10-16
+**Authority:** GitHub
 **GitLab status:** legacy snapshot; no mirror is configured or intended.
 
 ## Canonical locations

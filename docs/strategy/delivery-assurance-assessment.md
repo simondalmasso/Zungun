@@ -1,7 +1,7 @@
 # Zungun Delivery Assurance — strategic assessment
 
-**Review date:** 2026-10-16  
-**Status:** Conditional product thesis; commercial validation is not established by this repository.  
+**Review date:** 2026-10-16
+**Status:** Conditional product thesis; commercial validation is not established by this repository.
 **Decision scope:** Whether to pursue an Android SDK and receiver protocol for durable delivery of critical app operations under intermittent, constrained, or satellite-enabled connectivity.
 
 ## Executive verdict
