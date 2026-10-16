@@ -3,7 +3,7 @@
   "version": "1.0.0-order076",
   "private": true,
   "type": "module",
-  "description": "Application-level critical-operation system for unstable connectivity with explicit ambiguity and verifiable execution evidence.",
+  "description": "Android SDK for reliable offline-first delivery of critical field operations, with idempotency, reconciliation, and verifiable execution evidence.",
   "scripts": {
     "clean": "rm -rf dist .artifacts .tmp coverage",
     "format:check": "node tools/quality/check-format.mjs",
@@ -39,6 +39,8 @@
     "demo:link": "npm run build && node dist/examples/link-quickstart/src/demo.js",
     "verify:link-vectors": "npm run build && node tools/link-vectors/generate.mjs .tmp/link-planner-v1.vectors && cmp .tmp/link-planner-v1.vectors testdata/link-planner-v1.vectors",
     "test:link-resilience": "npm run build && node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js",
+    "test:seo": "node --test cloudflare/test/public-site-seo.test.mjs",
+    "test:e2e:public": "npx e2e run tests/public-site.e2e.ts",
     "benchmark:assurance": "npm run build && node dist/tools/resilience-lab/src/comparative-benchmark.js"
   },
   "engines": {
@@ -46,5 +48,26 @@
   },
   "devDependencies": {
     "typescript": "5.8.3"
-  }
+  },
+  "homepage": "https://zungun.simondalmasso44.workers.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simondalmasso/Zungun.git"
+  },
+  "bugs": {
+    "url": "https://github.com/simondalmasso/Zungun/issues"
+  },
+  "keywords": [
+    "android-sdk",
+    "offline-first",
+    "mobile-reliability",
+    "idempotency",
+    "delivery-assurance",
+    "reconciliation",
+    "field-operations",
+    "distributed-systems",
+    "cloudflare-workers",
+    "resilience-testing",
+    "critical-operations"
+  ]
 }
