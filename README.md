@@ -1,17 +1,43 @@
-# Zungun
+# Zungun — Delivery Assurance
 
-> **Repository authority:** [GitHub is canonical](https://github.com/simondalmasso/Zungun). [GitLab is the legacy mirror target](https://gitlab.com/simondalmasso/Zungun); it was stale at the 2026-10-16 cutover and is **not yet verified as a live mirror**. See [Repository authority and cutover record](REPOSITORY_AUTHORITY.md).
+> **Product hypothesis:** an Android SDK/runtime and receiver contract for durable delivery of critical app operations under intermittent, low-bandwidth, or satellite-enabled connectivity. Backend-agnostic by design; commercial value still requires independent benchmark and buyer evidence.
 
-Zungun is an independent evidence and continuity layer for critical operations under unstable connectivity. It preserves explicit ambiguity, separates transport acceptance from receiver durability and business effect, and records only evidence a responsible boundary is allowed to assert.
+Zungun is focused on **critical mutations**, not generic offline caching. It persists an operation locally, preserves a stable identity, applies an explicit retry contract, and reconciles ambiguous delivery with receiver evidence before risking another side effect. It keeps transport acceptance, receiver durability, business effect, and final evidence separate.
 
-**Zungun Link** adds a semantic connectivity runtime for existing applications: durable offline mutation queuing, validated-link planning, safe retry after ambiguous timeout, critical-data-first delivery, resumable large evidence transfer, exact-base delta policy, declarative prefetch and receiver reconciliation. It does not replace TCP/QUIC, Android networking, the application backend, or Witness.
+The current technical foundation is split into:
 
-## Components
+- **Zungun Link:** delivery planning under constrained connectivity, priority for critical payloads, deferred/resumable evidence transfer, exact-base delta policy and safe reconciliation.
+- **Witness:** continuity and integrity of operation evidence.
+- **Receiver contract:** durable idempotency and a query/reconciliation path, with stronger assurance only where the receiver can prove it.
+- **Proof and operations tooling:** inspectable receipts, incident bundles, Control Room and reproducible blackout/resilience exercises.
 
+This is not a claim of universal exactly-once execution. The strongest guarantees require receiver participation. Android WorkManager, Firebase offline features, PowerSync, Ditto and Couchbase Lite already solve overlapping parts of scheduling, persistence and offline sync. Zungun must demonstrate incremental value for side-effecting operations across existing backends.
+
+## Start with one critical endpoint
+
+1. Run Link Doctor locally to inventory OpenAPI writes.
+2. Wrap one mutation with an explicit Link delivery profile.
+3. Split critical core data from deferred attachments where the workflow supports it.
+4. Add the receiver idempotency/reconciliation boundary only where needed.
+5. Compare against a fair Room + WorkManager + backend-outbox baseline under reproducible fault injection.
+
+```bash
+npm ci --ignore-scripts --no-audit --no-fund
+npm run demo:link
+```
+
+The fixture is local evidence, not proof of production-scale behavior, OEM background reliability, customer savings or paid demand.
+
+## Current commercial stance
+
+**CONDITIONAL GO:** validate one high-cost workflow with design partners and publish a reproducible benchmark. Do not claim Zungun is a necessary infrastructure standard, a DOCOMO partner, a certified product, or a proven revenue stream. The current evidence and five go/no-go gates are in [the Delivery Assurance assessment](docs/strategy/delivery-assurance-assessment.md).
+
+## Architecture and verification
+
+- [Delivery Assurance strategic assessment](docs/strategy/delivery-assurance-assessment.md)
 - [Zungun Link architecture](docs/link-architecture.md)
 - [Link quickstart](docs/guides/link-quickstart.md)
 - [Link Doctor / OpenAPI scaffold](docs/link-doctor.md)
-- [ORDER 081 verification map](docs/order-081-verification.md)
 - [Protocol core](docs/architecture/protocol.md)
 - [Witness evidence continuity](docs/architecture/witness.md)
 - [Threat model](docs/architecture/threat-model.md)
@@ -22,22 +48,10 @@ Zungun is an independent evidence and continuity layer for critical operations u
 - [Control Room](docs/guides/control-room.md)
 - [Resilience Lab and Blackout Drill](docs/guides/resilience-lab.md)
 - [Incident Proof Bundle](docs/reference/incident-proof-bundle.md)
-
-## Existing REST API adoption
-
-Start with one critical endpoint rather than rewriting an application:
-
-```text
-STEP_0  run Link Doctor locally
-STEP_1  wrap one mutation with L0 Link planning
-STEP_2  split critical core from deferred attachments
-STEP_3  add allowlisted Receiver Proxy L1 for durable idempotency/reconciliation
-STEP_4  add native L2 receiver/effect evidence only where justified
-STEP_5  enable Witness / Proof Bundle / Blackout Drill for that workflow
-```
-
-`npm run doctor:link -- --openapi openapi.yaml` inventories local OpenAPI writes and emits a draft policy scaffold. Unknown business semantics remain `UNKNOWN_REQUIRES_ANNOTATION`; HTTP method alone never establishes retry safety.
+- [Repository authority and migration record](REPOSITORY_AUTHORITY.md)
 
 ## Evidence boundaries
 
-Zungun does not claim universal exactly-once execution, operator or standards-body endorsement, satellite-network truth, sensor truth, regulatory certification, production scale, or business-effect proof from transport acceptance alone. `UNKNOWN`, `CONFLICT`, and unresolved required evidence are explicit non-success/incomplete states. L0 does not claim L1/L2 assurance. Emulator CI does not exhaustively prove OEM background behavior.
+UNKNOWN, CONFLICT, and unresolved required evidence are incomplete states, not success. L0 Link planning does not claim L1 receiver durability or L2 business-effect assurance. An HTTP success response is not proof of the business effect. Emulator CI does not exhaustively prove OEM background behavior or real satellite-network performance.
+
+GitHub is the canonical development repository. GitLab is a historical legacy snapshot and is not synchronized or maintained as a mirror.
