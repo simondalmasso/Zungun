@@ -12,7 +12,7 @@ def create_identity(page,name):
     page.get_by_role('button',name='Create identity').click()
     expect(page.locator('#account .meta')).to_be_visible(timeout=15000)
     pairing_text=page.locator('#account .meta').inner_text()
-    match=re.search(r'Pairing code\\s+([A-Z2-9]{6,12})',pairing_text,re.IGNORECASE)
+    match=re.search(r'Pairing code\s+([A-Z2-9]{6,12})',pairing_text,re.IGNORECASE)
     assert match, f'PAIRING_CODE_NOT_RENDERED: {pairing_text!r}'
     return match.group(1).upper()
 
