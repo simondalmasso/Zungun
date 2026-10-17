@@ -55,8 +55,10 @@ jobs:
         working-directory: cloudflare
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.114.0 dev --local --local-protocol https --config .wrangler.order085.local.jsonc --ip 127.0.0.1 --port 8787 > "$RUNNER_TEMP/order085-local-worker.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/order085-local-worker.pid"
+          nohup npx --yes wrangler@4.114.0 dev --local --local-protocol https --config .wrangler.order085.local.jsonc --ip 127.0.0.1 --port 8787 > "$RUNNER_TEMP/order085-local-worker.log" 2>&1 < /dev/null &
+          worker_pid=$!
+          echo "$worker_pid" > "$RUNNER_TEMP/order085-local-worker.pid"
+          disown "$worker_pid" 2>/dev/null || true
           ready=0
           for _ in $(seq 1 20); do
             if curl --insecure --connect-timeout 1 --max-time 2 --fail --silent --show-error https://127.0.0.1:8787/health > "$RUNNER_TEMP/order085-local-health.json"; then ready=1; break; fi
@@ -77,6 +79,7 @@ jobs:
         if: always()
         run: |
           if [[ -f "$RUNNER_TEMP/order085-local-worker.pid" ]]; then kill "$(cat "$RUNNER_TEMP/order085-local-worker.pid")" 2>/dev/null || true; fi
+          pkill -f 'wrangler dev --local --local-protocol https --config .wrangler.order085.local.jsonc' 2>/dev/null || true
           rm -f cloudflare/.wrangler.order085.local.jsonc
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
