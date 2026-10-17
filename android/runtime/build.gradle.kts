@@ -74,3 +74,10 @@ publishing {
         }
     }
 }
+tasks.withType<org.gradle.api.publish.maven.tasks.PublishToMavenRepository>().configureEach {
+    dependsOn("bundleReleaseAar")
+}
+tasks.withType<org.gradle.api.publish.maven.tasks.PublishToMavenLocal>().configureEach {
+    dependsOn("bundleReleaseAar")
+}
+
