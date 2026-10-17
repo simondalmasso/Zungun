@@ -1,0 +1,5 @@
+# Platform metadata observed on the exact external-consumer instrumented graph.
+org.jetbrains.kotlin:kotlin-bom:1.8.22
+org.jetbrains.kotlin:kotlin-bom:1.9.10
+org.jetbrains.kotlin:kotlin-bom:1.9.22
+org.jetbrains.kotlin:kotlin-bom:1.9.24

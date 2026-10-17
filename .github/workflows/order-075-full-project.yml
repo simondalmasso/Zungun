@@ -1,0 +1,208 @@
+name: Order 077 full project verification
+
+"on":
+  pull_request:
+    branches: [recovery/order-072-oracle-extension-candidate-v1]
+  workflow_dispatch:
+
+permissions: {contents: read}
+concurrency:
+  group: order-077-full-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  NPM_CONFIG_UPDATE_NOTIFIER: "false"
+  START_SHA: 8b206b91fb98bc3d514f9709b6258dcb839ad5f1
+  START_TREE: d729a39e0d92ccf3ee3335412d68dfe6d3073387
+  CANDIDATE_SUBTREE: 108629fc91c1e03454c18b14a6b557c2b62898d4
+
+jobs:
+  typescript-primary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs: {package_sha: "${{ steps.package.outputs.sha }}"}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}", fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: "Gate 01 — immutable ancestry and protected boundaries"
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$START_SHA" HEAD
+          test "$(git rev-parse "$START_SHA^{tree}")" = "$START_TREE"
+          test "$(git rev-parse HEAD:candidate/order-072)" = "$CANDIDATE_SUBTREE"
+          test -z "$(git diff --name-only "$START_SHA..HEAD" | grep -E '^(candidate/order-072|canary/zep-core-canary/vendor/zep-core)/' || true)"
+          test -z "$(git status --porcelain)"
+      - name: Install root toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: "Gate 02 — format lint and type safety"
+        run: npm run format:check && npm run lint && npm run typecheck
+      - name: "Gate 03 — immutable oracle"
+        run: npm run verify:oracle && npm run test:core
+      - name: "Gate 04 — persistent receiver and migrations"
+        run: npm run test:receiver
+      - name: "Gate 05 — receipt and authorization security"
+        run: npm run test:security
+      - name: "Gate 06 — reconciliation and bounded completeness"
+        run: npm run test:reconciliation
+      - name: "Gate 07 — integrated field-service tests"
+        run: npm run test:e2e && npm test
+      - name: "Gate 08 — deterministic resilience matrix"
+        run: npm run test:resilience
+      - name: "Gate 09 — field-service executable demonstration"
+        run: npm run demo:field-service
+      - name: "Gate 10 — package docs site and placeholder policy"
+        run: npm run verify:pack && npm run verify:docs && npm run verify:no-placeholders
+      - name: "Gate 11 — secrets SBOM licenses provenance and advisories"
+        run: npm run verify:secrets && npm run verify:security-evidence && npm audit --registry=https://registry.npmjs.org --audit-level=high --omit=optional
+      - name: Seal TypeScript evidence
+        id: package
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/order077-typescript"; mkdir -p "$out"
+          cp -a .artifacts/. "$out/"; cp services/receiver/openapi/openapi.yaml "$out/openapi.yaml"
+          git ls-files | LC_ALL=C sort > "$out/source-files.txt"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
+          echo "sha=$(jq -r .sha256 .artifacts/npm-package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with: {name: "order077-typescript-${{ github.run_id }}", path: "${{ runner.temp }}/order077-typescript", if-no-files-found: error, retention-days: 14, compression-level: 0}
+
+  browser-container-history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}", fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
+      - name: Install browser harness
+        run: python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+      - name: "Gates 12–14 — browser container least privilege historical candidate and canary"
+        run: bash tools/ci/order077-platform.sh
+      - name: Seal browser container and history evidence
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/order077-platform"; mkdir -p "$out"
+          cp control-room-e2e.json image-inspect.json "$out/"
+          find "$out" -type f -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with: {name: "order077-platform-${{ github.run_id }}", path: "${{ runner.temp }}/order077-platform", if-no-files-found: error, retention-days: 14, compression-level: 0}
+
+  android-primary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    outputs: {aar_sha: "${{ steps.android.outputs.aar_sha }}"}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}", persist-credentials: false}
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: Install Android and browser inputs
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"; sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0' emulator 'system-images;android-35;google_apis;x86_64'
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+          npm ci --ignore-scripts --no-audit --no-fund && npm run build
+          python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+      - name: "Gate 15a — clean Android outputs"
+        run: export JAVA_HOME="$JAVA_HOME_17_X64"; android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:clean :sample:clean
+      - name: "Gate 15b — build producer AAR and verify SHA-256"
+        id: android
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleRelease
+          aar=android/runtime/build/outputs/aar/runtime-release.aar; test -s "$aar"; sha256sum "$aar" | tee "$RUNNER_TEMP/runtime-release.aar.sha256"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:publishReleasePublicationToOrder080Repository
+          repo="$GITHUB_WORKSPACE/android/runtime/build/order080-repo"; published="$repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar"; pom="$repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.pom"
+          test -s "$published"; test -s "$pom"; test "$(sha256sum "$published"|cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
+          printf 'ZUNGUN_RUNTIME_REPO=%s\nZUNGUN_RUNTIME_PUBLISHED_AAR=%s\nZUNGUN_RUNTIME_PUBLISHED_POM=%s\n' "$repo" "$published" "$pom" >> "$GITHUB_ENV"
+          echo "aar_sha=$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")" >> "$GITHUB_OUTPUT"
+      - name: "Gate 15c — clean-bootstrap and strict-replay standalone consumer"
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+          test "$(sha256sum "$ZUNGUN_RUNTIME_PUBLISHED_AAR"|cut -d' ' -f1)" = "$(cut -d' ' -f1 "$RUNNER_TEMP/runtime-release.aar.sha256")"
+          ! grep -R -F 'project(:runtime)' android/external-consumer android/settings.gradle.kts
+          rm -f android/external-consumer/gradle.lockfile android/external-consumer/gradle/verification-metadata.xml; mkdir -p android/external-consumer/gradle
+          android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" --write-locks --write-verification-metadata sha256 assembleDebug assembleDebugAndroidTest
+          lock=android/external-consumer/gradle.lockfile; metadata=android/external-consumer/gradle/verification-metadata.xml
+          test -s "$lock"; test -s "$metadata"; grep -q '^com.zungun:zungun-runtime:1.0.80=' "$lock"; grep -q 'group="com.zungun" name="zungun-runtime" version="1.0.80"' "$metadata"
+          aar_sha="$(sha256sum "$ZUNGUN_RUNTIME_PUBLISHED_AAR"|cut -d' ' -f1)"; pom_sha="$(sha256sum "$ZUNGUN_RUNTIME_PUBLISHED_POM"|cut -d' ' -f1)"
+          grep -q "value=\"$aar_sha\"" "$metadata"; grep -q "value=\"$pom_sha\"" "$metadata"
+          lock_sha="$(sha256sum "$lock"|cut -d' ' -f1)"; metadata_sha="$(sha256sum "$metadata"|cut -d' ' -f1)"
+          android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" clean assembleDebug assembleDebugAndroidTest
+          test "$(sha256sum "$lock"|cut -d' ' -f1)" = "$lock_sha"; test "$(sha256sum "$metadata"|cut -d' ' -f1)" = "$metadata_sha"
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"
+      - name: "Gate 15d — runtime lint unit sample and lock integrity"
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleDebug :runtime:lintDebug :runtime:testDebugUnitTest :sample:assembleDebug
+          sha256sum -c "$RUNNER_TEMP/runtime-release.aar.sha256"; test -s android/gradle/verification-metadata.xml; test "$(find android -type f -name gradle.lockfile|wc -l)" -ge 3
+      - name: "Gate 16 — Room WorkManager migration force-stop persistence"
+        run: |
+          set -euo pipefail; export JAVA_HOME="$JAVA_HOME_17_X64"; sdkroot="$ANDROID_SDK_ROOT"
+          export ANDROID_USER_HOME="$RUNNER_TEMP/android-user-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/android-user-home" ANDROID_AVD_HOME="$RUNNER_TEMP/android-user-home/avd"; mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n zungun-api35 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          "$sdkroot/emulator/emulator" -list-avds | grep -Fx zungun-api35; sudo chmod 666 /dev/kvm || true
+          nohup "$sdkroot/emulator/emulator" -avd zungun-api35 -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/emulator-unit.log" 2>&1 &
+          trap 'cat "$RUNNER_TEMP/emulator-unit.log" || true' ERR
+          timeout 180s adb wait-for-device
+          booted=0; for _ in $(seq 1 180); do [ "$(adb shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" = 1 ] && { booted=1; break; }; sleep 2; done; test "$booted" = 1
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:connectedDebugAndroidTest; adb emu kill || true
+      - name: "Gate 17 — same-operation real Android HTTP receiver receipt reconciliation browser audit E2E"
+        run: bash tools/e2e/order076-real-e2e.sh
+      - name: Seal Android and real E2E evidence
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/order077-android"; mkdir -p "$out"
+          cp android/runtime/build/outputs/aar/runtime-release.aar "$out/zungun-runtime-release.aar"; cp "$RUNNER_TEMP/runtime-release.aar.sha256" "$out/"
+          apk="$(find android/external-consumer/build/outputs/apk/debug -maxdepth 1 -type f -name '*-debug.apk' -print -quit)"; test -n "$apk"; cp "$apk" "$out/external-consumer-debug.apk"
+          cp android/external-consumer/gradle.lockfile "$out/"; cp android/external-consumer/gradle/verification-metadata.xml "$out/"; cp -a "$RUNNER_TEMP/order076-real-e2e" "$out/real-e2e"; cp "$RUNNER_TEMP/emulator-unit.log" "$out/"
+          rm -f "$out/real-e2e/keys.json"
+          test -z "$(find "$out" -type f \( -name 'keys.json' -o -iname '*private*.pem' -o -iname '*private*.key' \) -print -quit)"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out" | tee "$out/ARTIFACT_SECRET_SCAN.json"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with: {name: "order077-android-e2e-${{ github.run_id }}", path: "${{ runner.temp }}/order077-android", if-no-files-found: error, retention-days: 14, compression-level: 0}
+
+  independent-reproduction:
+    if: always()
+    needs: [typescript-primary, android-primary]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}", persist-credentials: false}
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: "Gate 18 — independent reproducible npm package and Android AAR"
+        run: |
+          set -euo pipefail; test '${{ needs.typescript-primary.result }}' = success; test '${{ needs.android-primary.result }}' = success
+          npm ci --ignore-scripts --no-audit --no-fund; npm run verify:pack; test "$(jq -r .sha256 .artifacts/npm-package.json)" = '${{ needs.typescript-primary.outputs.package_sha }}'
+          export JAVA_HOME="$JAVA_HOME_17_X64"; sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"; yes | "$sdkroot/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true; "$sdkroot/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'; export ANDROID_SDK_ROOT="$sdkroot" ANDROID_HOME="$sdkroot"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleRelease; test "$(sha256sum android/runtime/build/outputs/aar/runtime-release.aar|cut -d' ' -f1)" = '${{ needs.android-primary.outputs.aar_sha }}'
+
+  completion-gate:
+    if: always()
+    needs: [typescript-primary, browser-container-history, android-primary, independent-reproduction]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}", fetch-depth: 0, persist-credentials: false}
+      - name: "Gate 19 — no skips fixed-head completion seal"
+        run: |
+          set -euo pipefail; test '${{ needs.typescript-primary.result }}' = success; test '${{ needs.browser-container-history.result }}' = success; test '${{ needs.android-primary.result }}' = success; test '${{ needs.independent-reproduction.result }}' = success
+          out="$RUNNER_TEMP/order077-completion"; mkdir -p "$out"; jq -n --arg head "$(git rev-parse HEAD)" --arg tree "$(git rev-parse HEAD^{tree})" '{orderId:"ZUNGUN-OWNER-ARQ-MASTER-FULL-PROJECT-COMPLETION-077",ok:true,head:$head,tree:$tree,logicalGates:19,requiredGatesSkipped:0,artifactPrivateKeyMaterial:0,productionMutations:0,merge:false,release:false}' > "$out/result.json"
+          git diff --name-status "$START_SHA..HEAD" > "$out/changed-files.txt"; find "$out" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+          node tools/ci/scan-artifact-secrets.mjs "$out"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with: {name: "order077-completion-${{ github.run_id }}", path: "${{ runner.temp }}/order077-completion", if-no-files-found: error, retention-days: 14, compression-level: 0}

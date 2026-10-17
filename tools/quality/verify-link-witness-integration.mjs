@@ -1,0 +1,15 @@
+import { appendWitnessEvidence, buildIncidentProofBundle, verifyIncidentProofBundle } from '../../dist/packages/protocol-core/src/witness.js';
+import { attachLinkEvidence, verifyLinkEvidenceAttachment } from '../../dist/packages/link-core/src/proof-extension.js';
+import { createLinkDecisionRecord } from '../../dist/packages/link-core/src/witness-link.js';
+let chain=[];
+const add=(input)=>{const value=appendWitnessEvidence(chain,input);chain=[...chain,value];};
+add({incidentId:'op-link-proof',evidenceId:'ev1',state:'DETECTED',evidenceClass:'OBSERVED_FACT',emitterId:'source:test',authorizationScope:'witness:source',observedAtMs:1000,monotonicMs:1,provenance:'ci:link',reasonCode:'LINK_FIXTURE_DETECTED',claims:{boundaryRole:'SENSOR_OR_SOURCE',sourceId:'source:test'}});
+add({incidentId:'op-link-proof',evidenceId:'ev2',state:'COMMITTED_LOCAL',evidenceClass:'MACHINE_ASSERTION',emitterId:'device:test',authorizationScope:'witness:local',observedAtMs:1001,monotonicMs:2,provenance:'ci:link',reasonCode:'LOCAL_DURABLE_COMMIT',claims:{boundaryRole:'ZUNGUN_WITNESS',localCommitRef:'room:op-link-proof'}});
+const base=buildIncidentProofBundle(chain);
+const decision=createLinkDecisionRecord({recordVersion:1,operationId:'op-link-proof',kind:'TRANSMISSION_PLAN_CREATED',occurredAtMs:1002,planId:'plan-ci',snapshotHash:'snapshot-ci',adapterId:'http',networkKey:'process-local-network',certainty:'PLANNED',coreComplete:false,requiredEvidenceComplete:false,details:{reasonCodes:'NETWORK_NOT_VALIDATED'}});
+const attached=attachLinkEvidence(base,{decisionRecords:[decision],transportAttempts:[],deferredObjectManifest:[{objectId:'photo',state:'PENDING',required:true}],reconciliation:{state:'NOT_STARTED'}});
+verifyIncidentProofBundle(attached);
+verifyLinkEvidenceAttachment(attached);
+const tampered={...attached,files:attached.files.map((file)=>file.path==='link/decision-records.json'?{...file,content:'[]'}:file)};
+let failedClosed=false;try{verifyIncidentProofBundle(tampered);}catch{failedClosed=true;}if(!failedClosed)throw new Error('LINK_WITNESS_TAMPER_NOT_DETECTED');
+console.log(JSON.stringify({ok:true,manifestSha256:attached.manifestSha256,files:attached.files.map((file)=>file.path)}));

@@ -1,0 +1,84 @@
+name: Order 085 isolated mobile messenger E2E
+
+on:
+  push:
+    branches: [feat/zungun-full-project-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: order085-local-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22.16.0
+          package-manager-cache: false
+      - name: Install exact project dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify UI contract and create isolated local Worker config
+        run: |
+          set -euo pipefail
+          node tools/order085/ui-contract.mjs
+          node --check cloudflare/public/messages/messages.js
+          node --check cloudflare/src/worker.mjs
+          node --test cloudflare/test/contracts.test.mjs
+          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/order085-local-manifest"
+          node - "$RUNNER_TEMP/order085-local-manifest/result.json" <<'NODE'
+          const fs=require('fs');
+          const result=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          let config=fs.readFileSync('cloudflare/wrangler.jsonc','utf8');
+          config=config.replace('__ORDER083_D1_DATABASE_ID__','00000000-0000-4000-8000-000000000001')
+            .replace('__SOURCE_BUNDLE_SHA256__',result.sourceBundleSha256)
+            .replace('__STATIC_ASSET_MANIFEST_SHA256__',result.staticAssetManifestSha256)
+            .replace('__MIGRATION_MANIFEST_SHA256__',result.migrationManifestSha256)
+            .replace('"ZUNGUN_ENVIRONMENT": "production"','"ZUNGUN_ENVIRONMENT": "test"');
+          fs.writeFileSync('cloudflare/.wrangler.order085.local.jsonc',config);
+          NODE
+      - name: Initialize isolated local D1 schema
+        working-directory: cloudflare
+        run: npx --yes wrangler@4.151.1 d1 execute DB --local --config .wrangler.order085.local.jsonc --file migrations/0001_order083_product.sql
+      - name: Start isolated HTTPS Worker and run mobile E2E
+        env:
+          ZUNGUN_ORIGIN: https://127.0.0.1:8787
+          ORDER085_WEB_EVIDENCE: ${{ runner.temp }}/order085-local
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/order085-local"
+          cd cloudflare
+          nohup npx --yes wrangler@4.151.1 dev --local --local-protocol https --config .wrangler.order085.local.jsonc --ip 127.0.0.1 --port 8787 > "$RUNNER_TEMP/order085-local-worker.log" 2>&1 < /dev/null &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true; pkill -f "wrangler dev --local --local-protocol https --config .wrangler.order085.local.jsonc" 2>/dev/null || true; rm -f cloudflare/.wrangler.order085.local.jsonc' EXIT
+          ready=0
+          for _ in $(seq 1 20); do
+            if curl --insecure --connect-timeout 1 --max-time 2 --fail --silent --show-error https://127.0.0.1:8787/health > "$RUNNER_TEMP/order085-local-health.json"; then ready=1; break; fi
+            sleep 2
+          done
+          if [[ "$ready" != 1 ]]; then cat "$RUNNER_TEMP/order085-local-worker.log"; exit 1; fi
+          cat "$RUNNER_TEMP/order085-local-health.json"
+          cd ..
+          python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+          python -m playwright install --with-deps chromium
+          python tools/browser/order085-messenger-e2e.py
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: order085-local-mobile-evidence-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/order085-local
+            ${{ runner.temp }}/order085-local-worker.log
+            ${{ runner.temp }}/order085-local-health.json
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 0

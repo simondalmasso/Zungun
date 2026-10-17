@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import { spawnSync } from 'node:child_process';
+test('developer quickstart is executable and demonstrates no duplicate effect',()=>{const out=spawnSync(process.execPath,['dist/examples/link-quickstart/src/demo.js'],{encoding:'utf8'});assert.equal(out.status,0,out.stderr);assert.match(out.stdout,/WAIT_FOR_VALIDATED_LINK/);assert.match(out.stdout,/SEND_CRITICAL_CORE_NOW/);assert.match(out.stdout,/secondSideEffectSendCount": 0/);assert.match(out.stdout,/EVIDENCE_ATTACHMENT_COMPLETE/);});

@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "zungun",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zungun-order083-product-v1",
+      "database_id": "__ORDER083_D1_DATABASE_ID__"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CONVERSATIONS", "class_name": "ConversationDurableObject" }
+    ]
+  },
+  "migrations": [
+    { "tag": "order083-v1", "new_sqlite_classes": ["ConversationDurableObject"] }
+  ],
+  "vars": {
+    "ZUNGUN_ENVIRONMENT": "production",
+    "ZUNGUN_ORDER": "ORDER-083",
+    "ZUNGUN_SOURCE_BUNDLE_SHA256": "__SOURCE_BUNDLE_SHA256__",
+    "ZUNGUN_STATIC_ASSET_MANIFEST_SHA256": "__STATIC_ASSET_MANIFEST_SHA256__",
+    "ZUNGUN_MIGRATION_MANIFEST_SHA256": "__MIGRATION_MANIFEST_SHA256__"
+  }
+}

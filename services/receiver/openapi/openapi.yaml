@@ -1,0 +1,176 @@
+openapi: 3.1.0
+info:
+  title: Zungun Persistent Receiver API
+  version: 1.1.0-order080
+  description: Application-level critical-operation receiver. Transport acceptance is not proof of business effect.
+servers:
+  - url: http://127.0.0.1:8788
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        '200': { description: Process health }
+  /ready:
+    get:
+      operationId: readiness
+      responses:
+        '200': { description: Database and key-provider readiness }
+  /api/v1/operations:
+    get:
+      security: [{ bearerAuth: [] }]
+      operationId: listOperations
+      responses:
+        '200': { description: Paginated operation summaries }
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: acceptOperation
+      responses:
+        '202': { description: Receiver acceptance; not business-effect proof }
+        '409': { description: Identity or replay conflict }
+  /api/v1/operations/{operationId}:
+    get:
+      security: [{ bearerAuth: [] }]
+      operationId: getOperation
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      responses:
+        '200': { description: Evidence timeline and current state }
+        '404': { description: Operation not found }
+  /api/v1/operations/{operationId}/witness:
+    get:
+      security: [{ bearerAuth: [] }]
+      operationId: getWitnessChain
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      responses:
+        '200': { description: Verified persisted Witness chain; empty means no Witness proof is stored }
+        '403': { description: Principal lacks witness:read }
+  /api/v1/operations/{operationId}/witness/ingest:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: ingestWitnessSenderChain
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chain]
+              properties:
+                chain: { type: array, minItems: 1, items: { $ref: '#/components/schemas/WitnessEvidence' } }
+                nowMs: { type: integer }
+      responses:
+        '202': { description: Sender chain persisted and receiver DELIVERED_DURABLY appended transactionally }
+        '403': { description: Principal lacks witness:ingest }
+        '409': { description: Divergent or invalid Witness history }
+  /api/v1/operations/{operationId}/witness/attest:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: appendWitnessAttestation
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evidence]
+              properties:
+                evidence: { $ref: '#/components/schemas/WitnessEvidenceInput' }
+                nowMs: { type: integer }
+      responses:
+        '201': { description: Authorized post-durability Witness transition appended }
+        '403': { description: Principal lacks witness:attest }
+        '409': { description: Invalid transition or missing durable receiver proof }
+  /api/v1/operations/{operationId}/witness/reconcile:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: reconcileWitnessHistories
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [senderChain]
+              properties:
+                senderChain: { type: array, items: { $ref: '#/components/schemas/WitnessEvidence' } }
+      responses:
+        '200': { description: RECONCILED, UNKNOWN or CONFLICT without optimistic inference }
+        '403': { description: Principal lacks witness:reconcile }
+  /api/v1/operations/{operationId}/witness/bundle:
+    get:
+      security: [{ bearerAuth: [] }]
+      operationId: getIncidentProofBundle
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      responses:
+        '200': { description: Deterministic zungun-proof-bundle/1 object for offline verification }
+        '403': { description: Principal lacks witness:read }
+  /api/v1/operations/{operationId}/claim:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: claimOperation
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      responses:
+        '200': { description: Transactional lease with fencing token }
+  /api/v1/operations/{operationId}/effect:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: recordApplicationEffect
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      responses:
+        '200': { description: Application effect and signed receipt when justified }
+  /api/v1/operations/{operationId}/reconcile:
+    post:
+      security: [{ bearerAuth: [] }]
+      operationId: reconcileOperation
+      parameters: [{ $ref: '#/components/parameters/OperationId' }]
+      responses:
+        '200': { description: Evidence-derived verdict; UNKNOWN is preserved }
+  /api/v1/completeness:
+    get:
+      security: [{ bearerAuth: [] }]
+      operationId: boundedCompleteness
+      responses:
+        '200': { description: Completeness only within declared reporting scope }
+components:
+  parameters:
+    OperationId:
+      in: path
+      name: operationId
+      required: true
+      schema: { type: string }
+  schemas:
+    WitnessEvidenceInput:
+      type: object
+      required: [incidentId, evidenceId, state, evidenceClass, emitterId, authorizationScope, observedAtMs, monotonicMs, provenance, reasonCode, claims]
+      properties:
+        incidentId: { type: string }
+        evidenceId: { type: string }
+        state:
+          type: string
+          enum: [DETECTED, COMMITTED_LOCAL, CUSTODY_ACCEPTED, DELIVERED_DURABLY, OWNED_BY_RESPONDER, ACTION_STARTED, CONDITION_RECHECKED, RESOLVED, RECONCILED, UNKNOWN, CONFLICT, EXPIRED_WITHOUT_RESOLUTION]
+        evidenceClass: { type: string, enum: [OBSERVED_FACT, MACHINE_ASSERTION, HUMAN_ATTESTATION, DERIVED_CONCLUSION] }
+        emitterId: { type: string }
+        authorizationScope: { type: string }
+        observedAtMs: { type: integer }
+        monotonicMs: { type: integer }
+        provenance: { type: string }
+        reasonCode: { type: string }
+        claims: { type: object, additionalProperties: true }
+    WitnessEvidence:
+      allOf:
+        - $ref: '#/components/schemas/WitnessEvidenceInput'
+        - type: object
+          required: [schemaVersion, previousState, previousHash, chainPosition, evidenceHash]
+          properties:
+            schemaVersion: { type: string, const: zungun-witness/1 }
+            previousState: { type: [string, 'null'] }
+            previousHash: { type: [string, 'null'] }
+            chainPosition: { type: integer, minimum: 0 }
+            evidenceHash: { type: string, pattern: '^sha256:' }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

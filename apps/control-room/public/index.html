@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Zungun Control Room</title>
+  <meta name="description" content="Evidence-first operations, ambiguity and reconciliation control room.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to operations</a>
+  <header class="topbar">
+    <div><span class="eyebrow">ZUNGUN</span><h1>Control Room</h1></div>
+    <div class="connection" role="status"><span id="healthDot" aria-hidden="true"></span><span id="healthText">Checking receiver</span></div>
+  </header>
+  <main id="main">
+    <section class="auth-panel" aria-labelledby="authHeading">
+      <div><h2 id="authHeading">Role-scoped session</h2><p>The token remains in session storage. Server-side permissions determine available actions.</p></div>
+      <form id="authForm"><label for="token">API token</label><div class="inline"><input id="token" name="token" type="password" autocomplete="current-password" minlength="16" required><button type="submit">Connect</button></div></form>
+    </section>
+
+    <section class="summary" aria-label="Global operation summary">
+      <article><span>Global observed</span><strong id="observedCount">—</strong></article>
+      <article><span>Global terminal</span><strong id="terminalCount">—</strong></article>
+      <article><span>Explicit unknown</span><strong id="unknownCount">—</strong></article>
+      <article><span>Declared scope complete</span><strong id="completeState">—</strong></article>
+    </section>
+
+    <section class="scope-panel" aria-labelledby="scopeHeading">
+      <div><p class="kicker">DECLARED POPULATION</p><h2 id="scopeHeading">Completeness certificate</h2></div>
+      <form id="scopeForm" class="scope-form">
+        <label>Scope type<select id="scopeType"><option>SHIFT</option><option>ROUTE</option><option>DEVICE</option><option>BATCH</option></select></label>
+        <label>Scope ID<input id="scopeId" placeholder="shift_2026_08_05" required></label>
+        <button type="submit">Load certificate</button>
+      </form>
+      <pre id="scopeResult">No declared scope selected.</pre>
+    </section>
+
+    <nav class="tabs" aria-label="Control Room views">
+      <button type="button" data-view="operations" aria-pressed="true">Operations</button>
+      <button type="button" data-view="ambiguity" aria-pressed="false">Ambiguity queue</button>
+      <button type="button" data-view="reconciliation" aria-pressed="false">Reconciliation queue</button>
+      <button type="button" data-view="keys" aria-pressed="false">Receipt keys</button>
+    </nav>
+
+    <section class="workspace">
+      <div class="list-panel">
+        <div class="section-head"><div><p class="kicker" id="listKicker">OPERATIONS</p><h2 id="listHeading">Evidence queue</h2></div><button id="refreshButton" type="button">Refresh</button></div>
+        <form id="filters" class="filters">
+          <label>Search<input id="query" name="q" placeholder="Operation or work order"></label>
+          <label>State<select id="state" name="state"><option value="">All states</option><option>RECEIVER_ACCEPTED</option><option>CLAIMED</option><option>UNKNOWN</option><option>COMPLETED</option><option>REJECTED</option><option>EXPIRED</option><option>CANCELLED</option></select></label>
+          <button type="submit">Apply</button>
+        </form>
+        <div class="table-wrap"><table><caption class="sr-only">Critical operations</caption><thead><tr><th>Operation</th><th>Work order</th><th>Transport/receiver</th><th>Business effect</th><th>Updated</th></tr></thead><tbody id="operationRows"></tbody></table></div>
+        <p id="emptyState" class="empty" hidden>No matching operations.</p>
+        <div class="pagination"><button id="previousPage" type="button" disabled>Previous</button><span id="pageState">—</span><button id="nextPage" type="button" disabled>Next</button></div>
+        <div id="keyControls" class="key-controls" hidden>
+          <label>Validity milliseconds<input id="keyValidity" type="number" min="60000" value="31536000000"></label>
+          <button id="rotateKey" type="button">Rotate signing key</button>
+        </div>
+      </div>
+
+      <aside class="detail-panel" aria-labelledby="detailHeading">
+        <div class="section-head"><div><p class="kicker">EVIDENCE</p><h2 id="detailHeading">Select an operation</h2></div><button id="exportButton" type="button" disabled>Export JSON</button></div>
+        <div id="detailContent" class="detail-empty">Transport acceptance is not proof of business effect. Select a row to inspect exact evidence.</div>
+        <form id="reviewForm" class="review-form" hidden>
+          <h3>Reconciliation review</h3>
+          <label>Review note<textarea id="reviewNote" minlength="3">Review evidence without fabricating application acknowledgement.</textarea></label>
+          <button type="submit">Run deterministic review</button>
+        </form>
+        <form id="resolutionForm" class="review-form" hidden>
+          <h3>Manual resolution record</h3>
+          <label>Target verdict<select id="resolutionVerdict"><option>UNKNOWN</option><option>EFFECT_CONFIRMED</option><option>NO_EFFECT_CONFIRMED</option><option>REJECTED</option><option>DUPLICATE_CONFIRMED</option><option>COMPENSATION_REQUIRED</option></select></label>
+          <label>Rationale<textarea id="resolutionRationale" minlength="8" required></textarea></label>
+          <button type="submit">Record evidence-bound resolution</button>
+        </form>
+      </aside>
+    </section>
+  </main>
+  <footer><strong>Honest boundary:</strong> explicit <code>UNKNOWN</code> remains until qualifying application evidence exists. Completeness applies only to a persisted declared population.</footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
