@@ -3,8 +3,6 @@ name: Order 085 isolated mobile messenger E2E
 on:
   push:
     branches: [feat/zungun-full-project-v1]
-  pull_request:
-    branches: [recovery/order-072-oracle-extension-candidate-v1]
 
 permissions:
   contents: read
@@ -61,7 +59,7 @@ jobs:
           cd cloudflare
           nohup npx --yes wrangler@4.114.0 dev --local --local-protocol https --config .wrangler.order085.local.jsonc --ip 127.0.0.1 --port 8787 > "$RUNNER_TEMP/order085-local-worker.log" 2>&1 < /dev/null &
           worker_pid=$!
-          trap 'kill "$worker_pid" 2>/dev/null || true; pkill -f "wrangler dev --local --local-protocol https --config .wrangler.order085.local.jsonc" 2>/dev/null || true; rm -f .wrangler.order085.local.jsonc' EXIT
+          trap 'kill "$worker_pid" 2>/dev/null || true; pkill -f "wrangler dev --local --local-protocol https --config .wrangler.order085.local.jsonc" 2>/dev/null || true; rm -f cloudflare/.wrangler.order085.local.jsonc' EXIT
           ready=0
           for _ in $(seq 1 20); do
             if curl --insecure --connect-timeout 1 --max-time 2 --fail --silent --show-error https://127.0.0.1:8787/health > "$RUNNER_TEMP/order085-local-health.json"; then ready=1; break; fi
