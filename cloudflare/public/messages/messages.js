@@ -67,7 +67,7 @@ async function open(c){
 window.addEventListener('zungun-identity',e=>{me=e.detail;loadConvs();updateComposer()});
 window.addEventListener('zungun-signout',()=>{me=null;current=null;closeSocket();msgs.innerHTML='';setSocket('Offline','offline');showList();loadConvs();updateComposer()});
 const initialMe=await ensureIdentity();if(initialMe&&!me){me=initialMe;await loadConvs()}updateComposer();
-document.getElementById('pair').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),err=document.getElementById('pair-error');err.textContent='';try{const r=await api('/api/v1/conversations',{method:'POST',body:JSON.stringify({pairingCode:String(fd.get('code')).toUpperCase()})});e.currentTarget.reset();await loadConvs();await open(r.conversation)}catch(x){err.textContent=x.message}});
+document.getElementById('pair').addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget,fd=new FormData(form),err=document.getElementById('pair-error');err.textContent='';try{const r=await api('/api/v1/conversations',{method:'POST',body:JSON.stringify({pairingCode:String(fd.get('code')).toUpperCase()})});form.reset();await loadConvs();await open(r.conversation)}catch(x){err.textContent=x.message}});
 sendForm.addEventListener('submit',async e=>{
   e.preventDefault();const err=document.getElementById('send-error');err.textContent='';if(!current){err.textContent='Choose a conversation first.';return}
   const body=messageInput.value.trim();if(!body)return;const id=`msg_${crypto.randomUUID()}`;sendButton.disabled=true;sendForm.setAttribute('aria-busy','true');
