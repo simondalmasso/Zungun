@@ -47,6 +47,7 @@ with sync_playwright() as p:
     expect(row).to_be_visible(timeout=15000);row.click()
     expect(recipient.locator('body')).to_have_class('messages-page conversation-open')
     expect(recipient.locator('#socket')).to_contain_text('Live',timeout=15000)
+    recipient.wait_for_timeout(350)  # let the 260ms pane transition settle before measuring geometry
     assert_mobile_bounds(recipient)
     recipient.screenshot(path=str(out/'messages-390-thread-light.png'))
 
