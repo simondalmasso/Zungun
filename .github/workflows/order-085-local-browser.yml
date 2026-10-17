@@ -8,13 +8,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: order085-local-${{ github.ref }}
+  group: order085-local-v2-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   local-mobile:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
