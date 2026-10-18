@@ -39,7 +39,7 @@ Each line of `/ops/EVENTS.ndjson` is one complete JSON object with:
 - `seq` must be contiguous, start at `1`, and increase by exactly `1`.
 - `event_id` must be unique.
 - `type` must be exactly one of this closed allowlist:
-  `WORKSET_OPENED|CLAIM_ASSIGNED|STOP|TAKEOVER|RISK_ESCALATED|CHECKPOINT_REQUESTED|CHECKPOINT_ACCEPTED|AUDIT_DECIDED|RELEASE_AUTHORIZED|DEPLOYMENT_RECORDED|INCIDENT_RECORDED|WORKSET_CLOSED`
+  `WORKSET_OPENED|CLAIM_ASSIGNED|STOP|TAKEOVER|RISK_ESCALATED|CHECKPOINT_REQUESTED|CHECKPOINT_ACCEPTED|AUDIT_DECIDED|RELEASE_AUTHORIZED|DEPLOYMENT_RECORDED|INCIDENT_RECORDED|WORKSET_CLOSED|EXECUTION_PROGRESS_RECORDED`
 - Any event type outside that allowlist causes `FAIL_CLOSED`.
 - Existing lines must never be edited or deleted, except for the one-shot pre-AUD-acceptance bootstrap normalization authorized by `ZUNGUN-AUD-20260731-059-CP001-001`.
 - Readers consume at most the latest 20 events.
