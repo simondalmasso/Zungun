@@ -77,9 +77,14 @@ jobs:
       - name: Install exact dependencies
         run: |
           set -euo pipefail
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          lock="../../evidence/order057/canary-package-lock.order057.json"
+          test -s "$lock"
+          lock_sha="$(sha256sum "$lock" | cut -d' ' -f1)"
+          test "$lock_sha" = "$EXPECTED_LOCK_SHA256"
+          cp "$lock" package-lock.json
           test "$(sha256sum package-lock.json | cut -d' ' -f1)" = "$EXPECTED_LOCK_SHA256"
           npm ci --ignore-scripts --no-audit --no-fund
+          test "$(sha256sum package-lock.json | cut -d' ' -f1)" = "$EXPECTED_LOCK_SHA256"
       - name: Canary and core regression
         run: |
           set -euo pipefail
