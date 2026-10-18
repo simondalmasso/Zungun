@@ -23,7 +23,8 @@ const allowedEventTypes = Object.freeze([
   'RELEASE_AUTHORIZED',
   'DEPLOYMENT_RECORDED',
   'INCIDENT_RECORDED',
-  'WORKSET_CLOSED'
+  'WORKSET_CLOSED',
+  'EXECUTION_PROGRESS_RECORDED'
 ]);
 const terminalAuditStatuses = new Set(['PASS', 'PASS_WITH_FINDINGS']);
 const allowedEventTypeSet = new Set(allowedEventTypes);
@@ -105,9 +106,10 @@ if (worksetOrder === 'ORDER-085') {
   if (current.platform?.write_authorized !== true || current.platform?.deploy_authorized !== true || current.platform?.cloudflare_write_authorized !== true) fail('ORDER-085 active write/deploy authorization');
   if (current.platform?.release_authorized !== false || current.platform?.production_change_authorized !== true) fail('ORDER-085 platform boundaries');
   const activeEvents = events.filter(event => event.workset_id === current.workset.id);
-  if (activeEvents.length !== 4) fail('ORDER-085 transition event count');
+  if (activeEvents.length < 4) fail('ORDER-085 transition event count');
   const expectedTypes = ['WORKSET_OPENED','CLAIM_ASSIGNED','RELEASE_AUTHORIZED','CHECKPOINT_REQUESTED'];
-  if (JSON.stringify(activeEvents.map(event => event.type)) !== JSON.stringify(expectedTypes)) fail('ORDER-085 transition event sequence');
+  if (JSON.stringify(activeEvents.slice(0,4).map(event => event.type)) !== JSON.stringify(expectedTypes)) fail('ORDER-085 transition event sequence');
+  if (activeEvents.slice(4).some(event => event.type !== 'EXECUTION_PROGRESS_RECORDED' || event.actor !== 'ARQ' || event.data?.order_id !== 'ORDER-085' || !event.data?.candidate_head_sha)) fail('ORDER-085 progress event format');
   if (activeEvents[0].actor !== 'HUMAN_OWNER' || activeEvents[1].actor !== 'HUMAN_OWNER' || activeEvents[2].actor !== 'HUMAN_OWNER' || activeEvents[3].actor !== 'ARQ') fail('ORDER-085 transition actor sequence');
   if (activeEvents.some(event => event.data?.order_id !== 'ORDER-085')) fail('ORDER-085 event order identity');
   if (activeEvents[0].data?.authorization?.source_comment_id !== 5372505874) fail('ORDER-085 workset authorization source');

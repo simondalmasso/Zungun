@@ -54,16 +54,102 @@
       "format_check": "WINDOWS_COPY_LINE_ENDING_NOISE; DO_NOT_REFORMAT_WHOLE_REPO"
     },
     "final_head_gates": {
-      "order077": "PENDING_NEW_FINAL_HEAD",
-      "order081": "PENDING_NEW_FINAL_HEAD",
-      "order083": "PENDING_NEW_FINAL_HEAD",
-      "mobile_visual_and_functional": "PENDING",
-      "logo_hash_and_dimensions": "PENDING_EXACT_BINARY_RETRIEVAL",
-      "production_identity": "PENDING_MANIFEST_RECONCILIATION",
-      "production_live_e2e": "PENDING_WORKFLOW_EXECUTION"
+      "order077": "IN_PROGRESS",
+      "order081": "IN_PROGRESS",
+      "order083": "NOT_RUN_DISPATCH_UNAVAILABLE",
+      "mobile_visual_and_functional": "LOCAL_E2E_PASS_AND_ISOLATED_GITHUB_E2E_SUCCESS; PRODUCTION_E2E_PENDING",
+      "logo_hash_and_dimensions": "BLOCKED_CANONICAL_BINARY_NOT_FOUND",
+      "production_identity": "PENDING_DEPLOY",
+      "production_live_e2e": "NOT_RUN_WORKFLOW_DISPATCH_NOT_TRIGGERED"
     },
     "production_deploy": "NOT_RUN",
-    "merge": "NOT_AUTHORIZED"
+    "merge": "NOT_AUTHORIZED",
+    "remote_ci": {
+      "order077": {
+        "runId": 39129613506,
+        "url": "https://github.com/simondalmasso/Zungun/actions/runs/39129613506",
+        "status": "IN_PROGRESS",
+        "completedJobs": {
+          "typescriptPrimary": "SUCCESS",
+          "browserContainerHistory": "SUCCESS"
+        },
+        "activeJobs": {
+          "androidPrimary": "IN_PROGRESS",
+          "gate": "15b — build producer AAR and verify SHA-256"
+        }
+      },
+      "order081": {
+        "runId": 39129613418,
+        "url": "https://github.com/simondalmasso/Zungun/actions/runs/39129613418",
+        "status": "IN_PROGRESS",
+        "completedJobs": {
+          "linkCore": "SUCCESS",
+          "receiverDeveloperLink": "SUCCESS"
+        },
+        "activeJobs": {
+          "androidLink": "IN_PROGRESS",
+          "gate": "22 — TypeScript Kotlin differential equivalence"
+        }
+      },
+      "isolatedMobileE2E": {
+        "runId": 39129609272,
+        "url": "https://github.com/simondalmasso/Zungun/actions/runs/39129609272",
+        "status": "SUCCESS",
+        "head": "d614ec8e568c1343997dfbc79c2a9387673a3503"
+      },
+      "sourceExport": {
+        "runId": 39129609277,
+        "url": "https://github.com/simondalmasso/Zungun/actions/runs/39129609277",
+        "status": "SUCCESS",
+        "head": "d614ec8e568c1343997dfbc79c2a9387673a3503"
+      },
+      "androidBootstrap": {
+        "runId": 39129609286,
+        "url": "https://github.com/simondalmasso/Zungun/actions/runs/39129609286",
+        "status": "IN_PROGRESS",
+        "activeJob": "Build producer AAR, publish coordinate, and verify SHA-256"
+      },
+      "order083": {
+        "status": "NOT_RUN",
+        "reason": "workflow_dispatch only; no workflow-dispatch action available through active connector; no indirect trigger attempted"
+      }
+    },
+    "local_verification": {
+      "uiContract": "PASS",
+      "workerContractTests": "5_OF_5_PASS",
+      "javascriptSyntax": "PASS",
+      "lint": "PASS_157_FILES",
+      "typecheck": "PASS",
+      "workflowYamlParse": "PASS_BOTH_WORKFLOWS",
+      "gitDiffCheck": "PASS",
+      "isolatedLocalWorkerE2E": "PASS",
+      "localE2ECoverage": [
+        "pairing",
+        "browser-back",
+        "360x800",
+        "390x844",
+        "412x915",
+        "768x1024",
+        "1440x900",
+        "dark",
+        "light",
+        "reduced-motion",
+        "offline-reconnect",
+        "ambiguous-durable-accept-same-message-id",
+        "single-message-count",
+        "single-delivery-ack",
+        "refresh-history",
+        "keyboard-send",
+        "pairing-error"
+      ],
+      "localE2EScreenshots": 11,
+      "productionWrites": false
+    },
+    "release_blockers": [
+      "Canonical Owner logo binary missing: exact SHA-256 and 508x476 dimensions cannot be verified.",
+      "Order 083 exact-head workflow_dispatch not triggered: active GitHub tools expose no workflow-dispatch action.",
+      "Order 077 and Order 081 exact-head workflows still running at last read."
+    ]
   },
   "boundaries": {
     "merge": false,
@@ -80,5 +166,7 @@
     "requires_new_exact_head": true,
     "no_success_claim_before_fresh_verification": true
   },
-  "next_action": "RESUME_ORDER_085_RECONCILE_LOGO_AND_PRODUCTION_E2E_THEN_FINAL_HEAD_CI_AND_GUARDED_DEPLOY"
+  "next_action": "CONTINUE_EXACT_HEAD_CI_THEN_RESOLVE_OWNER_LOGO_AND_ORDER083_DISPATCH_BEFORE_GUARDED_DEPLOY",
+  "candidate_head_sha": "d614ec8e568c1343997dfbc79c2a9387673a3503",
+  "last_reconciled_at": "2026-10-18T13:03:39Z"
 }
