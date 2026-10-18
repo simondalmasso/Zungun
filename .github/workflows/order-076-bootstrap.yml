@@ -96,6 +96,7 @@ jobs:
           test -s android/gradle/verification-metadata.xml
           test -s android/external-consumer/gradle/verification-metadata.xml
           python tools/android/test_complete_gradle_verification.py
+          python tools/android/test_gradle_supplement.py
           python tools/android/complete-gradle-verification.py \
             --metadata android/gradle/verification-metadata.xml \
             --merge-from "$PREVIOUS_VERIFICATION" \

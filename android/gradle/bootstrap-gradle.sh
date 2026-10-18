@@ -28,7 +28,14 @@ if [ -f "$supplement" ] && [ -f "$metadata" ]; then
     rm -f "$backup"
   }
   trap restore_metadata EXIT INT TERM
-  (cd "$repo_root" && git apply --check "$supplement" && git apply "$supplement")
+  if (cd "$repo_root" && git apply --check "$supplement"); then
+    (cd "$repo_root" && git apply "$supplement")
+  else
+    # Metadata completion can reorder XML after the initial Gradle pass. Reapply only the
+    # exact reviewed checksum facts semantically, validating GAV/artifact/hash association.
+    python3 "$repo_root/tools/android/verify-gradle-supplement.py" \
+      --patch "$supplement" --metadata "$metadata"
+  fi
 fi
 sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [ -n "${GITHUB_PATH:-}" ] && [ -n "$sdkroot" ] && [ -x "$sdkroot/platform-tools/adb" ]; then
