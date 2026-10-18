@@ -13,10 +13,12 @@ must(css.includes('@media(prefers-color-scheme:dark)')&&css.includes('@media(pre
 must(!/transition\s*:\s*all\b/i.test(css),'NO_TRANSITION_ALL');
 must(css.includes('overflow-wrap:anywhere')&&css.includes('max-width:86%'),'LONG_CONTENT_WRAP');
 must(js.includes("window.addEventListener('offline'")&&js.includes("window.addEventListener('online'"),'OFFLINE_RECONNECT_PRESENTATION');
-must(js.includes("stateLabel(m.deliveredAtMs?'DELIVERED':'SENT')"),'TRUTHFUL_SENT_DELIVERED_ADAPTER');
+must(js.includes("message.deliveredAtMs ? 'DELIVERED' : 'SENT'")&&js.includes('stateLabel(state)'),'TRUTHFUL_SENT_DELIVERED_ADAPTER');
 must(common.includes("UNKNOWN:'Uncertain — checking'")&&common.includes("QUEUED:'Saved on device'"),'AMBIGUOUS_AND_QUEUED_NOT_LAUNDERED');
-must(js.includes("api(`/api/v1/conversations/${current.conversationId}/messages`")&&js.includes("/ack`"),'REAL_SEND_AND_ACK_PATHS_PRESERVED');
+must(js.includes("'/api/v1/conversations/' + pending.conversationId + '/messages'")&&js.includes("'/ack'"),'REAL_SEND_AND_ACK_PATHS_PRESERVED');
 must(js.includes("new WebSocket")&&js.includes('poll()'),'REALTIME_AND_POLL_FALLBACK_PRESERVED');
 must(html.includes('aria-live="polite"')&&html.includes('aria-label="Back to conversations"'),'ACCESSIBILITY_LIVE_AND_BACK');
 must(!html.includes('iMessage')&&!html.includes('WhatsApp'),'NO_COMPETITOR_BRANDING');
+must(js.includes("window.addEventListener('popstate'")&&js.includes('history.pushState')&&js.includes("location.hash === '#conversation'"),'BROWSER_HISTORY_BACK_HANDLING');
+must(js.includes('Retry same message safely')&&js.includes("'zungun.pendingMessages.v1'")&&js.includes('restorePendingMessages'),'AMBIGUOUS_SAME_ID_RECOVERY_AND_REFRESH');
 console.log('ORDER085_UI_CONTRACT=PASS');

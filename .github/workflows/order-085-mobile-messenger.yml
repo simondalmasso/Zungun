@@ -65,7 +65,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/order085-preflight"
           cp -a "$RUNNER_TEMP/order085-manifest-a/." "$RUNNER_TEMP/order085-preflight/"
           printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/order085-preflight/HEAD"
-          printf 'ORDER085_UI_CONTRACT=PASS\nMOBILE_TARGETS=360x800,390x844\nOWNER_LOGO_ASSET_HANDOFF_REQUIRED=YES\n' > "$RUNNER_TEMP/order085-preflight/RESULT"
+          printf 'ORDER085_UI_CONTRACT=PASS\nMOBILE_TARGETS=360x800,390x844\n' > "$RUNNER_TEMP/order085-preflight/RESULT"
+          if [[ -f cloudflare/public/brand/owner-logo.png ]]; then
+            printf 'OWNER_LOGO_FILE_PRESENT=YES\n' >> "$RUNNER_TEMP/order085-preflight/RESULT"
+          else
+            printf 'OWNER_LOGO_ASSET_HANDOFF_REQUIRED=YES\n' >> "$RUNNER_TEMP/order085-preflight/RESULT"
+          fi
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: order085-preflight-${{ github.run_id }}
@@ -92,6 +97,23 @@ jobs:
         with:
           node-version: 22.16.0
           package-manager-cache: false
+      - name: Verify canonical Owner logo before production mutation
+        run: |
+          set -euo pipefail
+          asset="cloudflare/public/brand/owner-logo.png"
+          if [[ ! -f "$asset" ]]; then
+            echo "::error::OWNER_LOGO_ASSET_HANDOFF_REQUIRED: missing canonical 508x476 binary; do not substitute or deploy a false brand PASS"
+            exit 86
+          fi
+          printf '%s  %s\n' 'e0507f73f60b7d2914fde0edbde322170e937e7546a5e9ab317b3d589a785f5b' "$asset" | sha256sum --check --status
+          node - "$asset" <<'NODE'
+          const fs=require('fs');
+          const b=fs.readFileSync(process.argv[2]);
+          if (b.length < 24 || b.toString('hex',0,8) !== '89504e470d0a1a0a') throw new Error('OWNER_LOGO_NOT_PNG');
+          const width=b.readUInt32BE(16), height=b.readUInt32BE(20);
+          if (width !== 508 || height !== 476) throw new Error(`OWNER_LOGO_DIMENSIONS_MISMATCH:${width}x${height}`);
+          console.log(`OWNER_LOGO_SHA256_AND_DIMENSIONS=PASS:${width}x${height}`);
+          NODE
       - name: Deploy exact green candidate to existing Zungun Worker
         env:
           ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/order085-deploy
@@ -109,7 +131,7 @@ jobs:
       - name: Record prior ORDER-083 live semantic evidence without writing new production fixtures
         run: |
           set -euo pipefail
-          printf 'PRIOR_ORDER083_LIVE_MATRIX=PASS\nPRIOR_SOURCE_BUNDLE_SHA256=f445554dc6dd0c7f746e7d49c526c5866d32bdd64d38810eb6676c360f7b70ad\nCURRENT_HEAD_PRODUCTION_WRITE_E2E=NOT_RUN_READ_ONLY_POLICY\n' > "$RUNNER_TEMP/order085-deploy/prior-order083-live-evidence.txt"
+          printf 'PRIOR_ORDER083_LIVE_MATRIX=PASS\nPRIOR_SOURCE_BUNDLE_SHA256=f445554dc6dd0c7f746e7d49c526c5866d32bdd64d38810eb6676c360f7b70ad\nPRIOR_HEAD_PRODUCTION_WRITE_E2E=NOT_RUN\n' > "$RUNNER_TEMP/order085-deploy/prior-order083-live-evidence.txt"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: order085-production-deploy-${{ github.run_id }}
@@ -121,7 +143,7 @@ jobs:
           compression-level: 0
 
   production-mobile:
-    name: Read-only production smoke
+    name: Production mobile E2E and read-only smoke
     needs: [ui-contract, deploy-production]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -130,6 +152,19 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Install production browser harness
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+          python -m playwright install --with-deps chromium
+      - name: Production mobile and recovery E2E with isolated test identities
+        env:
+          ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+          ORDER085_WEB_EVIDENCE: ${{ runner.temp }}/order085-mobile-e2e
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/order085-mobile-e2e"
+          python tools/browser/order085-messenger-e2e.py
       - name: Verify production identity and messenger markup using GET only
         env:
           EXPECTED_SOURCE_SHA: ${{ needs.ui-contract.outputs.source_sha }}
@@ -152,12 +187,15 @@ jobs:
           grep -q 'safe-area-inset-bottom' "$RUNNER_TEMP/order085-readonly/app.css"
           grep -q 'overflow-wrap:anywhere' "$RUNNER_TEMP/order085-readonly/app.css"
           grep -q 'RECIPIENT_DELIVERY_ACK' "$RUNNER_TEMP/order085-readonly/messages.js" || grep -q 'DELIVERED' "$RUNNER_TEMP/order085-readonly/messages.js"
-          printf 'PRODUCTION_READ_ONLY_SMOKE=PASS\nPRODUCTION_WRITE_E2E=NOT_RUN_READ_ONLY_POLICY\n' > "$RUNNER_TEMP/order085-readonly/RESULT"
+          printf 'PRODUCTION_MOBILE_E2E=PASS\nPRODUCTION_READ_ONLY_SMOKE=PASS\n' > "$RUNNER_TEMP/order085-readonly/RESULT"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
         with:
           name: order085-production-readonly-${{ github.run_id }}
-          path: ${{ runner.temp }}/order085-readonly
-          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/order085-readonly
+            ${{ runner.temp }}/order085-mobile-e2e
+          if-no-files-found: warn
           retention-days: 14
           compression-level: 0
 
@@ -206,7 +244,7 @@ jobs:
           test "$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "$EXPECTED_SOURCE_SHA"
           test "$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "$EXPECTED_STATIC_SHA"
           test "$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "$EXPECTED_MIGRATION_SHA"
-          printf 'ORDER077=PASS\nORDER081=PASS\nPRIOR_ORDER083_LIVE_SEMANTIC_MATRIX=PASS_SOURCE=f445554dc6dd0c7f746e7d49c526c5866d32bdd64d38810eb6676c360f7b70ad\nPRODUCTION_READ_ONLY_SMOKE=PASS\nPRODUCTION_WRITE_E2E=NOT_RUN_READ_ONLY_POLICY\nEXACT_SOURCE_IDENTITY=PASS\nREQUIRED_GATES_SKIPPED=0\nPR16_MERGE=NO\nOWNER_LOGO_ASSET_HANDOFF_REQUIRED=YES\n' > "$RUNNER_TEMP/order085-seal/RESULT"
+          printf 'ORDER077=PASS\nORDER081=PASS\nPRIOR_ORDER083_LIVE_SEMANTIC_MATRIX=PASS_SOURCE=f445554dc6dd0c7f746e7d49c526c5866d32bdd64d38810eb6676c360f7b70ad\nPRODUCTION_READ_ONLY_SMOKE=PASS\nPRODUCTION_WRITE_E2E=PASS\nEXACT_SOURCE_IDENTITY=PASS\nREQUIRED_GATES_SKIPPED=0\nPR16_MERGE=NO\nOWNER_LOGO_CANONICAL_SHA256_AND_DIMENSIONS=PASS\n' > "$RUNNER_TEMP/order085-seal/RESULT"
           find "$RUNNER_TEMP/order085-seal" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/order085-seal/MANIFEST.sha256"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:

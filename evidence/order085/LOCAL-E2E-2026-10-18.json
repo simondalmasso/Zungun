@@ -1,0 +1,105 @@
+{
+  "schema": "zungun.order085.local-e2e-summary.v1",
+  "captured_date": "2026-10-18",
+  "execution": "PASS",
+  "environment": "isolated local Wrangler HTTPS Worker plus local D1; ZUNGUN_ENVIRONMENT=test",
+  "production_writes": false,
+  "source_manifest_at_test_start": {
+    "sourceBundleSha256": "ee7ace9d9cf7c92c60fe429b5ca480a33a399a7a95c5b2d0b18080ab90cc0501",
+    "staticAssetManifestSha256": "a8a33ec1964d2b912c8f107501e67ba3b46190c3bc9f859e47198c57483ce290",
+    "migrationManifestSha256": "f3f46fd61b5570cbf1661d4df7b1bfc84889aecc5a7f824c92d68c2111ab243a"
+  },
+  "checks": {
+    "ok": true,
+    "origin": "https://127.0.0.1:8787",
+    "routes200": [
+      "/",
+      "/messages",
+      "/control",
+      "/developers",
+      "/ops"
+    ],
+    "mobile390x844": "PASS",
+    "mobile360x800": "PASS",
+    "mobile412x915": "PASS",
+    "tablet768x1024": "PASS",
+    "desktop1440x900": "PASS",
+    "browserBackReturnsToInbox": "PASS",
+    "singlePaneBackNavigation": "PASS",
+    "composerVisibleAndTouchSized": "PASS",
+    "noHorizontalOverflow": "PASS",
+    "longContentWrap": "PASS",
+    "lightMode": "PASS",
+    "darkMode": "PASS",
+    "reducedMotion": "PASS",
+    "offlineAcceptanceAndReconnectDelivery": "PASS",
+    "ambiguousDurableAcceptReconciledWithStableMessageId": "PASS",
+    "ambiguousLogicalMessageCount": 1,
+    "ambiguousDeliveryAckCount": 1,
+    "refreshPreservesServerHistory": "PASS",
+    "keyboardSend": "PASS",
+    "pairingError": "PASS",
+    "ownerLogoGate": "BLOCKED_CANONICAL_BINARY_NOT_INTEGRATED",
+    "screenshots": [
+      "messages-390-list-light.png",
+      "messages-390-thread-light.png",
+      "messages-360-thread-dark-reduced-motion.png",
+      "messages-412-thread-light.png",
+      "messages-768-thread-dark.png",
+      "messages-1440-thread-dark.png",
+      "messages-1440-thread-light.png",
+      "messages-412-long-delivered-light.png",
+      "messages-412-offline-light.png",
+      "messages-360-ambiguous-reconciled-dark.png",
+      "messages-360-pair-error-dark.png"
+    ],
+    "viewportMetrics": [
+      {
+        "w": 360,
+        "sw": 360,
+        "body": "messages-page conversation-open"
+      },
+      {
+        "w": 412,
+        "sw": 412,
+        "body": "messages-page conversation-open"
+      },
+      {
+        "w": 768,
+        "sw": 768,
+        "body": "messages-page conversation-open"
+      }
+    ]
+  },
+  "routes": {
+    "/": 200,
+    "/messages": 200,
+    "/control": 200,
+    "/developers": 200,
+    "/ops": 200
+  },
+  "screenshots_generated": [
+    "messages-390-list-light.png",
+    "messages-390-thread-light.png",
+    "messages-360-thread-dark-reduced-motion.png",
+    "messages-412-thread-light.png",
+    "messages-768-thread-dark.png",
+    "messages-1440-thread-dark.png",
+    "messages-1440-thread-light.png",
+    "messages-412-long-delivered-light.png",
+    "messages-412-offline-light.png",
+    "messages-360-ambiguous-reconciled-dark.png",
+    "messages-360-pair-error-dark.png"
+  ],
+  "screenshot_storage": "Local ignored path .tmp/order085-local-e2e-python/evidence; screenshots are not represented as production evidence.",
+  "explicit_blockers": {
+    "canonical_owner_logo": "OWNER_LOGO_ASSET_HANDOFF_REQUIRED",
+    "production_e2e": "NOT_RUN",
+    "workflow_dispatch": "NOT_TRIGGERED",
+    "deployment": "NOT_RUN"
+  },
+  "notes": [
+    "This evidence is for local functional/responsive verification only; it does not assert production source identity.",
+    "The runtime source files tested have not changed since this run; subsequent changes in this work session are workflow/evidence bookkeeping only."
+  ]
+}
