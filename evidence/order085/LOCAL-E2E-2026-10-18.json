@@ -1,0 +1,110 @@
+{
+  "schema": "zungun.order085.local-e2e-summary.v1",
+  "captured_date": "2026-10-18",
+  "execution": "PASS",
+  "environment": "isolated local Wrangler HTTPS Worker plus local D1; ZUNGUN_ENVIRONMENT=test",
+  "production_writes": false,
+  "test_source_manifest_before_summary_refresh": {
+    "sourceBundleSha256": "6e890edefb1da2df08baefbfce9414b71e8cc3b59ecf901d5d63a4d76ade76e5",
+    "staticAssetManifestSha256": "18be25172d20022af060619d0bb8a0f1f709cf75ab1217d36ff832aa7d53bc8c",
+    "migrationManifestSha256": "f3f46fd61b5570cbf1661d4df7b1bfc84889aecc5a7f824c92d68c2111ab243a"
+  },
+  "identityNote": "Source manifest was generated before this evidence-summary refresh. This JSON is evidence bookkeeping and therefore the hash is not a final committed-source attestation; exact committed identity is recalculated by CI.",
+  "checks": {
+    "ok": true,
+    "origin": "https://127.0.0.1:8787",
+    "routes200": [
+      "/",
+      "/messages",
+      "/control",
+      "/developers",
+      "/ops"
+    ],
+    "mobile390x844": "PASS",
+    "mobile360x800": "PASS",
+    "mobile412x915": "PASS",
+    "tablet768x1024": "PASS",
+    "desktop1440x900": "PASS",
+    "browserBackReturnsToInbox": "PASS",
+    "singlePaneBackNavigation": "PASS",
+    "composerVisibleAndTouchSized": "PASS",
+    "noHorizontalOverflow": "PASS",
+    "longContentWrap": "PASS",
+    "lightMode": "PASS",
+    "darkMode": "PASS",
+    "reducedMotion": "PASS",
+    "offlineAcceptanceAndReconnectDelivery": "PASS",
+    "offlineAckRetryAfterTransientFailure": "PASS",
+    "offlineAckAttempts": 2,
+    "forcedAckFault": "First recipient ACK request aborted by the browser harness; the subsequent ACK retry succeeded.",
+    "ambiguousDurableAcceptReconciledWithStableMessageId": "PASS",
+    "ambiguousLogicalMessageCount": 1,
+    "ambiguousDeliveryAckCount": 1,
+    "refreshPreservesServerHistory": "PASS",
+    "keyboardSend": "PASS",
+    "pairingError": "PASS",
+    "ownerLogoGate": "BLOCKED_CANONICAL_BINARY_NOT_INTEGRATED",
+    "screenshots": [
+      "messages-390-list-light.png",
+      "messages-390-thread-light.png",
+      "messages-360-thread-dark-reduced-motion.png",
+      "messages-412-thread-light.png",
+      "messages-768-thread-dark.png",
+      "messages-1440-thread-dark.png",
+      "messages-1440-thread-light.png",
+      "messages-412-long-delivered-light.png",
+      "messages-412-offline-light.png",
+      "messages-360-ambiguous-reconciled-dark.png",
+      "messages-360-pair-error-dark.png"
+    ],
+    "viewportMetrics": [
+      {
+        "w": 360,
+        "sw": 360,
+        "body": "messages-page conversation-open"
+      },
+      {
+        "w": 412,
+        "sw": 412,
+        "body": "messages-page conversation-open"
+      },
+      {
+        "w": 768,
+        "sw": 768,
+        "body": "messages-page conversation-open"
+      }
+    ]
+  },
+  "routes": {
+    "/": 200,
+    "/messages": 200,
+    "/control": 200,
+    "/developers": 200,
+    "/ops": 200
+  },
+  "screenshots_generated": [
+    "messages-390-list-light.png",
+    "messages-390-thread-light.png",
+    "messages-360-thread-dark-reduced-motion.png",
+    "messages-412-thread-light.png",
+    "messages-768-thread-dark.png",
+    "messages-1440-thread-dark.png",
+    "messages-1440-thread-light.png",
+    "messages-412-long-delivered-light.png",
+    "messages-412-offline-light.png",
+    "messages-360-ambiguous-reconciled-dark.png",
+    "messages-360-pair-error-dark.png"
+  ],
+  "screenshot_storage": "Local ignored path .tmp/order085-local-e2e-ack-retry-3/evidence; screenshots are not production evidence and were not added to the repo.",
+  "explicit_blockers": {
+    "canonical_owner_logo": "OWNER_LOGO_ASSET_HANDOFF_REQUIRED",
+    "production_e2e": "NOT_RUN",
+    "workflow_dispatch": "NOT_TRIGGERED",
+    "deployment": "NOT_RUN"
+  },
+  "notes": [
+    "This is local functional/responsive evidence only; it does not assert production source identity.",
+    "The browser test verifies delivery ACK retry for the specific offline test message, using its DOM node and asserting at least two ACK attempts.",
+    "The ambiguous message remains a single logical message with one delivery ACK after response loss, refresh and same-ID reconciliation."
+  ]
+}

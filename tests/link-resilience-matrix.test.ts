@@ -1,0 +1,3 @@
+import test from 'node:test'; import assert from 'node:assert/strict';
+import { LINK_SCENARIOS, summarizeLinkScenarios } from '../tools/resilience-lab/src/link-scenarios.js';
+test('Link adversarial matrix covers required families and never expects duplicate business effect',()=>{const s=summarizeLinkScenarios();assert.ok(s.scenarioCount>=70);for(const family of ['CONNECTIVITY','QUALITY','PLANNING','AMBIGUITY','DELTA','DEFERRED','PREFETCH','SCHEDULER','SECURITY'])assert.ok(Number((s.families as any)[family])>0);assert.equal(s.duplicateBusinessEffectScenarios,0);assert.ok(LINK_SCENARIOS.some(x=>x.name==='response_lost_after_durable_accept'&&x.expectedReceiverEffectCount===1));});

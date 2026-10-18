@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0b0c0e" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
+  <title>Zungun Messages</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="messages-page">
+  <main class="messenger-app" aria-label="Zungun Messages">
+    <header class="messenger-globalbar">
+      <a class="brand brand-quiet" href="/" aria-label="Zungun home"><span class="brand-word">Zungun</span></a>
+      <nav class="nav compact-nav" aria-label="Primary">
+        <a data-nav="control" href="/control">Control</a>
+        <a data-nav="messages" href="/messages">Messages</a>
+        <a data-nav="developers" href="/developers">Developers</a>
+        <a href="/ops">Ops</a>
+      </nav>
+    </header>
+
+    <div class="messenger-layout">
+      <aside class="inbox-pane" id="inbox-pane" aria-label="Conversations">
+        <div class="inbox-scroll">
+          <div class="inbox-title-row">
+            <div>
+              <div class="eyebrow">Messages</div>
+              <h1>Conversations</h1>
+            </div>
+            <span class="privacy-dot" title="Application-level delivery states"></span>
+          </div>
+
+          <section class="identity-surface" aria-label="Account">
+            <div id="account"></div>
+          </section>
+
+          <form id="pair" class="pairing-form" aria-label="Start a conversation">
+            <label class="field-label" for="pair-code">New conversation</label>
+            <div class="pairing-row">
+              <input id="pair-code" name="code" maxlength="12" required placeholder="Another person's pairing code" autocomplete="off" autocapitalize="characters" spellcheck="false">
+              <button class="icon-button" type="submit" aria-label="Start conversation">→</button>
+            </div>
+            <div id="pair-error" class="error compact-error" role="alert"></div>
+          </form>
+
+          <label class="search-field" for="conversation-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="conversation-search" type="search" placeholder="Search conversations" autocomplete="off">
+          </label>
+
+          <div id="conversations" class="conversation-list" aria-live="polite"></div>
+        </div>
+      </aside>
+
+      <section class="thread-pane" id="thread-pane" aria-label="Active conversation">
+        <header class="thread-header">
+          <button id="back-to-list" class="mobile-back" type="button" aria-label="Back to conversations">‹</button>
+          <div class="thread-identity">
+            <div class="avatar avatar-neutral" id="chat-avatar" aria-hidden="true">Z</div>
+            <div class="thread-title-wrap">
+              <h2 id="chat-title">Select a conversation</h2>
+              <div class="thread-subtitle" id="chat-subtitle">Your delivery state stays explicit.</div>
+            </div>
+          </div>
+          <span id="socket" class="connection-state" data-state="offline" aria-live="polite"><span class="connection-dot"></span><span class="connection-label">Offline</span></span>
+        </header>
+
+        <div id="messages" class="message-thread" aria-live="polite" aria-relevant="additions text">
+          <div class="thread-empty" id="thread-empty">
+            <div class="empty-mark" aria-hidden="true">↗</div>
+            <strong>Choose a conversation</strong>
+            <span>Messages are marked sent only after durable server acceptance, and delivered only after recipient acknowledgement.</span>
+          </div>
+        </div>
+
+        <div class="composer-shell">
+          <form id="send" class="composer" aria-label="Send message">
+            <label class="sr-only" for="message-body">Message</label>
+            <textarea id="message-body" name="body" maxlength="2000" required placeholder="Message" autocomplete="off" rows="1" enterkeyhint="send"></textarea>
+            <button class="send-button" type="submit" aria-label="Send message" disabled>↑</button>
+          </form>
+          <div class="composer-meta">
+            <div id="send-error" class="error" role="alert"></div>
+            <div class="composer-hint" id="composer-hint">Select a conversation to send.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/messages/messages.js"></script>
+</body>
+</html>

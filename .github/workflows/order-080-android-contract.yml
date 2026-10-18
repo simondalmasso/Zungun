@@ -1,0 +1,110 @@
+name: Order 080 standalone Android contract
+
+"on":
+  push:
+    branches: [feat/zungun-full-project-v1]
+    paths:
+      - android/runtime/**
+      - android/settings.gradle.kts
+      - android/gradle/bootstrap-gradle.sh
+      - android/gradle/verification-metadata.xml
+      - android/external-consumer/**
+      - .github/workflows/order-080-android-contract.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: order-080-android-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Android SDK inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+      - name: Gate 15a strict producer clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:clean :sample:clean
+      - name: Gate 15b and 29 publish real AAR by Maven coordinate
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:assembleRelease
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :runtime:publishReleasePublicationToOrder080Repository
+          repo="$GITHUB_WORKSPACE/android/runtime/build/order080-repo"
+          aar="$repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.aar"
+          pom="$repo/com/zungun/zungun-runtime/1.0.80/zungun-runtime-1.0.80.pom"
+          test -s "$aar"
+          test -s "$pom"
+          sha256sum "$aar" | tee "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256"
+          printf 'ZUNGUN_RUNTIME_REPO=%s\n' "$repo" >> "$GITHUB_ENV"
+          printf 'ZUNGUN_RUNTIME_AAR=%s\n' "$aar" >> "$GITHUB_ENV"
+      - name: Gate 29 standalone consumer bootstrap evidence if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          test -f android/external-consumer/settings.gradle.kts
+          ! grep -R -F 'project(:runtime)' android/external-consumer android/settings.gradle.kts
+          if [ ! -s android/external-consumer/gradle/verification-metadata.xml ]; then
+            android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
+              -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" \
+              --write-locks --write-verification-metadata sha256 \
+              assembleDebug assembleDebugAndroidTest
+          fi
+      - name: Gate 29 strict standalone coordinate consumption
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sha256sum -c "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256"
+          android/gradle/bootstrap-gradle.sh -p android/external-consumer --no-daemon --stacktrace \
+            -PzungunRuntimeRepository="$ZUNGUN_RUNTIME_REPO" clean assembleDebug assembleDebugAndroidTest
+          sha256sum -c "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256"
+          apk="$(find android/external-consumer/build/outputs/apk/debug -maxdepth 1 -type f -name '*-debug.apk' -print -quit)"
+          test -n "$apk"
+          test -s "$apk"
+          printf 'ZUNGUN_CONSUMER_APK=%s\n' "$apk" >> "$GITHUB_ENV"
+          test -s android/external-consumer/gradle.lockfile
+          test -s android/external-consumer/gradle/verification-metadata.xml
+      - name: Archive Gate 29 and 30 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/order080-android-contract"
+          mkdir -p "$out"
+          cp "$ZUNGUN_RUNTIME_AAR" "$out/zungun-runtime-1.0.80.aar"
+          cp "$RUNNER_TEMP/zungun-runtime-1.0.80.aar.sha256" "$out/"
+          cp "$ZUNGUN_CONSUMER_APK" "$out/external-consumer-debug.apk"
+          sha256sum "$out/external-consumer-debug.apk" > "$out/external-consumer-debug.apk.sha256"
+          cp android/external-consumer/gradle/verification-metadata.xml "$out/consumer-verification-metadata.xml"
+          cp android/external-consumer/gradle.lockfile "$out/consumer-gradle.lockfile"
+          find "$out" -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$out/MANIFEST.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: order080-android-contract-${{ github.run_id }}
+          path: ${{ runner.temp }}/order080-android-contract
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

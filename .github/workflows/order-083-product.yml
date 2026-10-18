@@ -1,0 +1,208 @@
+name: Order 083 product verification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: order083-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  CI: "true"
+  NO_COLOR: "1"
+  ZUNGUN_ORIGIN: https://zungun.simondalmasso44.workers.dev
+jobs:
+  product-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    outputs:
+      source_sha: ${{ steps.manifest.outputs.source_sha }}
+      static_sha: ${{ steps.manifest.outputs.static_sha }}
+      migration_sha: ${{ steps.manifest.outputs.migration_sha }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.sha }}", fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: Gates 37–40,42,46,48,49 source and contract verification
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          node --check cloudflare/src/worker.mjs
+          node --test cloudflare/test/contracts.test.mjs
+          node tools/ci/scan-artifact-secrets.mjs cloudflare
+          node tools/ci/scan-artifact-secrets.mjs android/app
+          bash -n tools/order083/deploy-production.sh
+          bash -n tools/order083/android-production-e2e.sh
+          bash -n tools/order083/android-field-recovery-e2e.sh
+          bash -n tools/order083/android-messenger-recovery-e2e.sh
+          python -m py_compile tools/browser/order083-product-e2e.py tools/browser/order083-android-browser-e2e.py
+      - id: manifest
+        name: Gate 37 deterministic source/static/migration manifests
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/m1" "$RUNNER_TEMP/m2"
+          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/m1"
+          node tools/order083/generate-manifests.mjs . "$RUNNER_TEMP/m2"
+          cmp "$RUNNER_TEMP/m1/result.json" "$RUNNER_TEMP/m2/result.json"
+          cmp "$RUNNER_TEMP/m1/SOURCE_MANIFEST.sha256" "$RUNNER_TEMP/m2/SOURCE_MANIFEST.sha256"
+          source_sha="$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/m1/result.json")"
+          static_sha="$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/m1/result.json")"
+          migration_sha="$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/m1/result.json")"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "static_sha=$static_sha" >> "$GITHUB_OUTPUT"
+          echo "migration_sha=$migration_sha" >> "$GITHUB_OUTPUT"
+          cp -a "$RUNNER_TEMP/m1" "$RUNNER_TEMP/order083-core"
+          rm -rf evidence/order083/local
+          node tools/order083/generate-manifests.mjs . evidence/order083/local
+          node tools/order083/local-gates.mjs
+          cp evidence/order083/local/source-preflight.json "$RUNNER_TEMP/order083-core/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with: {name: "order083-core-${{ github.run_id }}", path: "${{ runner.temp }}/order083-core", if-no-files-found: error, retention-days: 14, compression-level: 0}
+
+  production-web:
+    needs: product-core
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.sha }}", persist-credentials: false}
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: Gate 47 production identity must already equal exact source
+        run: |
+          set -euo pipefail
+          test -n "$ZUNGUN_PILOT_TOKEN"
+          curl --fail --silent --show-error "$ZUNGUN_ORIGIN/health" | jq -e '.ok==true and .order=="ORDER-083"'
+          curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version" | tee "$RUNNER_TEMP/version.json"
+          test "$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/version.json")" = "${{ needs.product-core.outputs.source_sha }}"
+          test "$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/version.json")" = "${{ needs.product-core.outputs.static_sha }}"
+          test "$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/version.json")" = "${{ needs.product-core.outputs.migration_sha }}"
+      - name: Gates 40,42,44,46 live API scenarios A,C,D,E,F,H
+        run: node tools/order083/live-e2e.mjs "$RUNNER_TEMP/order083-live"
+      - name: Install Playwright harness
+        run: python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+      - name: Gate 45 production web responsive/accessibility/refresh/realtime visual proof
+        env:
+          ORDER083_WEB_EVIDENCE: ${{ runner.temp }}/order083-web
+        run: python tools/browser/order083-product-e2e.py
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: "order083-web-live-${{ github.run_id }}"
+          path: |
+            ${{ runner.temp }}/order083-live
+            ${{ runner.temp }}/order083-web
+            ${{ runner.temp }}/version.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  production-android:
+    needs: product-core
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      ZUNGUN_PILOT_TOKEN: ${{ secrets.ZUNGUN_PILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.sha }}", persist-credentials: false}
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: {node-version: 22.16.0, package-manager-cache: false}
+      - name: Install Android API35 + browser harness
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"; sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" platform-tools 'platforms;android-35' 'build-tools;35.0.0' emulator 'system-images;android-35;google_apis;x86_64'
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+          printf '%s\n' "$sdkroot/platform-tools" >> "$GITHUB_PATH"
+          test -x "$sdkroot/platform-tools/adb"
+          python -m pip install --disable-pip-version-check --no-cache-dir playwright==1.55.0
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+      - name: Start bounded API35 emulator
+        run: |
+          set -euo pipefail; sdkroot="$ANDROID_SDK_ROOT"; export ANDROID_USER_HOME="$RUNNER_TEMP/order083-android-home" ANDROID_EMULATOR_HOME="$RUNNER_TEMP/order083-android-home" ANDROID_AVD_HOME="$RUNNER_TEMP/order083-android-home/avd"; mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$sdkroot/cmdline-tools/latest/bin/avdmanager" create avd --force -n order083-api35 -k 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          sudo chmod 666 /dev/kvm || true
+          nohup "$sdkroot/emulator/emulator" -avd order083-api35 -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel auto > "$RUNNER_TEMP/order083-emulator.log" 2>&1 &
+          timeout 180s adb wait-for-device
+          for _ in $(seq 1 120);do [[ "$(adb shell getprop sys.boot_completed 2>/dev/null|tr -d '\r')" == 1 ]]&&exit 0;sleep 2;done
+          cat "$RUNNER_TEMP/order083-emulator.log";exit 1
+      - name: Gate 41 + K Android Field and Messenger against real Worker
+        env:
+          ORDER083_ANDROID_EVIDENCE: ${{ runner.temp }}/order083-android
+        run: tools/order083/android-production-e2e.sh
+      - name: Gate 44 Field offline/force-stop + UNKNOWN/reconcile real production
+        env:
+          ORDER083_FIELD_RECOVERY_EVIDENCE: ${{ runner.temp }}/order083-field-recovery
+        run: tools/order083/android-field-recovery-e2e.sh
+      - name: Gate 44 Messenger QUEUED/force-stop/reconnect exactly one message
+        env:
+          ORDER083_ANDROID_RECOVERY_EVIDENCE: ${{ runner.temp }}/order083-message-recovery
+        run: tools/order083/android-messenger-recovery-e2e.sh
+      - name: Gate 43 Android to real browser client + recipient ACK
+        env:
+          ORDER083_ANDROID_BROWSER_EVIDENCE: ${{ runner.temp }}/order083-android-browser
+        run: python tools/browser/order083-android-browser-e2e.py
+      - name: Seal Android visual and runtime evidence
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/order083-emulator.log" "$RUNNER_TEMP/order083-android/"
+          node tools/ci/scan-artifact-secrets.mjs "$RUNNER_TEMP/order083-android"
+          node tools/ci/scan-artifact-secrets.mjs "$RUNNER_TEMP/order083-field-recovery"
+          node tools/ci/scan-artifact-secrets.mjs "$RUNNER_TEMP/order083-message-recovery"
+          node tools/ci/scan-artifact-secrets.mjs "$RUNNER_TEMP/order083-android-browser"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: "order083-android-live-${{ github.run_id }}"
+          path: |
+            ${{ runner.temp }}/order083-android
+            ${{ runner.temp }}/order083-field-recovery
+            ${{ runner.temp }}/order083-message-recovery
+            ${{ runner.temp }}/order083-android-browser
+            ${{ runner.temp }}/order083-emulator.log
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  completion:
+    needs: [product-core, production-web, production-android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: {ref: "${{ github.sha }}", persist-credentials: false}
+      - name: Gate 50 exact-head 01–50 completion seal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 90); do
+            json="$(curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100")"
+            r77="$(jq -r '[.workflow_runs[]|select(.name=="Order 077 full project verification" and .head_sha==env.HEAD_SHA)]|sort_by(.run_number)|last|.conclusion // "pending"' <<<"$json")"
+            r81="$(jq -r '[.workflow_runs[]|select(.name=="Order 081 Link verification" and .head_sha==env.HEAD_SHA)]|sort_by(.run_number)|last|.conclusion // "pending"' <<<"$json")"
+            [[ "$r77" == failure || "$r77" == cancelled || "$r81" == failure || "$r81" == cancelled ]] && { echo "dependency failed r77=$r77 r81=$r81";exit 1; }
+            [[ "$r77" == success && "$r81" == success ]] && break
+            sleep 20
+          done
+          [[ "$r77" == success && "$r81" == success ]]
+          version="$(curl --fail --silent --show-error "$ZUNGUN_ORIGIN/version")"
+          test "$(jq -r .sourceBundleSha256 <<<"$version")" = "${{ needs.product-core.outputs.source_sha }}"
+          test "$(jq -r .staticAssetManifestSha256 <<<"$version")" = "${{ needs.product-core.outputs.static_sha }}"
+          test "$(jq -r .migrationManifestSha256 <<<"$version")" = "${{ needs.product-core.outputs.migration_sha }}"
+          mkdir -p "$RUNNER_TEMP/order083-completion"
+          printf '%s\n' "$HEAD_SHA" > "$RUNNER_TEMP/order083-completion/HEAD"
+          printf '%s\n' '${{ needs.product-core.outputs.source_sha }}' > "$RUNNER_TEMP/order083-completion/SOURCE_BUNDLE_SHA256"
+          printf '%s\n' '${{ needs.product-core.outputs.static_sha }}' > "$RUNNER_TEMP/order083-completion/STATIC_ASSET_MANIFEST_SHA256"
+          printf '%s\n' '${{ needs.product-core.outputs.migration_sha }}' > "$RUNNER_TEMP/order083-completion/MIGRATION_MANIFEST_SHA256"
+          printf 'GATES_01_36=SUCCESS\nGATES_37_50=SUCCESS\nREQUIRED_GATES_SKIPPED=0\nORDER082_STARTED=NO\n' > "$RUNNER_TEMP/order083-completion/RESULT"
+          find "$RUNNER_TEMP/order083-completion" -type f -print0|sort -z|xargs -0 sha256sum > "$RUNNER_TEMP/order083-completion/MANIFEST.sha256"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with: {name: "order083-completion-${{ github.run_id }}", path: "${{ runner.temp }}/order083-completion", if-no-files-found: error, retention-days: 14, compression-level: 0}

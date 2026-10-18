@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: Zungun Receiver Capability Contract
+  version: 1.0.0
+paths:
+  /api/v1/capabilities:
+    get:
+      operationId: getReceiverCapabilities
+      summary: Negotiate receiver capabilities before planning a transmission.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: baseSha256
+          required: false
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{64}$'
+      responses:
+        '200':
+          description: Versioned capability snapshot with bounded TTL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiverCapabilitiesV1'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    ReceiverCapabilitiesV1:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, version, receiverId, ttlMs, operations, transfer, delta]
+      properties:
+        schemaVersion:
+          const: zungun.receiver-capabilities/1
+        version:
+          const: 1
+        receiverId:
+          type: string
+        ttlMs:
+          type: integer
+          minimum: 1
+          maximum: 3600000
+        operations:
+          type: object
+          required: [query, durableReceipt]
+          properties:
+            query: { type: boolean }
+            durableReceipt: { type: boolean }
+        transfer:
+          type: object
+          required: [resume, networkBinding]
+          properties:
+            resume: { type: boolean }
+            networkBinding: { type: boolean }
+        delta:
+          type: object
+          required: [mode, exactBaseAvailable, requestedBaseSha256]
+          properties:
+            mode:
+              enum: [NONE, EXACT_BASE]
+            exactBaseAvailable:
+              type: boolean
+            requestedBaseSha256:
+              oneOf:
+                - type: string
+                  pattern: '^[0-9a-f]{64}$'
+                - type: 'null'

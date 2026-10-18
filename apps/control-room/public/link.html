@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Zungun Link — Operation view</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="page-header">
+      <div><p class="kicker">ZUNGUN LINK</p><h1>Semantic connectivity</h1></div>
+      <a href="/">Back to Control Room</a>
+    </header>
+    <section class="panel">
+      <form id="linkForm">
+        <label>Operation ID <input id="operationId" autocomplete="off" required></label>
+        <button type="submit">Inspect Link evidence</button>
+      </form>
+      <p id="linkStatus">No operation loaded.</p>
+    </section>
+    <section class="panel" aria-labelledby="linkHeading">
+      <h2 id="linkHeading">Operation Link state</h2>
+      <div id="linkGrid" class="detail-grid"></div>
+      <h3>Why this plan</h3><ul id="linkReasons"></ul>
+      <h3>Link evidence</h3><ol id="linkEvidence" class="timeline"></ol>
+      <p><strong>Evidence boundary:</strong> a plan is not a send; a send is not receiver durability; receiver durability is not application effect. Required deferred evidence keeps the package visibly incomplete.</p>
+    </section>
+  </main>
+  <script type="module" src="/link-view.js"></script>
+</body>
+</html>
