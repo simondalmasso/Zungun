@@ -57,7 +57,7 @@
       "order077": "IN_PROGRESS_EXACT_HEAD_RUN_39136334183",
       "order081": "IN_PROGRESS_EXACT_HEAD_RUN_39136334431",
       "order083": "NOT_RUN_DISPATCH_UNAVAILABLE",
-      "mobile_visual_and_functional": "LOCAL_UI_CONTRACT_WORKER_5_OF_5_LINT_TYPECHECK_PASS; VISUAL_CONTAINMENT_FIX_COMMITTED; ISOLATED_GITHUB_E2E_RUN_39136330653_IN_PROGRESS",
+      "mobile_visual_and_functional": "ISOLATED_GITHUB_E2E_SUCCESS_RUN_39136330653; ARTIFACT_12140091394; VISUAL_REVIEW_CONFIRMS_CONVERSATION_LIST_TEXT_NOW_ELLIPSIZES_WITHOUT_CROSS_PANE_OVERFLOW; OWNER_LOGO_GATE_REMAINS_BLOCKED",
       "logo_hash_and_dimensions": "BLOCKED_CANONICAL_BINARY_NOT_FOUND; STRICT_GATE_RESTORED_AND_FAILS_CLOSED",
       "production_identity": "PENDING_DEPLOY; LIVE_VERSION_REMAINS_PRIOR_ORDER083_SOURCE",
       "production_live_e2e": "NOT_RUN"
@@ -93,8 +93,28 @@
       "isolatedMobileE2E": {
         "runId": 39136330653,
         "url": "https://github.com/simondalmasso/Zungun/actions/runs/39136330653",
-        "status": "IN_PROGRESS",
-        "head": "0e29d8ebf7e82b8a54e9e2f6ce3beb07335d1e44"
+        "status": "SUCCESS",
+        "head": "0e29d8ebf7e82b8a54e9e2f6ce3beb07335d1e44",
+        "artifact": {
+          "id": 12140091394,
+          "name": "order085-local-mobile-evidence-39136330653",
+          "expired": false,
+          "size_bytes": 568466
+        },
+        "coverage": {
+          "viewports": [
+            "360x800",
+            "390x844",
+            "412x915",
+            "768x1024",
+            "1440x900"
+          ],
+          "offlineReconnect": "PASS",
+          "ambiguousReconciliation": "PASS",
+          "duplicateLogicalMessages": 0,
+          "recipientAckRetryAfterTransientFailure": "PASS",
+          "ownerLogo": "BLOCKED_CANONICAL_BINARY_NOT_INTEGRATED"
+        }
       },
       "sourceExport": {
         "runId": 39136330650,
@@ -173,5 +193,5 @@
   },
   "next_action": "CONTINUE_EXACT_HEAD_CI_THEN_RESOLVE_OWNER_LOGO_AND_ORDER083_DISPATCH_BEFORE_GUARDED_DEPLOY",
   "candidate_head_sha": "0e29d8ebf7e82b8a54e9e2f6ce3beb07335d1e44",
-  "last_reconciled_at": "2026-10-18T14:32:00.757Z"
+  "last_reconciled_at": "2026-10-18T14:33:30.990Z"
 }
