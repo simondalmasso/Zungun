@@ -2,8 +2,8 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 7,
-  "updated_at": "2026-10-18T14:24:00.704Z",
+  "revision": 8,
+  "updated_at": "2026-10-18T14:32:00.757Z",
   "authority": {
     "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
@@ -176,7 +176,7 @@
     "authorized_deploy_procedure": "tools/order083/deploy-production.sh",
     "authorized_workflow": ".github/workflows/order-085-mobile-messenger.yml",
     "remote_state_requirement": "READ_REAL_RELEVANT_PLATFORM_STATE_BEFORE_ANY_FUTURE_PLATFORM_ACTION",
-    "last_verified_at": "2026-10-18T14:24:00.704Z",
+    "last_verified_at": "2026-10-18T14:32:00.757Z",
     "state": "ORDER-085_ACTIVE_PRODUCTION_FIRST_AFTER_REQUIRED_GATES"
   },
   "next_action": "RESUME_ORDER_085_RECONCILE_LOGO_AND_PRODUCTION_E2E_THEN_FINAL_HEAD_CI_AND_GUARDED_DEPLOY"
