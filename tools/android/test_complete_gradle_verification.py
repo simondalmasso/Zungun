@@ -3,8 +3,19 @@
 from __future__ import annotations
 import hashlib
 import unittest
+from pathlib import Path
+import importlib.util
 from unittest.mock import patch
-from complete_gradle_verification import fetch_maven_central_bom
+
+_module_spec = importlib.util.spec_from_file_location(
+    "complete_gradle_verification",
+    Path(__file__).with_name("complete-gradle-verification.py"),
+)
+if _module_spec is None or _module_spec.loader is None:
+    raise RuntimeError("GRADLE_VERIFICATION_HELPER_IMPORT_FAILED")
+_verification_helper = importlib.util.module_from_spec(_module_spec)
+_module_spec.loader.exec_module(_verification_helper)
+fetch_maven_central_bom = _verification_helper.fetch_maven_central_bom
 
 def response(body: bytes):
     class FakeResponse:
