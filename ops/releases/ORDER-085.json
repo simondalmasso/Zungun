@@ -1,0 +1,77 @@
+{
+  "schema_version": "gaos-lean.release.v1",
+  "release_id": "ORDER-085",
+  "project": "ZUNGUN",
+  "workset_id": "ZUNGUN-ORDER-085-MOBILE-PRODUCT-COMPLETION-001",
+  "created_at": "2026-10-18T11:40:07Z",
+  "status": "AUTHORIZED",
+  "source_order": {
+    "order_id": "ORDER-085",
+    "source_issue": 10,
+    "source_comment_id": 5372505874,
+    "source_comment_url": "https://github.com/simondalmasso/Zungun/issues/10#issuecomment-5372505874",
+    "authority": "HUMAN_OWNER_AND_AUD",
+    "scope": "MOBILE_MESSENGER_PRODUCT_COMPLETION_AND_GUARDED_DEPLOY"
+  },
+  "target": {
+    "repository": "simondalmasso/Zungun",
+    "branch": "feat/zungun-full-project-v1",
+    "initial_head": "3c7d466ad9f54369ff60cb34b6dd86503502d6d6",
+    "initial_tree": "89dbc52f8289677e26d3eb7fdf1138cf26b9d5c9",
+    "production_origin": "https://zungun.simondalmasso44.workers.dev",
+    "owner_review_url": "https://zungun.simondalmasso44.workers.dev/messages"
+  },
+  "authorization": {
+    "human_owner": true,
+    "audit_authority": true,
+    "technical_gate": "CONDITIONAL_REQUIRED_GATES_MUST_PASS",
+    "authorized_at": "2026-10-18T11:40:07Z"
+  },
+  "actions": {
+    "merge": false,
+    "tag": false,
+    "github_release": false,
+    "cloudflare_write": true,
+    "deploy": true,
+    "production_change": true
+  },
+  "preconditions": {
+    "deploy_procedure": "tools/order083/deploy-production.sh",
+    "only_existing_workflow": ".github/workflows/order-085-mobile-messenger.yml",
+    "workflow_dispatch_only": true,
+    "no_indirect_trigger_or_workflow_bypass": true,
+    "order077_exact_final_head": "SUCCESS_REQUIRED_ZERO_SKIPS",
+    "order081_exact_final_head": "SUCCESS_REQUIRED_ZERO_SKIPS",
+    "order083_exact_final_head": "SUCCESS_REQUIRED_ZERO_SKIPS",
+    "manifest_identity_matches_candidate": true,
+    "owner_logo_sha256": "e0507f73f60b7d2914fde0edbde322170e937e7546a5e9ab317b3d589a785f5b",
+    "owner_logo_dimensions": "508x476",
+    "production_messenger_e2e": "REQUIRED_REAL_PAIR_SEND_DURABLE_SENT_RECIPIENT_ACK_DELIVERED",
+    "mobile_viewports": [
+      "360x800",
+      "390x844",
+      "412x915"
+    ],
+    "desktop_viewport": "1440x900",
+    "additional_visual_viewports": [
+      "768x1024"
+    ],
+    "no_horizontal_overflow": true,
+    "offline_reconnect_and_ambiguous_state": true,
+    "duplicate_logical_messages": 0,
+    "secret_leaks": 0,
+    "owner_logo_missing": "DO_NOT_SUBSTITUTE; KEEP_FINAL_BRAND_GATE_BLOCKED"
+  },
+  "limits": {
+    "no_merge": true,
+    "no_new_branch": true,
+    "no_new_pull_request": true,
+    "no_force_push_reset_rebase_or_history_rewrite": true,
+    "no_order082": true,
+    "no_atm_work": true,
+    "no_backend_contract_weakening": true,
+    "no_deploy_before_all_required_gates": true,
+    "no_secrets_in_output": true
+  },
+  "reason": "Explicit OWNER+AUD ORDER-085 authorization. Deployment is conditional on exact-final-head regression, visual, logo and production E2E gates; all production mutation must pass the existing guarded deploy script."
+}

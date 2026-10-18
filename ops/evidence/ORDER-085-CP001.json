@@ -1,0 +1,84 @@
+{
+  "schema_version": "gaos-lean.checkpoint.v1",
+  "checkpoint_id": "ORDER-085-CP001",
+  "project": "ZUNGUN",
+  "workset_id": "ZUNGUN-ORDER-085-MOBILE-PRODUCT-COMPLETION-001",
+  "created_at": "2026-10-18T11:40:07Z",
+  "status": "IN_PROGRESS",
+  "materialization": {
+    "mission_base_sha": "3c7d466ad9f54369ff60cb34b6dd86503502d6d6",
+    "branch": "feat/zungun-full-project-v1",
+    "commit_sha": "3c7d466ad9f54369ff60cb34b6dd86503502d6d6",
+    "tree_sha": "89dbc52f8289677e26d3eb7fdf1138cf26b9d5c9"
+  },
+  "scope": {
+    "runtime_semantics_change": false,
+    "ui_productization": true,
+    "allowed_paths": [
+      ".github/workflows/order-085-local-browser.yml",
+      ".github/workflows/order-085-mobile-messenger.yml",
+      "cloudflare/public/**",
+      "tools/browser/order085-messenger-e2e.py",
+      "tools/order085/**",
+      "docs/**",
+      "evidence/order085/**"
+    ],
+    "forbidden": [
+      "MERGE",
+      "NEW_PRODUCT_BRANCH",
+      "NEW_PR",
+      "FORCE_PUSH",
+      "RESET",
+      "REBASE",
+      "HISTORY_REWRITE",
+      "DEFAULT_BRANCH_CHANGE",
+      "ORDER-082",
+      "ATM_REPOSITORY",
+      "BACKEND_SEMANTIC_WEAKENING",
+      "CI_GATE_WEAKENING",
+      "UNGUARDED_CLOUDFLARE_MUTATION",
+      "SECRETS_IN_LOGS"
+    ]
+  },
+  "verification": {
+    "activation_preflight": {
+      "ui_contract": "PASS_ON_INITIAL_HEAD",
+      "cloudflare_contract_tests": "5_OF_5_PASS_ON_INITIAL_HEAD",
+      "javascript_syntax": "PASS_ON_INITIAL_HEAD",
+      "lint": "PASS_ON_INITIAL_HEAD",
+      "typecheck": "PASS_ON_INITIAL_HEAD"
+    },
+    "known_non_green": {
+      "order076_android_bootstrap": "FAIL_AT_STRICT_GRADLE_VERIFICATION_METADATA_MISSING_OR_UNCACHED_kotlin-bom_1.8.22; AAR_AND_EXTERNAL_CONSUMER_BUILD_PASSED",
+      "windows_full_npm_test": "EPERM_FSYNC_UNCONFIRMED_AS_CODE_DEFECT",
+      "format_check": "WINDOWS_COPY_LINE_ENDING_NOISE; DO_NOT_REFORMAT_WHOLE_REPO"
+    },
+    "final_head_gates": {
+      "order077": "PENDING_NEW_FINAL_HEAD",
+      "order081": "PENDING_NEW_FINAL_HEAD",
+      "order083": "PENDING_NEW_FINAL_HEAD",
+      "mobile_visual_and_functional": "PENDING",
+      "logo_hash_and_dimensions": "PENDING_EXACT_BINARY_RETRIEVAL",
+      "production_identity": "PENDING_MANIFEST_RECONCILIATION",
+      "production_live_e2e": "PENDING_WORKFLOW_EXECUTION"
+    },
+    "production_deploy": "NOT_RUN",
+    "merge": "NOT_AUTHORIZED"
+  },
+  "boundaries": {
+    "merge": false,
+    "deploy_executed": false,
+    "deploy_authorized_conditionally": true,
+    "release": false,
+    "cloudflare_write_executed": false,
+    "cloudflare_write_authorized_conditionally": true,
+    "production_change_executed": false,
+    "production_change_authorized_conditionally": true
+  },
+  "audit": {
+    "status": "PENDING",
+    "requires_new_exact_head": true,
+    "no_success_claim_before_fresh_verification": true
+  },
+  "next_action": "RESUME_ORDER_085_RECONCILE_LOGO_AND_PRODUCTION_E2E_THEN_FINAL_HEAD_CI_AND_GUARDED_DEPLOY"
+}

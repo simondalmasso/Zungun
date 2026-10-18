@@ -40,7 +40,12 @@ const readJson = (file) => {
 };
 const current = readJson('ops/CURRENT.json');
 const checkpoint = readJson('ops/evidence/GAOS-LEAN-BASELINE-CP001.json');
-const release = readJson('ops/releases/GAOS-LEAN-BASELINE-001.json');
+const baselineRelease = readJson('ops/releases/GAOS-LEAN-BASELINE-001.json');
+const baselineOrderId = 'ZUNGUN-ARQ-CANONICAL-PRODUCT-BASELINE-059';
+const worksetOrder = current.workset?.order_id;
+const order085ReleasePath = 'ops/releases/ORDER-085.json';
+if (worksetOrder === 'ORDER-085' && !fs.existsSync(path.join(root, order085ReleasePath))) fail('missing ' + order085ReleasePath);
+const release = worksetOrder === 'ORDER-085' ? readJson(order085ReleasePath) : baselineRelease;
 if (current.schema_version !== 'gaos-lean.current.v1') fail('CURRENT schema');
 if (current.project !== 'ZUNGUN' || current.system !== 'GAOS_ARQ_AUD') fail('CURRENT identity');
 if (current.authority?.sole_active_operational_state !== '/ops/CURRENT.json') fail('CURRENT authority');
@@ -57,8 +62,9 @@ if (checkpoint.scope?.runtime_behavior_change !== false) fail('checkpoint runtim
 for (const key of ['merge','deploy','release','production_change','cloudflare_write']) {
   if (checkpoint.boundaries?.[key] !== false) fail(`checkpoint ${key} boundary`);
 }
-if (release.status === 'AUTHORIZED') fail('release unexpectedly authorized');
-for (const value of Object.values(release.actions ?? {})) if (value !== false) fail('release action enabled');
+if (baselineRelease.status !== 'NOT_AUTHORIZED') fail('Order 059 baseline release must remain NOT_AUTHORIZED');
+for (const value of Object.values(baselineRelease.actions ?? {})) if (value !== false) fail('Order 059 baseline release action enabled');
+if (worksetOrder !== baselineOrderId && worksetOrder !== 'ORDER-085') fail('unsupported active order');
 const lines = fs.readFileSync(path.join(root, 'ops/EVENTS.ndjson'), 'utf8').trim().split('\n').filter(Boolean);
 if (lines.length < 4) fail('insufficient events');
 const ids = new Set();
@@ -73,7 +79,44 @@ for (const [index, line] of lines.entries()) {
   ids.add(event.event_id);
   events.push(event);
 }
-if (worksetStatus === 'CLOSED') {
+
+if (worksetOrder === 'ORDER-085') {
+  if (worksetStatus !== 'ACTIVE' || current.workset?.id !== 'ZUNGUN-ORDER-085-MOBILE-PRODUCT-COMPLETION-001') fail('ORDER-085 active workset identity/status');
+  if (current.workset?.phase !== 'EXECUTION') fail('ORDER-085 phase');
+  if (current.workset?.target_branch !== 'feat/zungun-full-project-v1') fail('ORDER-085 product target branch');
+  if (current.workset?.target_start_sha !== '3c7d466ad9f54369ff60cb34b6dd86503502d6d6') fail('ORDER-085 source start head');
+  if (current.claim?.id !== 'ZUNGUN-ORDER-085-ARQ-CLAIM-001' || current.claim?.status !== 'ACTIVE') fail('ORDER-085 claim identity/status');
+  if (current.claim?.branch !== current.workset.target_branch || current.claim?.base_sha !== current.workset.target_start_sha) fail('ORDER-085 claim branch/base');
+  if (!Array.isArray(current.claim?.allowed_paths) || !current.claim.allowed_paths.includes('cloudflare/public/**')) fail('ORDER-085 claim paths');
+  if (current.workset?.active_checkpoint?.id !== 'ORDER-085-CP001' || current.workset?.active_checkpoint?.status !== 'IN_PROGRESS') fail('ORDER-085 active checkpoint reference');
+  if (current.workset?.active_checkpoint?.path !== '/ops/evidence/ORDER-085-CP001.json') fail('ORDER-085 active checkpoint path');
+  const activeCheckpoint = readJson('ops/evidence/ORDER-085-CP001.json');
+  if (activeCheckpoint.checkpoint_id !== 'ORDER-085-CP001' || activeCheckpoint.workset_id !== current.workset.id) fail('ORDER-085 checkpoint identity');
+  if (activeCheckpoint.status !== 'IN_PROGRESS') fail('ORDER-085 checkpoint cannot claim PASS before terminal gates');
+  if (activeCheckpoint.materialization?.commit_sha !== current.workset.target_start_sha) fail('ORDER-085 initial checkpoint HEAD');
+  if (release.release_id !== 'ORDER-085' || release.workset_id !== current.workset.id || release.status !== 'AUTHORIZED') fail('ORDER-085 release identity/status');
+  if (release.source_order?.source_comment_id !== 5372505874 || release.authorization?.human_owner !== true || release.authorization?.audit_authority !== true) fail('ORDER-085 Owner/AUD authority');
+  if (release.target?.branch !== current.workset.target_branch || release.target?.initial_head !== current.workset.target_start_sha) fail('ORDER-085 release target');
+  for (const key of ['merge','tag','github_release']) if (release.actions?.[key] !== false) fail('ORDER-085 forbidden action ' + key);
+  for (const key of ['cloudflare_write','deploy','production_change']) if (release.actions?.[key] !== true) fail('ORDER-085 missing scoped authorization ' + key);
+  if (release.preconditions?.deploy_procedure !== 'tools/order083/deploy-production.sh') fail('ORDER-085 deploy procedure');
+  if (release.preconditions?.workflow_dispatch_only !== true || release.preconditions?.no_indirect_trigger_or_workflow_bypass !== true) fail('ORDER-085 workflow guard');
+  if (release.preconditions?.order077_exact_final_head !== 'SUCCESS_REQUIRED_ZERO_SKIPS' || release.preconditions?.order081_exact_final_head !== 'SUCCESS_REQUIRED_ZERO_SKIPS' || release.preconditions?.order083_exact_final_head !== 'SUCCESS_REQUIRED_ZERO_SKIPS') fail('ORDER-085 exact-head gate contract');
+  if (current.platform?.write_authorized !== true || current.platform?.deploy_authorized !== true || current.platform?.cloudflare_write_authorized !== true) fail('ORDER-085 active write/deploy authorization');
+  if (current.platform?.release_authorized !== false || current.platform?.production_change_authorized !== true) fail('ORDER-085 platform boundaries');
+  const activeEvents = events.filter(event => event.workset_id === current.workset.id);
+  if (activeEvents.length !== 4) fail('ORDER-085 transition event count');
+  const expectedTypes = ['WORKSET_OPENED','CLAIM_ASSIGNED','RELEASE_AUTHORIZED','CHECKPOINT_REQUESTED'];
+  if (JSON.stringify(activeEvents.map(event => event.type)) !== JSON.stringify(expectedTypes)) fail('ORDER-085 transition event sequence');
+  if (activeEvents[0].actor !== 'HUMAN_OWNER' || activeEvents[1].actor !== 'HUMAN_OWNER' || activeEvents[2].actor !== 'HUMAN_OWNER' || activeEvents[3].actor !== 'ARQ') fail('ORDER-085 transition actor sequence');
+  if (activeEvents.some(event => event.data?.order_id !== 'ORDER-085')) fail('ORDER-085 event order identity');
+  if (activeEvents[0].data?.authorization?.source_comment_id !== 5372505874) fail('ORDER-085 workset authorization source');
+  if (activeEvents[2].data?.release_id !== 'ORDER-085' || activeEvents[2].data?.actions?.deploy !== true || activeEvents[2].data?.actions?.merge !== false) fail('ORDER-085 release event boundaries');
+  if (activeEvents[3].data?.checkpoint_id !== 'ORDER-085-CP001' || activeEvents[3].data?.requested_commit_sha !== current.workset.target_start_sha) fail('ORDER-085 checkpoint request event');
+  if (current.next_action !== 'RESUME_ORDER_085_RECONCILE_LOGO_AND_PRODUCTION_E2E_THEN_FINAL_HEAD_CI_AND_GUARDED_DEPLOY') fail('ORDER-085 next action');
+}
+
+if (worksetStatus === 'CLOSED' && worksetOrder === baselineOrderId) {
   if (current.workset?.phase !== 'CLOSED') fail('closed workset phase');
   if (current.claim?.status !== 'INACTIVE') fail('closed claim status');
   if (current.claim?.autonomy !== 'NONE_WORKSET_CLOSED') fail('closed claim autonomy');
@@ -136,8 +179,8 @@ if (worksetStatus === 'CLOSED') {
   for (const key of ['write_authorized','deploy_authorized','release_authorized','production_change_authorized']) {
     if (current.platform?.[key] !== false) fail(`closed platform ${key}`);
   }
-  if (release.status !== 'NOT_AUTHORIZED') fail('closed release status');
-  for (const value of Object.values(release.authorization ?? {})) if (value !== false) fail('closed release authorization');
+  if (baselineRelease.status !== 'NOT_AUTHORIZED') fail('closed baseline release status');
+  for (const value of Object.values(baselineRelease.authorization ?? {})) if (value !== false) fail('closed baseline release authorization');
 }
 const policy = fs.readFileSync(path.join(root, 'ops/POLICY.md'), 'utf8');
 for (const phrase of ['/ops/CURRENT.json','last 20','FAIL_CLOSED','Real remote HEAD',allowedEventTypesText]) if (!policy.includes(phrase)) fail(`POLICY missing ${phrase}`);

@@ -52,10 +52,11 @@ A checkpoint under `/ops/evidence/<CHECKPOINT_ID>.json` must identify the materi
 
 Files under `/ops/releases/` record release decisions and boundaries. A record with `status != AUTHORIZED` cannot cause deploy, release, merge, tag, default-branch change, or production mutation.
 
-## Current workset boundary
+## Workset-specific execution boundary
 
-- Mission base SHA: `5c49374d5fa54858108cffe437520b793d0cfeb4`.
-- Implementation branch: `feat/gaos-lean-product-baseline-v1`.
-- Allowed paths: `/ops/**`, `README.md`, `docs/**`, `tools/**`, `.github/workflows/**`, `evidence/order057/**`.
-- Forbidden: runtime source changes, dependency version changes, default-branch changes, Cloudflare writes, merge, deploy, release, or production changes.
-- This workset must preserve runtime behavior and fail closed on scope drift.
+- Order 059 remains closed and immutable as the accepted product baseline. Its checkpoint and GAOS-LEAN-BASELINE-001.json release record stay historical and NOT_AUTHORIZED; do not rewrite them to represent another order.
+- The currently materialized ORDER-085 workset is represented by CURRENT.json, the append-only event tail, ops/evidence/ORDER-085-CP001.json, and ops/releases/ORDER-085.json.
+- ORDER-085 permits edits only on the existing product branch feat/zungun-full-project-v1 and within the exact claim allowlist in CURRENT.json. Preserve fast-forward ancestry from its start HEAD. No new product branch/PR, merge, reset, force-push, rebase, history rewrite, Order 082, or ATM work.
+- The ORDER-085 release record authorizes production mutation conditionally, not unconditionally. Every exact-final-head required gate, canonical Owner logo verification, deterministic manifest check, and real production mobile E2E must pass before deployment.
+- Production writes must run only through the existing .github/workflows/order-085-mobile-messenger.yml workflow_dispatch and its guarded tools/order083/deploy-production.sh. No direct Wrangler upload, trigger workaround, workflow weakening, or secret disclosure.
+- A deployment authorization is not permission to skip verification. An IN_PROGRESS checkpoint is not PASS, and missing or failed required checks remain FAIL_CLOSED.

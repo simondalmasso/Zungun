@@ -2,8 +2,8 @@
   "schema_version": "gaos-lean.current.v1",
   "project": "ZUNGUN",
   "system": "GAOS_ARQ_AUD",
-  "revision": 5,
-  "updated_at": "2026-07-31T07:41:00Z",
+  "revision": 6,
+  "updated_at": "2026-10-18T11:40:07Z",
   "authority": {
     "status": "ACTIVE",
     "sole_active_operational_state": "/ops/CURRENT.json",
@@ -30,40 +30,85 @@
     "fail_closed": true
   },
   "workset": {
-    "id": "ZUNGUN-GAOS-LEAN-BASELINE-001",
-    "order_id": "ZUNGUN-ARQ-CANONICAL-PRODUCT-BASELINE-059",
-    "status": "CLOSED",
-    "phase": "CLOSED",
-    "objective": "Materialize the minimal GAOS LEAN control plane and establish a documented, reusable-CI product baseline without runtime behavior change.",
-    "risk": "MEDIUM",
+    "id": "ZUNGUN-ORDER-085-MOBILE-PRODUCT-COMPLETION-001",
+    "order_id": "ORDER-085",
+    "status": "ACTIVE",
+    "phase": "EXECUTION",
+    "objective": "Complete and verify the existing Zungun mobile-first messenger in production with truthful delivery semantics, exact source identity, the canonical Owner logo, and reproducible visual/functional evidence.",
+    "risk": "HIGH",
     "mission_base_sha": "5c49374d5fa54858108cffe437520b793d0cfeb4",
     "implementation_branch": "feat/gaos-lean-product-baseline-v1",
+    "target_branch": "feat/zungun-full-project-v1",
+    "target_start_sha": "3c7d466ad9f54369ff60cb34b6dd86503502d6d6",
     "allowed_paths": [
-      "/ops/**",
+      "ops/**",
       "README.md",
       "docs/**",
       "tools/**",
       ".github/workflows/**",
-      "evidence/order057/**"
+      "evidence/order057/**",
+      "cloudflare/public/**",
+      "tools/browser/order085-messenger-e2e.py",
+      "tools/order085/**",
+      "evidence/order085/**"
     ],
     "forbidden": [
-      "RUNTIME_SOURCE_CHANGES",
-      "DEPENDENCY_VERSION_CHANGES",
-      "DEFAULT_BRANCH_CHANGE",
-      "CLOUDFLARE_WRITE",
       "MERGE",
-      "DEPLOY",
-      "RELEASE",
-      "PRODUCTION_CHANGE"
-    ]
+      "NEW_PRODUCT_BRANCH",
+      "NEW_PR",
+      "FORCE_PUSH",
+      "RESET",
+      "REBASE",
+      "HISTORY_REWRITE",
+      "DEFAULT_BRANCH_CHANGE",
+      "ORDER-082",
+      "ATM_REPOSITORY",
+      "BACKEND_SEMANTIC_WEAKENING",
+      "CI_GATE_WEAKENING",
+      "UNGUARDED_CLOUDFLARE_MUTATION",
+      "SECRETS_IN_LOGS"
+    ],
+    "active_checkpoint": {
+      "id": "ORDER-085-CP001",
+      "path": "/ops/evidence/ORDER-085-CP001.json",
+      "status": "IN_PROGRESS"
+    }
   },
   "claim": {
-    "id": "ZUNGUN-GAOS-LEAN-ARQ-CLAIM-001",
+    "id": "ZUNGUN-ORDER-085-ARQ-CLAIM-001",
     "role": "ARQ",
     "executor": "ARQ",
-    "status": "INACTIVE",
-    "assigned_at": "2026-07-31T05:08:26Z",
-    "autonomy": "NONE_WORKSET_CLOSED"
+    "status": "ACTIVE",
+    "assigned_at": "2026-10-18T11:40:07Z",
+    "autonomy": "LONG_AUTONOMOUS_UNTIL_TERMINAL",
+    "branch": "feat/zungun-full-project-v1",
+    "base_sha": "3c7d466ad9f54369ff60cb34b6dd86503502d6d6",
+    "allowed_paths": [
+      ".github/workflows/order-085-local-browser.yml",
+      ".github/workflows/order-085-mobile-messenger.yml",
+      "cloudflare/public/**",
+      "tools/browser/order085-messenger-e2e.py",
+      "tools/order085/**",
+      "docs/**",
+      "evidence/order085/**"
+    ],
+    "forbidden": [
+      "MERGE",
+      "NEW_PRODUCT_BRANCH",
+      "NEW_PR",
+      "FORCE_PUSH",
+      "RESET",
+      "REBASE",
+      "HISTORY_REWRITE",
+      "DEFAULT_BRANCH_CHANGE",
+      "ORDER-082",
+      "ATM_REPOSITORY",
+      "BACKEND_SEMANTIC_WEAKENING",
+      "CI_GATE_WEAKENING",
+      "UNGUARDED_CLOUDFLARE_MUTATION",
+      "SECRETS_IN_LOGS"
+    ],
+    "authority_source": "ORDER-085_OWNER_AUD_ISSUE10_COMMENT_5372505874"
   },
   "baseline": {
     "source_commit": "5c49374d5fa54858108cffe437520b793d0cfeb4",
@@ -122,13 +167,17 @@
     }
   },
   "platform": {
-    "write_authorized": false,
-    "deploy_authorized": false,
+    "write_authorized": true,
+    "deploy_authorized": true,
     "release_authorized": false,
-    "production_change_authorized": false,
+    "production_change_authorized": true,
+    "cloudflare_write_authorized": true,
+    "authorization_mode": "ORDER-085_CONDITIONAL_GATED",
+    "authorized_deploy_procedure": "tools/order083/deploy-production.sh",
+    "authorized_workflow": ".github/workflows/order-085-mobile-messenger.yml",
     "remote_state_requirement": "READ_REAL_RELEVANT_PLATFORM_STATE_BEFORE_ANY_FUTURE_PLATFORM_ACTION",
-    "last_verified_at": null,
-    "state": "UNCHANGED_BY_ORDER_059"
+    "last_verified_at": "2026-10-18T11:40:07Z",
+    "state": "ORDER-085_ACTIVE_PRODUCTION_FIRST_AFTER_REQUIRED_GATES"
   },
-  "next_action": "IDLE_AWAIT_HUMAN_WORKSET"
+  "next_action": "RESUME_ORDER_085_RECONCILE_LOGO_AND_PRODUCTION_E2E_THEN_FINAL_HEAD_CI_AND_GUARDED_DEPLOY"
 }
