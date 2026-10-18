@@ -44,6 +44,29 @@ jobs:
           node --check cloudflare/src/worker.mjs
           node --test cloudflare/test/contracts.test.mjs
           python -m py_compile tools/browser/order085-messenger-e2e.py
+      - name: Verify canonical Owner logo before production mutation
+        run: |
+          set -euo pipefail
+          asset="cloudflare/public/brand/owner-logo.png"
+          if [[ ! -f "$asset" ]]; then
+            echo "::error::OWNER_LOGO_ASSET_HANDOFF_REQUIRED: canonical 508x476 PNG is absent; do not substitute or deploy a false brand PASS"
+            exit 86
+          fi
+          printf '%s  %s\n' 'e0507f73f60b7d2914fde0edbde322170e937e7546a5e9ab317b3d589a785f5b' "$asset" | sha256sum --check --status
+          node - "$asset" <<'NODE'
+          const fs = require('node:fs');
+          const file = process.argv[2];
+          const bytes = fs.readFileSync(file);
+          if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+            throw new Error('OWNER_LOGO_NOT_PNG');
+          }
+          const width = bytes.readUInt32BE(16);
+          const height = bytes.readUInt32BE(20);
+          if (width !== 508 || height !== 476) {
+            throw new Error(`OWNER_LOGO_DIMENSIONS_MISMATCH:${width}x${height}`);
+          }
+          console.log(`OWNER_LOGO_SHA256_AND_DIMENSIONS=PASS:${width}x${height}`);
+          NODE
       - id: manifest
         name: Deterministic final source identity
         run: |
