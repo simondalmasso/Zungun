@@ -12,6 +12,7 @@ must(css.includes('.messages-page.conversation-open .thread-pane')&&css.includes
 must(css.includes('@media(prefers-color-scheme:dark)')&&css.includes('@media(prefers-reduced-motion:reduce)'),'DARK_LIGHT_REDUCED_MOTION');
 must(!/transition\s*:\s*all\b/i.test(css),'NO_TRANSITION_ALL');
 must(css.includes('overflow-wrap:anywhere')&&css.includes('max-width:86%'),'LONG_CONTENT_WRAP');
+must(css.includes('.conversation-name{display:block;') && css.includes('.conversation-preview{display:block;'), 'CONVERSATION_LIST_TEXT_CONTAINMENT');
 must(js.includes("window.addEventListener('offline'")&&js.includes("window.addEventListener('online'"),'OFFLINE_RECONNECT_PRESENTATION');
 must(js.includes("message.deliveredAtMs ? 'DELIVERED' : 'SENT'")&&js.includes('stateLabel(state)'),'TRUTHFUL_SENT_DELIVERED_ADAPTER');
 must(common.includes("UNKNOWN:'Uncertain — checking'")&&common.includes("QUEUED:'Saved on device'"),'AMBIGUOUS_AND_QUEUED_NOT_LAUNDERED');
