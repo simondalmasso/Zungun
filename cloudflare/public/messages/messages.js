@@ -11,6 +11,8 @@ let ws = null;
 let lastSeq = 0;
 let conversations = [];
 const pendingSends = new Map();
+const pendingDeliveryAcks = new Map();
+const pendingDeliveryAcksInFlight = new Set();
 
 const convs = document.getElementById('conversations');
 const msgs = document.getElementById('messages');
@@ -218,6 +220,40 @@ function addSafeRetry(messageId) {
   action.disabled = false;
 }
 
+function retryDeliveryAck(messageId) {
+  const pending = pendingDeliveryAcks.get(messageId);
+  if (!pending || pendingDeliveryAcksInFlight.has(messageId)) return;
+  pendingDeliveryAcksInFlight.add(messageId);
+  api(
+    '/api/v1/conversations/' + pending.conversationId + '/messages/' +
+      encodeURIComponent(messageId) + '/ack',
+    { method: 'POST', body: '{}' },
+  ).then((result) => {
+    pendingDeliveryAcks.delete(messageId);
+    if (current?.conversationId === pending.conversationId) render(result.message);
+  }).catch(() => {
+    // Keep the ACK pending; polling/reconnect will retry without rewriting message truth.
+  }).finally(() => {
+    pendingDeliveryAcksInFlight.delete(messageId);
+  });
+}
+
+function queueDeliveryAck(message, conversationId = current?.conversationId) {
+  if (!me || !message?.messageId || !conversationId || message.senderId === me.userId) return;
+  if (message.deliveredAtMs) {
+    pendingDeliveryAcks.delete(message.messageId);
+    return;
+  }
+  pendingDeliveryAcks.set(message.messageId, { conversationId });
+  retryDeliveryAck(message.messageId);
+}
+
+function retryPendingDeliveryAcks(conversationId) {
+  for (const [messageId, pending] of pendingDeliveryAcks) {
+    if (pending.conversationId === conversationId) retryDeliveryAck(messageId);
+  }
+}
+
 function render(message, stateOverride = null) {
   lastSeq = Math.max(lastSeq, Number(message.sequence) || 0);
   const existing = messageNode(message.messageId);
@@ -243,6 +279,7 @@ function render(message, stateOverride = null) {
     if (!stateOverride || stateOverride === 'SENT' || stateOverride === 'DELIVERED') {
       existing.querySelector('.message-reconcile')?.remove();
     }
+    queueDeliveryAck(message);
     return;
   }
 
@@ -277,20 +314,7 @@ function render(message, stateOverride = null) {
   element.append(body, metadata);
   msgs.append(element);
 
-  if (message.senderId !== me?.userId && !message.deliveredAtMs && current?.conversationId) {
-    const conversationId = current.conversationId;
-    api(
-      '/api/v1/conversations/' + conversationId + '/messages/' +
-        encodeURIComponent(message.messageId) + '/ack',
-      { method: 'POST', body: '{}' },
-    ).then((result) => {
-      if (current?.conversationId !== conversationId) return;
-      render(result.message);
-    }).catch(() => {
-      /* A later poll/reconnect can retry the ACK without inventing delivery. */
-    });
-  }
-
+  queueDeliveryAck(message);
   scrollToLatest();
 }
 
@@ -377,6 +401,7 @@ async function poll() {
     );
     if (current?.conversationId !== conversationId) return;
     result.items.forEach((message) => render(message));
+    retryPendingDeliveryAcks(conversationId);
   } catch {
     setSocket('Reconnecting', 'polling');
   }
@@ -457,6 +482,7 @@ window.addEventListener('zungun-signout', () => {
   current = null;
   pendingSends.clear();
   persistPendingMessages();
+  pendingDeliveryAcks.clear();
   closeSocket();
   msgs.innerHTML = '';
   setSocket('Offline', 'offline');

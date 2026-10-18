@@ -4,11 +4,12 @@
   "execution": "PASS",
   "environment": "isolated local Wrangler HTTPS Worker plus local D1; ZUNGUN_ENVIRONMENT=test",
   "production_writes": false,
-  "source_manifest_at_test_start": {
-    "sourceBundleSha256": "ee7ace9d9cf7c92c60fe429b5ca480a33a399a7a95c5b2d0b18080ab90cc0501",
-    "staticAssetManifestSha256": "a8a33ec1964d2b912c8f107501e67ba3b46190c3bc9f859e47198c57483ce290",
+  "test_source_manifest_before_summary_refresh": {
+    "sourceBundleSha256": "6e890edefb1da2df08baefbfce9414b71e8cc3b59ecf901d5d63a4d76ade76e5",
+    "staticAssetManifestSha256": "18be25172d20022af060619d0bb8a0f1f709cf75ab1217d36ff832aa7d53bc8c",
     "migrationManifestSha256": "f3f46fd61b5570cbf1661d4df7b1bfc84889aecc5a7f824c92d68c2111ab243a"
   },
+  "identityNote": "Source manifest was generated before this evidence-summary refresh. This JSON is evidence bookkeeping and therefore the hash is not a final committed-source attestation; exact committed identity is recalculated by CI.",
   "checks": {
     "ok": true,
     "origin": "https://127.0.0.1:8787",
@@ -33,6 +34,9 @@
     "darkMode": "PASS",
     "reducedMotion": "PASS",
     "offlineAcceptanceAndReconnectDelivery": "PASS",
+    "offlineAckRetryAfterTransientFailure": "PASS",
+    "offlineAckAttempts": 2,
+    "forcedAckFault": "First recipient ACK request aborted by the browser harness; the subsequent ACK retry succeeded.",
     "ambiguousDurableAcceptReconciledWithStableMessageId": "PASS",
     "ambiguousLogicalMessageCount": 1,
     "ambiguousDeliveryAckCount": 1,
@@ -91,7 +95,7 @@
     "messages-360-ambiguous-reconciled-dark.png",
     "messages-360-pair-error-dark.png"
   ],
-  "screenshot_storage": "Local ignored path .tmp/order085-local-e2e-python/evidence; screenshots are not represented as production evidence.",
+  "screenshot_storage": "Local ignored path .tmp/order085-local-e2e-ack-retry-3/evidence; screenshots are not production evidence and were not added to the repo.",
   "explicit_blockers": {
     "canonical_owner_logo": "OWNER_LOGO_ASSET_HANDOFF_REQUIRED",
     "production_e2e": "NOT_RUN",
@@ -99,7 +103,8 @@
     "deployment": "NOT_RUN"
   },
   "notes": [
-    "This evidence is for local functional/responsive verification only; it does not assert production source identity.",
-    "The runtime source files tested have not changed since this run; subsequent changes in this work session are workflow/evidence bookkeeping only."
+    "This is local functional/responsive evidence only; it does not assert production source identity.",
+    "The browser test verifies delivery ACK retry for the specific offline test message, using its DOM node and asserting at least two ACK attempts.",
+    "The ambiguous message remains a single logical message with one delivery ACK after response loss, refresh and same-ID reconciliation."
   ]
 }

@@ -16,6 +16,7 @@ must(js.includes("window.addEventListener('offline'")&&js.includes("window.addEv
 must(js.includes("message.deliveredAtMs ? 'DELIVERED' : 'SENT'")&&js.includes('stateLabel(state)'),'TRUTHFUL_SENT_DELIVERED_ADAPTER');
 must(common.includes("UNKNOWN:'Uncertain — checking'")&&common.includes("QUEUED:'Saved on device'"),'AMBIGUOUS_AND_QUEUED_NOT_LAUNDERED');
 must(js.includes("'/api/v1/conversations/' + pending.conversationId + '/messages'")&&js.includes("'/ack'"),'REAL_SEND_AND_ACK_PATHS_PRESERVED');
+must(js.includes('pendingDeliveryAcks')&&js.includes('retryPendingDeliveryAcks(conversationId)')&&js.includes('queueDeliveryAck(message)'), 'RECEIVER_ACK_RETRY_AFTER_TRANSIENT_FAILURE');
 must(js.includes("new WebSocket")&&js.includes('poll()'),'REALTIME_AND_POLL_FALLBACK_PRESERVED');
 must(html.includes('aria-live="polite"')&&html.includes('aria-label="Back to conversations"'),'ACCESSIBILITY_LIVE_AND_BACK');
 must(!html.includes('iMessage')&&!html.includes('WhatsApp'),'NO_COMPETITOR_BRANDING');

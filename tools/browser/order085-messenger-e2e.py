@@ -161,14 +161,51 @@ with sync_playwright() as p:
     sender.get_by_placeholder("Message").fill(long_body)
     sender.get_by_role("button", name="Send message").click()
     expect(recipient.get_by_text(long_body, exact=True)).to_be_visible(timeout=15000)
-    expect(sender.get_by_text("Delivered to recipient", exact=False)).to_be_visible(timeout=15000)
+    long_bubble = sender.locator("[id^='msg-msg_']").filter(has_text=long_body)
+    expect(long_bubble.locator(".message-state")).to_contain_text("Delivered to recipient", timeout=15000)
     expect(recipient.get_by_text(long_body, exact=True)).to_have_count(1)
     assert_mobile_bounds(recipient)
     recipient.screenshot(path=str(out / "messages-412-long-delivered-light.png"))
 
-    # Send while the recipient client is offline. Durable SENT is not relabelled as DELIVERED.
+    # Send while the recipient is offline, then drop its first delivery ACK to prove retry.
     recipient_ctx.set_offline(True)
     expect(recipient.locator("#socket")).to_contain_text("Offline", timeout=10000)
+    offline_uuid = uuid.uuid4().hex
+    offline_message_id = "msg_" + offline_uuid
+    sender.evaluate(
+        """(id) => {
+          const native = crypto.randomUUID.bind(crypto);
+          Object.defineProperty(crypto, 'randomUUID', {
+            configurable: true,
+            value: () => {
+              if (window.__order085ForcedUuid) {
+                const next = window.__order085ForcedUuid;
+                window.__order085ForcedUuid = null;
+                return next;
+              }
+              return native();
+            }
+          });
+          window.__order085ForcedUuid = id;
+        }""",
+        offline_uuid,
+    )
+    ack_attempts = {"remaining": 1, "calls": 0}
+    ack_pattern = re.compile(
+        rf".*/api/v1/conversations/[^/]+/messages/{re.escape(offline_message_id)}/ack$"
+    )
+
+    def fail_one_delivery_ack(route, request):
+        if request.method == "POST" and ack_attempts["remaining"] > 0:
+            ack_attempts["remaining"] -= 1
+            ack_attempts["calls"] += 1
+            route.abort("failed")
+        else:
+            if request.method == "POST":
+                ack_attempts["calls"] += 1
+            route.continue_()
+
+    recipient.route(ack_pattern, fail_one_delivery_ack)
     offline_body = "ORDER085 recipient offline while sender durable-accepts " + run_tag
     sender.get_by_placeholder("Message").fill(offline_body)
     sender.get_by_role("button", name="Send message").click()
@@ -179,7 +216,9 @@ with sync_playwright() as p:
     recipient_ctx.set_offline(False)
     expect(recipient.locator("#socket")).to_contain_text("Live", timeout=15000)
     expect(recipient.get_by_text(offline_body, exact=True)).to_be_visible(timeout=15000)
-    expect(sender.get_by_text("Delivered to recipient", exact=False).last).to_be_visible(timeout=15000)
+    expect(offline_bubble.locator(".message-state")).to_contain_text("Delivered to recipient", timeout=25000)
+    assert ack_attempts["calls"] >= 2, "MUST_RETRY_DELIVERY_ACK_AFTER_TRANSIENT_FAILURE"
+    recipient.unroute(ack_pattern)
     expect(recipient.get_by_text(offline_body, exact=True)).to_have_count(1)
 
     # Force the real Worker to durably accept one message and lose its POST response.
@@ -236,7 +275,8 @@ with sync_playwright() as p:
     expect(retry).to_be_enabled(timeout=10000)
     retry.click()
     expect(recipient.get_by_text(ambiguous_body, exact=True)).to_be_visible(timeout=15000)
-    expect(sender.get_by_text("Delivered to recipient", exact=False).last).to_be_visible(timeout=15000)
+    ambiguous_bubble = sender.locator("[id^='msg-msg_']").filter(has_text=ambiguous_body)
+    expect(ambiguous_bubble.locator(".message-state")).to_contain_text("Delivered to recipient", timeout=15000)
     expect(sender.get_by_text(ambiguous_body, exact=True)).to_have_count(1)
     expect(recipient.get_by_text(ambiguous_body, exact=True)).to_have_count(1)
     diagnostic = sender.request.get(
@@ -268,7 +308,8 @@ with sync_playwright() as p:
     recipient.get_by_placeholder("Message").fill(keyboard_body)
     recipient.get_by_placeholder("Message").press("Enter")
     expect(sender.get_by_text(keyboard_body, exact=True)).to_be_visible(timeout=15000)
-    expect(recipient.get_by_text("Delivered to recipient", exact=False).last).to_be_visible(timeout=15000)
+    keyboard_bubble = recipient.locator("[id^='msg-msg_']").filter(has_text=keyboard_body)
+    expect(keyboard_bubble.locator(".message-state")).to_contain_text("Delivered to recipient", timeout=15000)
     recipient.get_by_role("button", name="Back to conversations").click()
     expect(recipient.locator("body")).to_have_class("messages-page")
     expect(recipient.get_by_role("heading", name="Conversations")).to_be_visible()
@@ -300,6 +341,8 @@ with sync_playwright() as p:
         "darkMode": "PASS",
         "reducedMotion": "PASS",
         "offlineAcceptanceAndReconnectDelivery": "PASS",
+        "offlineAckRetryAfterTransientFailure": "PASS",
+        "offlineAckAttempts": ack_attempts["calls"],
         "ambiguousDurableAcceptReconciledWithStableMessageId": "PASS",
         "ambiguousLogicalMessageCount": 1,
         "ambiguousDeliveryAckCount": 1,
