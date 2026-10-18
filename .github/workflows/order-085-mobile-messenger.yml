@@ -120,6 +120,32 @@ jobs:
         with:
           node-version: 22.16.0
           package-manager-cache: false
+      - name: Verify exact-head ORDER-077 / ORDER-081 completion before production mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+          ORDER085_GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          r77=pending; r81=pending; id77=; id81=
+          for _ in $(seq 1 120); do
+            json="$(curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${ORDER085_GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100")"
+            row77="$(jq -c '[.workflow_runs[]|select(.name=="Order 077 full project verification" and .head_sha==env.HEAD_SHA)]|sort_by(.run_number)|last // {}' <<<"$json")"
+            row81="$(jq -c '[.workflow_runs[]|select(.name=="Order 081 Link verification" and .head_sha==env.HEAD_SHA)]|sort_by(.run_number)|last // {}' <<<"$json")"
+            id77="$(jq -r '.id // empty' <<<"$row77")"; r77="$(jq -r '.conclusion // .status // "pending"' <<<"$row77")"
+            id81="$(jq -r '.id // empty' <<<"$row81")"; r81="$(jq -r '.conclusion // .status // "pending"' <<<"$row81")"
+            echo "order077=$id77:$r77 order081=$id81:$r81 head=$HEAD_SHA"
+            [[ "$r77" == failure || "$r77" == cancelled || "$r77" == timed_out ]] && exit 31
+            [[ "$r81" == failure || "$r81" == cancelled || "$r81" == timed_out ]] && exit 32
+            [[ "$r77" == success && "$r81" == success && -n "$id77" && -n "$id81" ]] && break
+            sleep 10
+          done
+          [[ "$r77" == success && "$r81" == success && -n "$id77" && -n "$id81" ]]
+          mkdir -p "$RUNNER_TEMP/order085-deploy"
+          printf '%s\n' "$HEAD_SHA" > "$RUNNER_TEMP/order085-deploy/PREDEPLOY_HEAD"
+          printf '%s\n' "$id77" > "$RUNNER_TEMP/order085-deploy/ORDER077_RUN"
+          printf '%s\n' "$id81" > "$RUNNER_TEMP/order085-deploy/ORDER081_RUN"
+          printf 'ORDER077=SUCCESS\nORDER081=SUCCESS\nREQUIRED_GATES_SKIPPED=0\nMUTATION_AUTHORIZED_BY_EXACT_HEAD_REGRESSIONS=YES\n' > "$RUNNER_TEMP/order085-deploy/PREDEPLOY_GATE_RESULT"
       - name: Deploy exact green candidate to existing Zungun Worker
         env:
           ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/order085-deploy

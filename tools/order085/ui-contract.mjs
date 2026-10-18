@@ -3,6 +3,7 @@ const html=fs.readFileSync('cloudflare/public/messages/index.html','utf8');
 const css=fs.readFileSync('cloudflare/public/app.css','utf8');
 const js=fs.readFileSync('cloudflare/public/messages/messages.js','utf8');
 const common=fs.readFileSync('cloudflare/public/common.js','utf8');
+const workflow=fs.readFileSync('.github/workflows/order-085-mobile-messenger.yml','utf8');
 const must=(ok,label)=>{if(!ok)throw new Error(`ORDER085_UI_CONTRACT:${label}`);console.log(`${label}=PASS`)};
 must(html.includes('viewport-fit=cover'),'MOBILE_SAFE_AREA_META');
 must(html.includes('id="inbox-pane"')&&html.includes('id="thread-pane"')&&html.includes('id="back-to-list"'),'MOBILE_SINGLE_PANE_STRUCTURE');
@@ -23,4 +24,7 @@ must(html.includes('aria-live="polite"')&&html.includes('aria-label="Back to con
 must(!html.includes('iMessage')&&!html.includes('WhatsApp'),'NO_COMPETITOR_BRANDING');
 must(js.includes("window.addEventListener('popstate'")&&js.includes('history.pushState')&&js.includes("location.hash === '#conversation'"),'BROWSER_HISTORY_BACK_HANDLING');
 must(js.includes('Retry same message safely')&&js.includes("'zungun.pendingMessages.v1'")&&js.includes('restorePendingMessages'),'AMBIGUOUS_SAME_ID_RECOVERY_AND_REFRESH');
+const deployJob = workflow.split('  deploy-production:')[1]?.split('  production-mobile:')[0] || '';
+const regressionGate = 'Verify exact-head ORDER-077 / ORDER-081 completion before production mutation';
+must(deployJob.includes('GH_TOKEN: ${{ github.token }}') && deployJob.includes('ORDER085_GITHUB_REPOSITORY: ${{ github.repository }}') && deployJob.includes(regressionGate) && deployJob.indexOf(regressionGate) < deployJob.indexOf('bash tools/order083/deploy-production.sh') && deployJob.includes('select(.name=="Order 077 full project verification" and .head_sha==env.HEAD_SHA)') && deployJob.includes('select(.name=="Order 081 Link verification" and .head_sha==env.HEAD_SHA)') && deployJob.includes('[[ "$r77" == success && "$r81" == success'), 'GITHUB_EXPRESSION_INTERPOLATION_BEFORE_DEPLOY');
 console.log('ORDER085_UI_CONTRACT=PASS');
