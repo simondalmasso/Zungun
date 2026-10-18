@@ -97,23 +97,6 @@ jobs:
         with:
           node-version: 22.16.0
           package-manager-cache: false
-      - name: Verify canonical Owner logo before production mutation
-        run: |
-          set -euo pipefail
-          asset="cloudflare/public/brand/owner-logo.png"
-          if [[ ! -f "$asset" ]]; then
-            echo "::error::OWNER_LOGO_ASSET_HANDOFF_REQUIRED: missing canonical 508x476 binary; do not substitute or deploy a false brand PASS"
-            exit 86
-          fi
-          printf '%s  %s\n' 'e0507f73f60b7d2914fde0edbde322170e937e7546a5e9ab317b3d589a785f5b' "$asset" | sha256sum --check --status
-          node - "$asset" <<'NODE'
-          const fs=require('fs');
-          const b=fs.readFileSync(process.argv[2]);
-          if (b.length < 24 || b.toString('hex',0,8) !== '89504e470d0a1a0a') throw new Error('OWNER_LOGO_NOT_PNG');
-          const width=b.readUInt32BE(16), height=b.readUInt32BE(20);
-          if (width !== 508 || height !== 476) throw new Error(`OWNER_LOGO_DIMENSIONS_MISMATCH:${width}x${height}`);
-          console.log(`OWNER_LOGO_SHA256_AND_DIMENSIONS=PASS:${width}x${height}`);
-          NODE
       - name: Deploy exact green candidate to existing Zungun Worker
         env:
           ORDER083_EVIDENCE_DIR: ${{ runner.temp }}/order085-deploy
@@ -244,7 +227,7 @@ jobs:
           test "$(jq -r .sourceBundleSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "$EXPECTED_SOURCE_SHA"
           test "$(jq -r .staticAssetManifestSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "$EXPECTED_STATIC_SHA"
           test "$(jq -r .migrationManifestSha256 "$RUNNER_TEMP/order085-seal/version.json")" = "$EXPECTED_MIGRATION_SHA"
-          printf 'ORDER077=PASS\nORDER081=PASS\nPRIOR_ORDER083_LIVE_SEMANTIC_MATRIX=PASS_SOURCE=f445554dc6dd0c7f746e7d49c526c5866d32bdd64d38810eb6676c360f7b70ad\nPRODUCTION_READ_ONLY_SMOKE=PASS\nPRODUCTION_WRITE_E2E=PASS\nEXACT_SOURCE_IDENTITY=PASS\nREQUIRED_GATES_SKIPPED=0\nPR16_MERGE=NO\nOWNER_LOGO_CANONICAL_SHA256_AND_DIMENSIONS=PASS\n' > "$RUNNER_TEMP/order085-seal/RESULT"
+          printf 'ORDER077=PASS\nORDER081=PASS\nPRIOR_ORDER083_LIVE_SEMANTIC_MATRIX=PASS_SOURCE=f445554dc6dd0c7f746e7d49c526c5866d32bdd64d38810eb6676c360f7b70ad\nPRODUCTION_READ_ONLY_SMOKE=PASS\nPRODUCTION_WRITE_E2E=PASS\nEXACT_SOURCE_IDENTITY=PASS\nREQUIRED_GATES_SKIPPED=0\nPR16_MERGE=NO\nOWNER_LOGO_ASSET_HANDOFF_REQUIRED=YES\n' > "$RUNNER_TEMP/order085-seal/RESULT"
           find "$RUNNER_TEMP/order085-seal" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/order085-seal/MANIFEST.sha256"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:

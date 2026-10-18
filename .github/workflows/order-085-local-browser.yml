@@ -43,7 +43,7 @@ jobs:
             .replace('__SOURCE_BUNDLE_SHA256__',result.sourceBundleSha256)
             .replace('__STATIC_ASSET_MANIFEST_SHA256__',result.staticAssetManifestSha256)
             .replace('__MIGRATION_MANIFEST_SHA256__',result.migrationManifestSha256)
-            .replace('"ZUNGUN_ENVIRONMENT": "production"','"ZUNGUN_ENVIRONMENT": "test",\n    "ZUNGUN_PILOT_TOKEN": "order085-local-only-pilot"');
+            .replace('"ZUNGUN_ENVIRONMENT": "production"','"ZUNGUN_ENVIRONMENT": "test", "ZUNGUN_PILOT_TOKEN": "order085-local-only-pilot"');
           fs.writeFileSync('cloudflare/.wrangler.order085.local.jsonc',config);
           NODE
       - name: Initialize isolated local D1 schema
