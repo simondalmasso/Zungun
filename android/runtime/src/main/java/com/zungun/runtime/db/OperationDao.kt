@@ -60,6 +60,9 @@ interface OperationDao {
         errorCode: String?,
     ): Int
 
+    @Query("UPDATE transport_attempts SET completedAtMs=:completedAtMs,status='UNKNOWN',errorCode=:errorCode WHERE operationId=:id AND status='STARTED' AND completedAtMs IS NULL")
+    suspend fun markStartedAttemptsUnknown(id: String, completedAtMs: Long, errorCode: String): Int
+
     @Query("SELECT * FROM transport_attempts WHERE operationId=:id ORDER BY startedAtMs,attemptNumber")
     suspend fun attemptsFor(id: String): List<TransportAttemptEntity>
 

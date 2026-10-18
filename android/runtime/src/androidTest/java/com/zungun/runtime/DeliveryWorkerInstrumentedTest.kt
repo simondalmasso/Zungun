@@ -8,6 +8,7 @@ import androidx.work.workDataOf
 import androidx.work.testing.TestListenableWorkerBuilder
 import com.zungun.runtime.db.OperationEntity
 import com.zungun.runtime.db.ZungunDatabase
+import com.zungun.runtime.db.TransportAttemptEntity
 import com.zungun.runtime.delivery.DeliveryWorker
 import com.zungun.runtime.delivery.SemanticRevalidator
 import com.zungun.runtime.model.OperationState
@@ -104,6 +105,51 @@ class DeliveryWorkerInstrumentedTest {
             assertTrue(database.operations().attemptsFor(operationId).isEmpty())
         } finally {
             database.close()
+        }
+    }
+
+    @Test
+    fun staleDeliveringAttemptRecoversToUnknownWithoutImmediateResend() = runBlocking {
+        val operationId = seed(OperationState.DELIVERING)
+        val startedAt = System.currentTimeMillis() - 1_000
+        val database = ZungunDatabase.open(context, databaseName)
+        try {
+            database.operations().transportAttempt(
+                TransportAttemptEntity(
+                    attemptId = "transport_stale_$operationId",
+                    operationId = operationId,
+                    attemptNumber = 1,
+                    startedAtMs = startedAt,
+                    completedAtMs = null,
+                    status = "STARTED",
+                    httpStatus = null,
+                    responseSha256 = null,
+                    errorCode = null,
+                ),
+            )
+        } finally {
+            database.close()
+        }
+
+        var calls = 0
+        install(ReceiverTransportClient { _, _, _ ->
+            calls += 1
+            TransportResult.AmbiguousFailure("SHOULD_NOT_SEND_DURING_RECOVERY")
+        })
+        val result = worker(operationId).doWork()
+        assertEquals(ListenableWorker.Result.retry()::class, result::class)
+        assertEquals(0, calls)
+
+        val recoveredDatabase = ZungunDatabase.open(context, databaseName)
+        try {
+            assertEquals(OperationState.UNKNOWN.name, recoveredDatabase.operations().get(operationId)?.state)
+            val attempt = recoveredDatabase.operations().attemptsFor(operationId).single()
+            assertEquals("UNKNOWN", attempt.status)
+            assertNotNull(attempt.completedAtMs)
+            assertEquals("PROCESS_INTERRUPTED_DURING_DELIVERY", attempt.errorCode)
+            assertTrue(recoveredDatabase.operations().evidenceFor(operationId).any { it.kind == "UNKNOWN" })
+        } finally {
+            recoveredDatabase.close()
         }
     }
 
