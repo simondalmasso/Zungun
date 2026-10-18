@@ -54,12 +54,12 @@
       "format_check": "WINDOWS_COPY_LINE_ENDING_NOISE; DO_NOT_REFORMAT_WHOLE_REPO"
     },
     "final_head_gates": {
-      "order077": "IN_PROGRESS_EXACT_HEAD_RUN_39137263375",
-      "order081": "IN_PROGRESS_EXACT_HEAD_RUN_39137263323",
+      "order077": "IN_PROGRESS_EXACT_HEAD_RUN_39137263375_ANDROID_GATE_15C",
+      "order081": "IN_PROGRESS_EXACT_HEAD_RUN_39137263323_ANDROID_GATE_22",
       "order083": "NOT_RUN_DISPATCH_UNAVAILABLE",
-      "mobile_visual_and_functional": "ISOLATED_GITHUB_E2E_SUCCESS_RUN_39137260706; ARTIFACT_12139344845; VISUAL_CONTAINMENT_FIX_PRESENT; EXACT_HEAD_CLEAN_CHECKOUT_VALIDATION_IN_PROGRESS; OWNER_LOGO_GATE_BLOCKED",
+      "mobile_visual_and_functional": "ISOLATED_E2E_SUCCESS_RUN_39137260706; ARTIFACT_12139344845; VISUAL_CONTAINMENT_FIX_PRESENT; OFFLINE_RECONNECT_AND_AMBIGUOUS_RECONCILIATION_PASS; CLEAN_EXACT_HEAD_CONTRACT_AND_MANIFEST_GENERATION_PASS; OWNER_LOGO_BLOCKED",
       "logo_hash_and_dimensions": "BLOCKED_CANONICAL_BINARY_NOT_FOUND; STRICT_GATE_RESTORED_AND_FAILS_CLOSED",
-      "production_identity": "MISMATCH_NOT_DEPLOYED; PRODUCTION_STILL_ON_OLD_ORDER083_SOURCE",
+      "production_identity": "MISMATCH_NOT_DEPLOYED",
       "production_live_e2e": "NOT_RUN"
     },
     "production_deploy": "NOT_RUN",
@@ -75,7 +75,7 @@
           "browserContainerHistory": "SUCCESS"
         },
         "activeJobs": {
-          "androidPrimary": "Gate 15a — clean Android outputs"
+          "androidPrimary": "Gate 15c — clean-bootstrap and strict-replay standalone consumer"
         }
       },
       "order081": {
@@ -88,7 +88,7 @@
           "linkCore": "SUCCESS"
         },
         "activeJobs": {
-          "androidLink": "Gate 22 — TypeScript Kotlin differential equivalence"
+          "androidLink": "Start bounded API35 emulator"
         }
       },
       "isolatedMobileE2E": {
@@ -112,10 +112,11 @@
       "androidBootstrap": {
         "runId": 39137260707,
         "url": "https://github.com/simondalmasso/Zungun/actions/runs/39137260707",
-        "status": "IN_PROGRESS",
+        "status": "IN_PROGRESS_POST_FAILED_STEP_CLEANUP",
         "head": "e0b229beebccaac7f773e236f1d00a64ce3f83b3",
-        "activeStep": "Build producer AAR, publish coordinate, and verify SHA-256",
-        "previousCandidateSameStepFailure": "kotlin-bom:1.8.22 cache artifact absent",
+        "failedStep": "Complete exact dependency verification metadata",
+        "error": "RESOLVED_ARTIFACTS_NOT_FOUND:org.jetbrains.kotlin:kotlin-bom:1.8.22",
+        "activeStep": "Post checkout cleanup",
         "strictGradleVerification": "PRESERVED"
       },
       "order083": {
@@ -124,13 +125,13 @@
       }
     },
     "local_verification": {
-      "uiContract": "PASS_ON_0e29d8e_WITH_CONVERSATION_LIST_TEXT_CONTAINMENT_REGRESSION",
-      "workerContractTests": "5_OF_5_PASS_ON_0e29d8e",
-      "javascriptSyntax": "PASS_ON_0e29d8e",
-      "lint": "PASS_157_FILES_ON_ab298e_before_CSS_ONLY_VISUAL_FIX",
-      "typecheck": "PASS_ON_ab298e_before_CSS_ONLY_VISUAL_FIX",
-      "workflowYamlParse": "PASS_BOTH_WORKFLOWS",
-      "gitDiffCheck": "PASS_AFTER_CSS_FIX",
+      "uiContract": "PASS_PREDEPLOY_ORDER_AND_GITHUB_EXPRESSION_INTERPOLATION",
+      "workerContractTests": "5_OF_5_PASS",
+      "javascriptSyntax": "PASS",
+      "lint": "PASS_157_FILES",
+      "typecheck": "PASS",
+      "workflowYamlParse": "PASS",
+      "gitDiffCheck": "PASS",
       "isolatedLocalWorkerE2E": "PASS",
       "localE2ECoverage": [
         "pairing",
@@ -155,20 +156,29 @@
       "productionWrites": false,
       "cloudflareContractTests": "5_OF_5_PASS_ON_ab298e1",
       "yamlWorkflowParse": "PASS_ON_ab298e1",
-      "fullWindowsSuite": "209_OF_217_PASS; 8_FAILED_WITH_EP ERM_FSYNC_ON_WINDOWS in receipt/persistence tests; npm test wrapper also invokes POSIX rm unsupported by cmd.exe; no code-defect conclusion from Windows result."
+      "fullWindowsSuite": "209_OF_217_PASS; 8_FAILED_WITH_EP ERM_FSYNC_ON_WINDOWS in receipt/persistence tests; npm test wrapper also invokes POSIX rm unsupported by cmd.exe; no code-defect conclusion from Windows result.",
+      "cleanDetachedCheckoutHead": "e0b229beebccaac7f773e236f1d00a64ce3f83b3",
+      "worktreeStatus": "CLEAN",
+      "npmCi": "PASS",
+      "manifestDeterminism": "PASS_TWO_GENERATIONS_BYTE_IDENTICAL"
     },
     "release_blockers": [
-      "Canonical Owner logo exact binary remains unavailable in product Git history, current 3819-file local image scan, Issue #10 authorization comments, and tested production asset URLs (404). Required SHA e0507f73f60b7d2914fde0edbde322170e937e7546a5e9ab317b3d589a785f5b; PNG 508x476. Workflow fails closed.",
-      "ORDER-083 workflow_dispatch not triggered: connected GitHub tool has no dispatch mutation; local gh is unauthenticated; no indirect trigger/bypass used.",
-      "ORDER-077 run 39137263375 is IN_PROGRESS on exact candidate e0b229beebccaac7f773e236f1d00a64ce3f83b3.",
-      "ORDER-081 run 39137263323 is IN_PROGRESS on exact candidate e0b229beebccaac7f773e236f1d00a64ce3f83b3.",
-      "ORDER-076 run 39137260707 remains IN_PROGRESS; prior candidates repeatedly failed strict metadata completion for kotlin-bom:1.8.22. Verification has not been relaxed and Android workflow paths remain outside the ORDER-085 exact claim allowlist.",
-      "Production /version still identifies the previous ORDER-083 source bundle b9dec993b9dc7868e9439850e9186842951badf8bf41bceec9060daf2ad919c5/static 1b0c967131987bc220b8e186fc859a4822407b5fd1d4f77eb0d83a6aafe380cf. Candidate e0b229 not deployed and production E2E not run.",
-      "Final exact-head generated manifests and clean-checkout full validation are still running; do not treat prior candidate manifest hashes as current."
+      "Canonical Owner logo binary unavailable in product Git history/tree, scanned local image files (3819 scanned), Issue #10 authorization comments, and tested production asset URLs (404). Required SHA e0507f73f60b7d2914fde0edbde322170e937e7546a5e9ab317b3d589a785f5b; PNG 508x476. Workflow fails closed.",
+      "ORDER-083 workflow_dispatch not triggered: connected GitHub tool has no dispatch action; local gh is unauthenticated; no indirect trigger or bypass used.",
+      "ORDER-077 exact-head run 39137263375 remains IN_PROGRESS on e0b229beebccaac7f773e236f1d00a64ce3f83b3.",
+      "ORDER-081 exact-head run 39137263323 remains IN_PROGRESS on e0b229beebccaac7f773e236f1d00a64ce3f83b3.",
+      "ORDER-076 run 39137260707 has failed its strict metadata completion step for kotlin-bom:1.8.22; remote job was still in post-step cleanup at latest read. No verification was weakened; the Android workflow is outside the ORDER-085 exact claim allowlist.",
+      "Production /version remains on source b9dec993b9dc7868e9439850e9186842951badf8bf41bceec9060daf2ad919c5/static 1b0c967131987bc220b8e186fc859a4822407b5fd1d4f77eb0d83a6aafe380cf. Candidate identity source b299a50bc0a3f8b31c4f90b9a3c78f3c64de43809e16a0bafbecdd200ad1e426/static abce6be18091e3020a1fbad26e5fd8304ccf2432b7bec4623e0a6348227afd7f; candidate not deployed and production E2E not run."
     ],
     "candidate_manifests": {
-      "status": "PENDING_EXACT_HEAD_GENERATION_ON_CLEAN_DETACHED_CHECKOUT",
-      "candidate_head_sha": "e0b229beebccaac7f773e236f1d00a64ce3f83b3"
+      "sourceBundleSha256": "b299a50bc0a3f8b31c4f90b9a3c78f3c64de43809e16a0bafbecdd200ad1e426",
+      "staticAssetManifestSha256": "abce6be18091e3020a1fbad26e5fd8304ccf2432b7bec4623e0a6348227afd7f",
+      "migrationManifestSha256": "3a5625a3e691df31db49ecff2a3f2452dfec55fb07396bca967d26556ee2c5ad",
+      "fileCount": 384,
+      "staticAssetCount": 12,
+      "migrationInputCount": 2,
+      "sourceInventory": "GIT_TRACKED_WORKTREE_BYTES",
+      "deterministicLocalGeneration": "PASS_TWICE_BYTE_IDENTICAL_ON_CLEAN_DETACHED_HEAD_e0b229"
     },
     "production_readback": {
       "observed_at": "2026-10-18T14:35:27.074Z",
@@ -188,33 +198,23 @@
       "result": "SOURCE_AND_STATIC_IDENTITY_MISMATCH; CANDIDATE_NOT_DEPLOYED"
     },
     "previous_candidate_manifests": {
-      "sourceBundleSha256": "90a24333384754c31a0825092940cba1c65dffc9f65713c19d22a71b0fc97e48",
-      "staticAssetManifestSha256": "abce6be18091e3020a1fbad26e5fd8304ccf2432b7bec4623e0a6348227afd7f",
-      "migrationManifestSha256": "3a5625a3e691df31db49ecff2a3f2452dfec55fb07396bca967d26556ee2c5ad",
-      "fileCount": 384,
-      "computedFrom": "Exact candidate tracked worktree bytes verified against remote Git blob SHAs",
-      "deterministicLocalGeneration": "PASS"
+      "status": "PENDING_EXACT_HEAD_GENERATION_ON_CLEAN_DETACHED_CHECKOUT",
+      "candidate_head_sha": "e0b229beebccaac7f773e236f1d00a64ce3f83b3"
     },
     "workflow_predeploy_gate": {
-      "status": "STATIC_CONTRACT_PASS_LOCAL",
+      "status": "PASS_STATIC_CONTRACT_AND_LOCAL_VALIDATION",
       "step": "Verify exact-head ORDER-077 / ORDER-081 completion before production mutation",
-      "placement": "deploy-production job after setup-node and before tools/order083/deploy-production.sh",
-      "behaviors": [
-        "queries runs for workflow-dispatch HEAD_SHA",
-        "requires latest Order 077 exact-head success",
-        "requires latest Order 081 exact-head success",
-        "fails closed on failed/cancelled/timed_out",
-        "fails closed on timeout or missing run IDs",
-        "records exact run IDs and HEAD before mutation"
+      "placement": "deploy-production job after checkout/setup-node and before tools/order083/deploy-production.sh",
+      "checks": [
+        "exact candidate HEAD_SHA",
+        "ORDER-077 latest run on exact head success",
+        "ORDER-081 latest run on exact head success",
+        "fail closed on failure/cancelled/timed_out/timeout/missing run ID",
+        "records PREDEPLOY_HEAD and exact run IDs under ORDER083_EVIDENCE_DIR"
       ],
       "ui_contract": "GITHUB_EXPRESSION_INTERPOLATION_BEFORE_DEPLOY=PASS",
-      "validated_commands": [
-        "node tools/order085/ui-contract.mjs",
-        "node --check cloudflare/public/messages/messages.js",
-        "node --test cloudflare/test/contracts.test.mjs",
-        "Python PyYAML workflow parse",
-        "git diff --check"
-      ]
+      "yaml_parse": "PASS",
+      "local_contract": "PASS"
     }
   },
   "boundaries": {
@@ -234,5 +234,5 @@
   },
   "next_action": "CONTINUE_EXACT_HEAD_CI_THEN_RESOLVE_OWNER_LOGO_AND_ORDER083_DISPATCH_BEFORE_GUARDED_DEPLOY",
   "candidate_head_sha": "e0b229beebccaac7f773e236f1d00a64ce3f83b3",
-  "last_reconciled_at": "2026-10-18T14:47:22.288Z"
+  "last_reconciled_at": "2026-10-18T14:49:06.004Z"
 }
