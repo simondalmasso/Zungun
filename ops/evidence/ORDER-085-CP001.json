@@ -49,18 +49,18 @@
       "typecheck": "PASS_ON_INITIAL_HEAD"
     },
     "known_non_green": {
-      "order076_android_bootstrap": "FAIL_AT_STRICT_GRADLE_VERIFICATION_METADATA_MISSING_OR_UNCACHED_kotlin-bom_1.8.22; AAR_AND_EXTERNAL_CONSUMER_BUILD_PASSED",
+      "order076_android_bootstrap": "FAILURE_ON_CANDIDATE_HEAD_d614ec8e568c1343997dfbc79c2a9387673a3503: AAR build and SHA-256 passed; strict metadata completion failed because kotlin-bom:1.8.22 has no artifact in expected Gradle cache. Do not remove strict verification to hide the failure.",
       "windows_full_npm_test": "EPERM_FSYNC_UNCONFIRMED_AS_CODE_DEFECT",
       "format_check": "WINDOWS_COPY_LINE_ENDING_NOISE; DO_NOT_REFORMAT_WHOLE_REPO"
     },
     "final_head_gates": {
-      "order077": "IN_PROGRESS",
-      "order081": "IN_PROGRESS",
+      "order077": "IN_PROGRESS_ANDROID_PRIMARY",
+      "order081": "IN_PROGRESS_ANDROID_LINK",
       "order083": "NOT_RUN_DISPATCH_UNAVAILABLE",
       "mobile_visual_and_functional": "LOCAL_E2E_PASS_AND_ISOLATED_GITHUB_E2E_SUCCESS; PRODUCTION_E2E_PENDING",
       "logo_hash_and_dimensions": "BLOCKED_CANONICAL_BINARY_NOT_FOUND",
       "production_identity": "PENDING_DEPLOY",
-      "production_live_e2e": "NOT_RUN_WORKFLOW_DISPATCH_NOT_TRIGGERED"
+      "production_live_e2e": "NOT_RUN"
     },
     "production_deploy": "NOT_RUN",
     "merge": "NOT_AUTHORIZED",
@@ -74,8 +74,7 @@
           "browserContainerHistory": "SUCCESS"
         },
         "activeJobs": {
-          "androidPrimary": "IN_PROGRESS",
-          "gate": "15b — build producer AAR and verify SHA-256"
+          "androidPrimary": "Gate 16 — Room WorkManager migration force-stop persistence in progress"
         }
       },
       "order081": {
@@ -87,8 +86,7 @@
           "receiverDeveloperLink": "SUCCESS"
         },
         "activeJobs": {
-          "androidLink": "IN_PROGRESS",
-          "gate": "22 — TypeScript Kotlin differential equivalence"
+          "androidLink": "Gate 25 — priority dependency scheduler and runtime network-wake dedup in progress"
         }
       },
       "isolatedMobileE2E": {
@@ -106,8 +104,10 @@
       "androidBootstrap": {
         "runId": 39129609286,
         "url": "https://github.com/simondalmasso/Zungun/actions/runs/39129609286",
-        "status": "IN_PROGRESS",
-        "activeJob": "Build producer AAR, publish coordinate, and verify SHA-256"
+        "status": "FAILURE",
+        "failedStep": "Complete exact dependency verification metadata",
+        "error": "RESOLVED_ARTIFACTS_NOT_FOUND:org.jetbrains.kotlin:kotlin-bom:1.8.22:/home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-bom/1.8.22",
+        "aarBuildAndSha": "PASS_BEFORE_FAILURE"
       },
       "order083": {
         "status": "NOT_RUN",
@@ -146,9 +146,10 @@
       "productionWrites": false
     },
     "release_blockers": [
-      "Canonical Owner logo binary missing: exact SHA-256 and 508x476 dimensions cannot be verified.",
-      "Order 083 exact-head workflow_dispatch not triggered: active GitHub tools expose no workflow-dispatch action.",
-      "Order 077 and Order 081 exact-head workflows still running at last read."
+      "Canonical Owner logo binary not found; expected SHA-256 e0507f73f60b7d2914fde0edbde322170e937e7546a5e9ab317b3d589a785f5b and 508x476 dimensions.",
+      "Order 083 exact-head workflow_dispatch not triggered: no dispatch action is available through the current connector, and no indirect trigger was used.",
+      "Order 077 and Order 081 exact-head verification are still in progress.",
+      "Order 076 Android bootstrap failed strict Gradle metadata completion for kotlin-bom:1.8.22; strict verification remains enabled."
     ]
   },
   "boundaries": {
@@ -168,5 +169,5 @@
   },
   "next_action": "CONTINUE_EXACT_HEAD_CI_THEN_RESOLVE_OWNER_LOGO_AND_ORDER083_DISPATCH_BEFORE_GUARDED_DEPLOY",
   "candidate_head_sha": "d614ec8e568c1343997dfbc79c2a9387673a3503",
-  "last_reconciled_at": "2026-10-18T13:03:39Z"
+  "last_reconciled_at": "2026-10-18T13:06:28Z"
 }
