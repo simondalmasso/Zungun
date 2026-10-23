@@ -11,3 +11,19 @@ test('Android witness ingest is authenticated, bounded, hash-validated, and neve
   assert.match(worker,/field\.user_id !== user\.user_id/);
   assert.doesNotMatch(worker,/ANDROID_WITNESS_\$\{item\.state\}[^;]{0,180}"VERIFIED"/s);
 });
+
+test('Pocket chat is explicitly routed and complies with the production CSP',()=>{
+  const html=fs.readFileSync(path.join(root,'cloudflare/public/chat/index.html'),'utf8');
+  const css=fs.readFileSync(path.join(root,'cloudflare/public/chat/app.css'),'utf8');
+  const js=fs.readFileSync(path.join(root,'cloudflare/public/chat/app.js'),'utf8');
+  assert.match(worker,/path===\"\\/chat\"/);
+  assert.match(worker,/path===\"\\/chat\\/\"/);
+  assert.match(html,/<link rel=\"stylesheet\" href=\"\.\/app\.css\">/);
+  assert.match(html,/<script src=\"\.\/app\.js\" defer><\\/script>/);
+  assert.doesNotMatch(html,/<style[\\s>]/i);
+  assert.doesNotMatch(html,/<script(?![^>]*\\bsrc=)[^>]*>/i);
+  assert.doesNotMatch(html,/\\sstyle=/i);
+  assert.match(css,/\.install-button/);
+  assert.match(js,/serviceWorker\\.register/);
+  assert.match(html,/todavía no transmite por satélite/i);
+});
