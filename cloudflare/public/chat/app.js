@@ -1,0 +1,15 @@
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const state={phone:'',messages:[]};
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function render(){const root=$('messages');root.innerHTML='';if(!state.messages.length){root.innerHTML='<div class="empty">Todavía no hay mensajes.<br>Escribe para probar la interfaz local.</div>';return;}for(const m of state.messages){const item=document.createElement('div');item.className='bubble mine';item.textContent=m.text;const meta=document.createElement('div');meta.className='meta';meta.textContent='Solo en este dispositivo · '+m.time;item.append(meta);root.append(item);}root.scrollTop=root.scrollHeight;}
+$('start').addEventListener('click',()=>{const v=$('phone').value.trim();if(!/^\+[1-9]\d{7,14}$/.test(v)){ $('loginHint').textContent='Usa formato internacional E.164, por ejemplo +54342…';return;}state.phone=v;$('identityValue').textContent=v;$('localIdentity').classList.remove('hidden');$('loginHint').textContent='Solo identidad local. No se envió SMS ni se creó una cuenta.';});
+$('composer').addEventListener('submit',e=>{e.preventDefault();const text=$('message').value.trim();if(!text)return;state.messages.push({text,time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})});$('message').value='';render();});
+$('clear').addEventListener('click',()=>{state.phone='';state.messages=[];$('phone').value='';$('localIdentity').classList.add('hidden');$('loginHint').textContent='Datos de esta sesión borrados.';render();});
+$('contacts').addEventListener('click',async()=>{if(!('contacts' in navigator)||!navigator.contacts?.select){$('contactHint').textContent='Este Chrome no expone Contact Picker aquí. La web no puede leer toda la agenda automáticamente; la app nativa podrá pedir permiso.';return;}try{const contacts=await navigator.contacts.select(['name','tel'],{multiple:false});if(contacts.length){$('phone').value=(contacts[0].tel||[])[0]||'';$('contactHint').textContent='Contacto seleccionado por el usuario; verifica el formato antes de continuar.';}}catch{$('contactHint').textContent='Selección cancelada o no permitida.';}});
+$('secureState').textContent=window.isSecureContext?'Sí':'No';$('storageState').textContent=(()=>{try{const k='zungun-pocket-test';localStorage.setItem(k,'1');localStorage.removeItem(k);return 'Disponible';}catch{return 'No disponible';}})();
+let promptEvent=null;$('install').hidden=true;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();promptEvent=e;$('install').hidden=false;});$('install').addEventListener('click',async()=>{if(promptEvent){promptEvent.prompt();await promptEvent.userChoice;promptEvent=null;$('install').hidden=true;}else alert('En Chrome Android: menú ⋮ → Instalar aplicación o Añadir a pantalla principal, si está disponible.');});
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if(location.protocol==='file:')$('installState').textContent='Abre desde HTTPS';
+render();
+})();
