@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#101010">
-<meta name="description" content="Zungun Pocket: chat experimental ultraliviano, preparado para probarse desde Chrome móvil.">
+<meta name="description" content="Zungun Pocket: borradores offline y rutas de envío asistidas mediante las apps SMS y WhatsApp del teléfono.">
+<meta name="robots" content="noindex,nofollow,noarchive">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <title>Zungun Pocket</title>
@@ -12,39 +13,46 @@
 </head>
 <body>
 <div class="shell">
-<header><div class="logo">Z</div><div><div class="brand">zungun <span class="brand-light">pocket</span></div><div class="sub">EXPERIMENTAL · TEXT ONLY</div></div><div class="spacer"></div><div class="status"><span class="dot"></span><span id="linkState">Enlace no validado</span></div></header>
+<header><div class="logo">Z</div><div><div class="brand">zungun <span class="brand-light">pocket</span></div><div class="sub">BETA · ENRUTADO EXPLÍCITO</div></div><div class="spacer"></div><div class="status"><span class="dot"></span><span id="linkState">Modo sin conexión validada</span></div></header>
 <main>
 <section class="panel" id="intro">
-<div class="eyebrow">Pocket / beta 0.1</div><h1>Mensajes pequeños.<br>Estados honestos.</h1>
-<p>Una interfaz web mínima, instalable desde Chrome en Android. Esta beta prueba la experiencia; todavía no transmite por satélite ni conecta usuarios.</p>
-<div class="notice"><b>Modo local:</b> los mensajes se guardan solamente en esta pestaña/dispositivo. No se envían a un servidor ni a otro usuario.</div>
-<div class="grid"><div class="metric"><b>Sin dependencias</b><span>Sin librerías externas ni fuentes remotas</span></div><div class="metric"><b>Preparada para móvil</b><span>Diseño adaptable y controles táctiles</span></div></div>
+<div class="eyebrow">Pocket / beta 0.2</div><h1>Mensajes pequeños.<br>Estados honestos.</h1>
+<p>Guarda borradores en el dispositivo y ábrelos en la aplicación SMS del teléfono o en WhatsApp. El enrutador recomienda una ruta según el estado de red reportado por el navegador, pero no confunde ese dato con conectividad real.</p>
+<div class="notice"><b>Sin backend por mensaje:</b> Zungun Pocket no envía contenido a un servidor de Zungun. Los botones abren una app nativa para que revises y confirmes el envío. La PWA no puede afirmar que un mensaje salió o llegó.</div>
+<div class="grid"><div class="metric"><b>Cola local</b><span>Destino y borradores quedan en este dispositivo</span></div><div class="metric"><b>Acción explícita</b><span>SMS y WhatsApp requieren confirmación en su app</span></div></div>
 </section>
 <section class="panel">
-<div class="section-title">Identidad de prueba</div>
-<label class="hint" for="phone">Número de teléfono (formato internacional)</label>
-<div class="formrow"><input class="field" id="phone" inputmode="tel" autocomplete="tel" placeholder="+54 342 ..." maxlength="18"><button class="btn" id="start">Continuar</button></div>
-<p class="hint" id="loginHint">No se envía SMS en esta versión. No introduzcas códigos de verificación.</p>
-<div id="localIdentity" class="hidden">
-<div class="notice">Identidad local de demostración: <b id="identityValue"></b>. No está verificada y no es una cuenta real.</div>
-<div class="formrow"><button class="btn secondary" id="contacts">Elegir contacto</button><button class="btn secondary" id="clear">Borrar datos locales</button></div>
+<div class="section-title">Destino de mensaje</div>
+<form id="destinationForm">
+<label class="hint" for="phone">Número de destino en formato internacional</label>
+<div class="formrow"><input class="field" id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="+54 342 ..." maxlength="24" aria-label="Número de destino en formato internacional" required><button class="btn" type="submit">Guardar destino</button></div>
+</form>
+<p class="hint" id="loginHint">No se verifica el número por SMS. Se valida solamente el formato y el destino se guarda localmente. No introduzcas códigos de verificación.</p>
+<div id="localDestination" class="hidden">
+<div class="notice">Destino local: <b id="destinationValue">Sin destino guardado</b>. Esto no prueba que el número exista, pertenezca al destinatario ni tenga cobertura.</div>
+<div class="formrow"><button class="btn secondary" id="contacts" type="button">Elegir contacto</button><button class="btn secondary" id="clear" type="button">Borrar datos locales</button></div>
 <p class="hint" id="contactHint">La agenda no se lee automáticamente. Chrome puede permitir elegir un contacto si el dispositivo y el navegador lo admiten.</p>
 </div>
 </section>
 <section class="panel">
-<div class="section-title">Conversación local</div>
-<div class="chatbox" id="messages" aria-live="polite"><div class="empty" id="empty">Todavía no hay mensajes.<br>Escribe para probar la interfaz local.</div></div>
-<form id="composer" class="formrow"><input class="field" id="message" placeholder="Escribe un mensaje…" maxlength="280" autocomplete="off" aria-label="Mensaje"><button class="btn" id="send" type="submit">Enviar</button></form>
-<p class="hint" id="sendHint">El botón agrega el mensaje a esta sesión; no realiza una transmisión.</p>
+<div class="section-title">Enrutador de señales</div>
+<div class="route-card"><div class="eyebrow">Recomendación · no es una comprobación de cobertura</div><h2 id="routeChoice">Guardar destino</h2><p id="routeReason">Primero guarda un número válido en formato internacional.</p><div class="metric"><b id="networkState">Comprobando estado del navegador…</b><span>El estado online/offline del navegador no verifica acceso a Internet ni al operador.</span></div><button class="btn" id="autoRoute" type="button" disabled>Abrir ruta recomendada para el último borrador</button></div>
+<p class="hint">SMS: abre el compositor nativo y puede tener costo; la red y el operador deciden si se puede enviar. WhatsApp: necesita Internet, una cuenta compatible y confirmación manual. Satélite: esta web no accede al módem ni puede habilitar una señal satelital; depende del equipo, operador y servicio contratados.</p>
+</section>
+<section class="panel">
+<div class="section-title">Borradores y solicitudes de envío</div>
+<div class="chatbox" id="messages" aria-live="polite"><div class="empty">Todavía no hay borradores. Escribe y guarda uno para elegir cómo abrir la aplicación de envío.</div></div>
+<form id="composer" class="formrow"><input class="field" id="message" placeholder="Escribe un mensaje…" maxlength="280" autocomplete="off" aria-label="Mensaje" required><button class="btn" id="send" type="submit">Guardar borrador</button></form>
+<p class="hint" id="sendHint">El borrador se guarda en este dispositivo. Después podrás abrir SMS o WhatsApp. Zungun no puede confirmar el envío ni la entrega.</p>
 </section>
 <section class="panel">
 <div class="section-title">Diagnóstico del navegador</div>
-<div class="grid"><div class="metric"><b id="secureState">Comprobando…</b><span>Contexto seguro</span></div><div class="metric"><b id="storageState">Comprobando…</b><span>Almacenamiento local</span></div><div class="metric"><b id="installState">Disponible según navegador</b><span>Instalación PWA</span></div><div class="metric"><b>No disponible en web</b><span>APIs nativas satelitales y SMS</span></div></div>
-<button class="btn secondary" id="install" class="btn secondary install-button" hidden>Instalar Zungun Pocket</button>
-<p class="hint">Una PWA no puede comprobar de forma fiable el hardware NTN ni enviar mensajes por la radio satelital del teléfono. Esa validación requiere una sonda Android nativa y un servicio compatible.</p>
+<div class="grid"><div class="metric"><b id="secureState">Comprobando…</b><span>Contexto seguro</span></div><div class="metric"><b id="storageState">Comprobando…</b><span>Almacenamiento local</span></div><div class="metric"><b id="installState">Disponible según navegador</b><span>Instalación PWA</span></div><div class="metric"><b>Requiere integración nativa</b><span>Consulta de capacidad NTN y radios</span></div></div>
+<button class="btn secondary install-button" id="install" type="button" hidden>Instalar Zungun Pocket</button>
+<p class="hint">Las señales de navegación, telemetría, radio de aficionado o satélite meteorológico no constituyen un canal genérico de subida para mensajes. La compatibilidad satelital de Android requiere hardware y configuración del fabricante/operador; un enlace o túnel de red no crea acceso radio.</p>
 </section>
 </main>
-<footer>Zungun Pocket · prototipo local · no es un servicio de mensajería real</footer>
+<footer>Zungun Pocket · beta de enrutamiento asistido · entrega no verificada</footer>
 </div>
 <script src="./app.js" defer></script>
 </body></html>
