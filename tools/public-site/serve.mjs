@@ -11,6 +11,7 @@ const routeFiles = new Map([
   ['/messages', 'messages/index.html'],
   ['/ops', 'ops/index.html'],
   ['/ops/legacy', 'ops/legacy/index.html'],
+  ['/chat/', 'chat/index.html'],
 ]);
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -20,6 +21,7 @@ const types = {
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 const server = createServer(async (request, response) => {
@@ -30,6 +32,11 @@ const server = createServer(async (request, response) => {
   }
 
   const url = new URL(request.url || '/', 'http://127.0.0.1');
+  if (url.pathname === '/chat') {
+    response.writeHead(308, { location: '/chat/', 'cache-control': 'no-store' });
+    response.end();
+    return;
+  }
   if (url.pathname.startsWith('/api/')) {
     response.writeHead(401, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     response.end(request.method === 'HEAD' ? undefined : JSON.stringify({ ok: false, error: 'UNAUTHORIZED' }));

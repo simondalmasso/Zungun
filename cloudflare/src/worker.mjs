@@ -415,6 +415,8 @@ async function route(request,env){const url=new URL(request.url);const path=url.
   if(request.method==="POST"&&path==="/api/v1/conversations") { const b=await readJson(request,4096);return conversationFor(request,env,b.pairingCode||""); }
   if(request.method==="GET"&&path==="/api/v1/conversations")return listConversations(request,env);
   if((m=/^\/api\/v1\/conversations\/(cv_[a-f0-9]{40})(?:\/(.*))?$/.exec(path))){const id=m[1],rest=m[2]||"";if(request.method==="GET"&&rest==="messages")return history(request,env,id);if(request.method==="POST"&&rest==="messages")return sendMessage(request,env,id);if(request.method==="GET"&&rest==="ws")return websocket(request,env,id);let mm;if((mm=/^messages\/([^/]+)$/.exec(rest))&&request.method==="GET")return getMessage(request,env,id,decodeURIComponent(mm[1]));if((mm=/^messages\/([^/]+)\/ack$/.exec(rest))&&request.method==="POST")return ackMessage(request,env,id,decodeURIComponent(mm[1]));}
+  if(request.method==="GET"&&path==="/chat")return Response.redirect(new URL("/chat/",url).toString(),308);
+  if(request.method==="GET"&&path==="/chat/")return asset(request,env,"/chat/index.html");
   if(request.method==="GET"&&path==="/")return asset(request,env,"/index.html");
   if(request.method==="GET"&&path==="/control")return asset(request,env,"/control/index.html");
   if(request.method==="GET"&&path==="/messages")return asset(request,env,"/messages/index.html");
