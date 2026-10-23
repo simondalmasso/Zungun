@@ -1,0 +1,12 @@
+{
+  "id": "./",
+  "name": "Zungun Pocket",
+  "short_name": "Zungun",
+  "description": "Chat experimental ultraliviano, en modo local.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101010",
+  "theme_color": "#101010",
+  "icons": [{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
