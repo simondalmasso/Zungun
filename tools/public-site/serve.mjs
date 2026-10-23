@@ -52,7 +52,7 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  const relative = routeFiles.get(pathname) || pathname.replace(/^\\/+/, '');
+  const relative = routeFiles.get(pathname) || pathname.replace(/^\/+/, '');
   const filename = path.resolve(root, relative);
   if (filename !== root && !filename.startsWith(root + path.sep)) {
     response.writeHead(403);
