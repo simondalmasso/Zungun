@@ -1,30 +1,132 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-const KEY='zungun-pocket-beta-v2';
-const state={phone:'',messages:[],storage:true};
-function normalizePhone(raw){return String(raw||'').replace(/[\s().-]/g,'');}
-function validPhone(raw){return /^\+[1-9]\d{7,14}$/.test(normalizePhone(raw));}
-function load(){try{const saved=JSON.parse(localStorage.getItem(KEY)||'{}');state.phone=validPhone(saved.phone)?normalizePhone(saved.phone):'';state.messages=Array.isArray(saved.messages)?saved.messages.filter(m=>m&&typeof m.text==='string'&&typeof m.phone==='string'&&m.text.length<=280&&validPhone(m.phone)).slice(-100):[];}catch{state.storage=false;}}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify({phone:state.phone,messages:state.messages.slice(-100)}));state.storage=true;}catch{state.storage=false;}}
-function setHint(id,text){$(id).textContent=text;}
-function currentRoute(){if(!state.phone)return{mode:'STORE_ONLY',label:'Guardar destino',reason:'Primero guarda un número válido en formato internacional.'};if(navigator.onLine)return{mode:'WHATSAPP',label:'WhatsApp',reason:'El navegador informa que hay una interfaz de red; no confirma acceso a Internet. WhatsApp requiere que el destinatario use el servicio y que confirmes el envío allí.'};return{mode:'SMS',label:'SMS del teléfono',reason:'El navegador informa que no hay conexión IP. SMS puede seguir disponible mediante tu operador, pero la PWA no puede comprobar cobertura ni servicio satelital.'};}
-function routeLabel(mode){return mode==='SMS'?'Compositor SMS abierto · no enviado':mode==='WHATSAPP'?'WhatsApp abierto · envío pendiente de confirmación':'Borrador local · no enviado';}
-function renderRoute(){const route=currentRoute();$('routeChoice').textContent=route.label;$('routeReason').textContent=route.reason;$('autoRoute').disabled=!state.phone||!state.messages.length;$('networkState').textContent=navigator.onLine?'Navegador online (sin verificación de Internet)':'Sin conexión IP detectada';$('linkState').textContent=navigator.onLine?'Red no verificada':'Modo sin conexión IP';}
-function makeAction(label,handler){const b=document.createElement('button');b.type='button';b.className='btn secondary small';b.textContent=label;b.addEventListener('click',handler);return b;}
-function renderMessages(){const root=$('messages');root.replaceChildren();if(!state.messages.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='Todavía no hay borradores. Escribe y guarda uno para elegir cómo abrir la aplicación de envío.';root.append(empty);return;}
-for(const m of state.messages){const item=document.createElement('article');item.className='bubble mine';const body=document.createElement('div');body.className='message-body';body.textContent=m.text;const meta=document.createElement('div');meta.className='meta';const details=document.createElement('span');details.textContent=m.phone+' · '+new Date(m.createdAt).toLocaleString();const deliveryState=document.createElement('span');deliveryState.className='delivery-state';deliveryState.textContent=routeLabel(m.status);meta.append(details,document.createTextNode(' · '),deliveryState);const actions=document.createElement('div');actions.className='message-actions';actions.append(makeAction('Abrir SMS',()=>openRoute(m,'SMS')),makeAction('Abrir WhatsApp',()=>openRoute(m,'WHATSAPP')),makeAction('Copiar',async()=>{try{await navigator.clipboard.writeText(m.text);setHint('sendHint','Texto copiado. No se transmitió ningún mensaje.');}catch{setHint('sendHint','El navegador no permitió copiar el texto.');}}));item.append(body,meta,actions);root.append(item);}
-root.scrollTop=root.scrollHeight;}
-function render(){renderMessages();renderRoute();$('destinationValue').textContent=state.phone||'Sin destino guardado';$('localDestination').classList.toggle('hidden',!state.phone);$('storageState').textContent=state.storage?'Disponible':'No disponible; los borradores solo viven en esta sesión';}
-function openRoute(message,mode){if(!message||!validPhone(message.phone)){setHint('sendHint','Guarda un destino válido antes de abrir un canal.');return;}const index=state.messages.findIndex(x=>x.id===message.id);if(index>=0){state.messages[index]={...state.messages[index],status:mode};persist();render();}if(mode==='SMS'){setHint('sendHint','Se abre el compositor SMS del sistema. Revisa destinatario y texto y pulsa enviar allí; Zungun no puede confirmar envío ni entrega.');window.location.href='sms:'+normalizePhone(message.phone)+'?body='+encodeURIComponent(message.text);return;}if(mode==='WHATSAPP'){setHint('sendHint','Se abre WhatsApp con el texto preparado. Confirma el envío en WhatsApp; Zungun no puede confirmar envío ni entrega.');const digits=normalizePhone(message.phone).replace(/^\+/,'');window.location.href='https://wa.me/'+digits+'?text='+encodeURIComponent(message.text);}}
-$('destinationForm').addEventListener('submit',e=>{e.preventDefault();const v=normalizePhone($('phone').value);if(!validPhone(v)){setHint('loginHint','Número inválido. Usa formato internacional E.164, por ejemplo +54342…');return;}state.phone=v;persist();$('phone').value=v;setHint('loginHint','Destino guardado localmente. No se envió SMS, no se creó una cuenta y el número no está verificado.');render();});
-$('composer').addEventListener('submit',e=>{e.preventDefault();const text=$('message').value.trim();if(!text)return;if(!state.phone){setHint('sendHint','Primero guarda el número de destino.');$('phone').focus();return;}if(text.length>280){setHint('sendHint','El mensaje supera el límite local de 280 caracteres.');return;}state.messages.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2),phone:state.phone,text,createdAt:Date.now(),status:'LOCAL'});state.messages=state.messages.slice(-100);persist();$('message').value='';setHint('sendHint','Borrador guardado en este dispositivo. Selecciona SMS o WhatsApp; la app nativa requiere tu confirmación.');render();});
-$('autoRoute').addEventListener('click',()=>{const latest=state.messages[state.messages.length-1];if(!latest)return;openRoute(latest,currentRoute().mode);});
-$('clear').addEventListener('click',()=>{state.phone='';state.messages=[];$('phone').value='';localStorage.removeItem(KEY);setHint('loginHint','Datos locales borrados.');setHint('sendHint','Se borraron destino y borradores de este dispositivo.');render();});
-$('contacts').addEventListener('click',async()=>{if(!('contacts'in navigator)||!navigator.contacts?.select){setHint('contactHint','Este navegador no expone Contact Picker. No puede leer toda la agenda automáticamente.');return;}try{const contacts=await navigator.contacts.select(['name','tel'],{multiple:false});if(contacts.length){$('phone').value=normalizePhone((contacts[0].tel||[])[0]||'');setHint('contactHint','Contacto seleccionado por acción explícita. Revisa el número y guárdalo.');}}catch{setHint('contactHint','Selección cancelada o no permitida.');}});
-$('secureState').textContent=window.isSecureContext?'Sí':'No';$('storageState').textContent='Comprobando…';
-let promptEvent=null;$('install').hidden=true;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();promptEvent=e;$('install').hidden=false;});$('install').addEventListener('click',async()=>{if(promptEvent){promptEvent.prompt();await promptEvent.userChoice;promptEvent=null;$('install').hidden=true;}else alert('En Chrome Android: menú ⋮ → Instalar aplicación o Añadir a pantalla principal, si está disponible.');});
-window.addEventListener('online',renderRoute);window.addEventListener('offline',renderRoute);
+const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false};
+const api=async(path,options={})=>{
+  const headers=new Headers(options.headers||{});headers.set('accept','application/json');
+  if(options.body!==undefined)headers.set('content-type','application/json');
+  const response=await fetch(path,{credentials:'same-origin',...options,headers});
+  let data={};try{data=await response.json()}catch{}
+  if(!response.ok){const error=new Error(data.error||('HTTP_'+response.status));error.status=response.status;error.code=data.error||('HTTP_'+response.status);throw error}
+  setConnection('Conectado',true);return data;
+};
+function setConnection(label,connected){$('connectionState').textContent=label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(connected));$('connectionDot').parentElement.classList.toggle('offline',!connected)}
+function toast(message){const el=$('toast');el.textContent=message;el.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('visible'),2100)}
+function showError(id,error){const map={
+  UNAUTHORIZED:'Tu sesión terminó. Entrá de nuevo.',
+  IDENTITY_NOT_FOUND:'No encontramos ese código.',
+  SELF_CONVERSATION_NOT_ALLOWED:'Ese es tu propio código.',
+  PAIRING_CODE_INVALID:'Revisá el código e intentá otra vez.',
+  RATE_LIMITED:'Esperá un momento e intentá de nuevo.',
+  MESSAGE_BODY_INVALID:'Escribí un mensaje de hasta 2.000 caracteres.',
+  FORBIDDEN:'No tenés acceso a esta conversación.'
+};$(id).textContent=map[error.code]||((error.message==='Failed to fetch'||error.message==='Load failed')?'No se pudo conectar. Revisá tu conexión.':'No se pudo completar. Intentá de nuevo.')}
+function openAuth(message=''){
+  closeSocket();state.me=null;state.current=null;$('chatView').classList.add('hidden');$('authView').classList.remove('hidden');$('accountError').textContent=message;
+}
+function openApp(){
+  $('authView').classList.add('hidden');$('chatView').classList.remove('hidden');$('myName').textContent=state.me.displayName;$('myCode').textContent=state.me.pairingCode;$('myAvatar').textContent=initial(state.me.displayName);loadConversations();
+}
+function initial(name){return Array.from(String(name||'z').trim())[0]?.toLocaleUpperCase()||'Z'}
+function closeSocket(){if(state.retry){clearTimeout(state.retry);state.retry=null}if(state.socket){state.socket.onclose=null;try{state.socket.close()}catch{}state.socket=null}}
+async function boot(){
+  try{const data=await api('/api/v1/me');state.me=data.identity;openApp()}
+  catch(error){if(error.status===401){openAuth();setConnection('Conectado',true)}else{openAuth('No se pudo conectar. Revisá tu conexión e intentá de nuevo.');setConnection('Sin conexión',false)}}
+}
+$('accountForm').addEventListener('submit',async event=>{
+  event.preventDefault();if(state.busy)return;const name=$('displayName').value.trim();if(!name)return;
+  state.busy=true;$('createAccount').disabled=true;$('accountError').textContent='';
+  try{await api('/api/v1/identity',{method:'POST',body:JSON.stringify({displayName:name,client:'browser'})});const data=await api('/api/v1/me');state.me=data.identity;openApp()}
+  catch(error){showError('accountError',error)}
+  finally{state.busy=false;$('createAccount').disabled=false}
+});
+function renderConversations(){
+  const root=$('conversationList');root.replaceChildren();
+  if(!state.conversations.length){const empty=document.createElement('div');empty.className='list-empty';empty.textContent='Todavía no hay chats. Tocá + para empezar.';root.append(empty);return}
+  for(const c of state.conversations){
+    const button=document.createElement('button');button.type='button';button.className='conversation-item'+(state.current?.conversationId===c.conversationId?' active':'');
+    const avatar=document.createElement('span');avatar.className='avatar';avatar.textContent=initial(c.peer.displayName);
+    const copy=document.createElement('span');copy.className='conversation-copy';
+    const title=document.createElement('strong');title.textContent=c.peer.displayName;
+    const code=document.createElement('span');code.textContent=c.peer.pairingCode;
+    copy.append(title,code);button.append(avatar,copy);button.addEventListener('click',()=>openConversation(c));root.append(button)
+  }
+}
+async function loadConversations(){
+  try{const data=await api('/api/v1/conversations');state.conversations=data.items||[];renderConversations();
+    if(state.current){const updated=state.conversations.find(c=>c.conversationId===state.current.conversationId);if(!updated){state.current=null;showEmpty()}else state.current=updated}
+  }catch(error){if(error.status===401)openAuth('Tu sesión terminó. Entrá de nuevo.');else setConnection('Sin conexión',false)}
+}
+$('newChat').addEventListener('click',togglePairForm);$('startChat').addEventListener('click',togglePairForm);
+function togglePairForm(){const form=$('pairForm');form.classList.toggle('hidden');if(!form.classList.contains('hidden')){$('pairError').textContent='';$('pairCode').focus()}}
+$('pairForm').addEventListener('submit',async event=>{
+  event.preventDefault();if(state.busy)return;const code=$('pairCode').value.trim().toUpperCase();if(!code)return;
+  const button=$('pairForm').querySelector('button[type="submit"]');button.disabled=true;$('pairError').textContent='';
+  try{const data=await api('/api/v1/conversations',{method:'POST',body:JSON.stringify({pairingCode:code})});$('pairCode').value='';$('pairForm').classList.add('hidden');await loadConversations();const conv=state.conversations.find(c=>c.conversationId===data.conversation.conversationId)||data.conversation;await openConversation(conv)}
+  catch(error){showError('pairError',error)}
+  finally{button.disabled=false}
+});
+$('copyCode').addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText(state.me.pairingCode);toast('Código copiado')}
+  catch{toast('Tu código: '+state.me.pairingCode)}
+});
+$('signOut').addEventListener('click',async()=>{
+  $('signOut').disabled=true;
+  try{await api('/api/v1/session/revoke',{method:'POST',body:'{}'});state.me=null;state.current=null;state.conversations=[];openAuth();$('displayName').value='';toast('Sesión cerrada')}
+  catch(error){showError('accountError',error)}
+  finally{$('signOut').disabled=false}
+});
+function showEmpty(){closeSocket();state.current=null;$('conversationPane').classList.add('hidden');$('emptyChat').classList.remove('hidden');$('chatView').classList.remove('in-chat');renderConversations()}
+async function openConversation(conversation){
+  closeSocket();state.current=conversation;state.lastSeq=0;$('chatView').classList.add('in-chat');$('emptyChat').classList.add('hidden');$('conversationPane').classList.remove('hidden');
+  $('chatTitle').textContent=conversation.peer.displayName;$('peerCode').textContent=conversation.peer.pairingCode;$('peerAvatar').textContent=initial(conversation.peer.displayName);$('messages').replaceChildren();
+  const loading=document.createElement('div');loading.className='loading';loading.textContent='Cargando mensajes…';$('messages').append(loading);renderConversations();
+  await poll(true);connectSocket();$('messageInput').focus()
+}
+$('backToChats').addEventListener('click',()=>{$('chatView').classList.remove('in-chat')});
+function renderMessage(message){
+  const id='message-'+message.messageId;let element=document.getElementById(id);const mine=message.senderId===state.me.userId;
+  if(!element){$('messages').querySelectorAll('.messages-empty,.loading').forEach(el=>el.remove());element=document.createElement('article');element.id=id;element.className='message'+(mine?' mine':'');element.dataset.sequence=String(message.sequence||0);const body=document.createElement('div');body.className='message-text';body.textContent=message.body;const meta=document.createElement('div');meta.className='message-meta';const time=document.createElement('time');time.textContent=new Date(message.clientCreatedAtMs||message.acceptedAtMs||Date.now()).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});meta.append(time);if(mine){const status=document.createElement('span');status.className='message-status';status.textContent=message.deliveredAtMs?'Entregado':'Enviado';meta.append(status)}element.append(body,meta);$('messages').append(element)}
+  else if(mine){const status=element.querySelector('.message-status');if(status)status.textContent=message.deliveredAtMs?'Entregado':'Enviado'}
+  state.lastSeq=Math.max(state.lastSeq,Number(message.sequence)||0);
+  if(!mine&&!message.deliveredAtMs&&state.current)api('/api/v1/conversations/'+state.current.conversationId+'/messages/'+encodeURIComponent(message.messageId)+'/ack',{method:'POST',body:'{}'}).catch(()=>{});
+  $('messages').scrollTop=$('messages').scrollHeight;
+}
+async function poll(initial=false){
+  const current=state.current;if(!current)return;
+  try{const after=initial?0:Math.max(0,state.lastSeq-5);const data=await api('/api/v1/conversations/'+current.conversationId+'/messages?after='+after);
+    if(state.current?.conversationId!==current.conversationId)return;
+    if(initial)$('messages').replaceChildren();
+    if(!data.items?.length&&initial){const empty=document.createElement('div');empty.className='messages-empty';empty.textContent='Todavía no hay mensajes. Escribí el primero.';$('messages').append(empty)}
+    for(const message of (data.items||[]))renderMessage(message);
+    if(!initial&&!state.lastSeq&&!(data.items||[]).length){$('messages').replaceChildren();const empty=document.createElement('div');empty.className='messages-empty';empty.textContent='Todavía no hay mensajes. Escribí el primero.';$('messages').append(empty)}
+    setConnection('Conectado',true)
+  }catch(error){if(error.status===401)openAuth('Tu sesión terminó. Entrá de nuevo.');else setConnection('Reconectando',false)}
+}
+function connectSocket(){
+  if(!state.current||!navigator.onLine)return;const conversationId=state.current.conversationId;const protocol=location.protocol==='https:'?'wss:':'ws:';
+  try{const socket=new WebSocket(protocol+'//'+location.host+'/api/v1/conversations/'+conversationId+'/ws');state.socket=socket;
+    socket.onopen=()=>{if(state.current?.conversationId!==conversationId){socket.close();return}setConnection('Conectado',true);poll(false)};
+    socket.onmessage=event=>{if(event.data==='pong')return;try{const update=JSON.parse(event.data);
+      if(update.type==='message')renderMessage(update.message);
+      if(update.type==='delivery_ack'){const el=document.getElementById('message-'+update.messageId);const status=el?.querySelector('.message-status');if(status)status.textContent='Entregado'}
+    }catch{}};
+    socket.onclose=()=>{if(state.socket===socket){state.socket=null;if(state.current?.conversationId===conversationId)state.retry=setTimeout(connectSocket,3000)}};
+    socket.onerror=()=>{setConnection('Reconectando',false)}
+  }catch{state.retry=setTimeout(connectSocket,3000)}
+}
+$('sendForm').addEventListener('submit',async event=>{
+  event.preventDefault();const body=$('messageInput').value.trim();const current=state.current;if(!body||!current)return;
+  if(state.busy)return;state.busy=true;$('sendButton').disabled=true;$('sendError').textContent='';
+  const id='msg_'+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));
+  try{const data=await api('/api/v1/conversations/'+current.conversationId+'/messages',{method:'POST',body:JSON.stringify({messageId:id,body,clientCreatedAtMs:Date.now()})});
+    if(state.current?.conversationId===current.conversationId)renderMessage(data.message);$('messageInput').value='';$('messageInput').focus();await loadConversations()
+  }catch(error){showError('sendError',error)}
+  finally{state.busy=false;$('sendButton').disabled=false}
+});
+window.addEventListener('online',()=>{setConnection('Conectando',false);poll();connectSocket()});
+window.addEventListener('offline',()=>setConnection('Sin conexión',false));
+state.pollTimer=setInterval(()=>{if(state.current)poll(false);else loadConversations()},4000);
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
-if(location.protocol==='file:')$('installState').textContent='Abre desde HTTPS';
-load();if(state.phone)$('phone').value=state.phone;render();
+if(location.protocol==='file:')setConnection('Abrí desde el enlace',false);
+boot();
 })();
