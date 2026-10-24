@@ -130,11 +130,13 @@
 
   function readTransportMode(root) {
     try {
-      return root && root.localStorage &&
-        root.localStorage.getItem(TRANSPORT_MODE_KEY) === 'SATELLITE_ONLY'
-        ? 'SATELLITE_ONLY' : 'INTERNET';
+      const storage = root && root.localStorage;
+      if (!storage || typeof storage.getItem !== 'function') return 'UNKNOWN';
+      const stored = storage.getItem(TRANSPORT_MODE_KEY);
+      if (stored === null) return 'INTERNET';
+      return stored === 'INTERNET' || stored === 'SATELLITE_ONLY' ? stored : 'UNKNOWN';
     } catch {
-      return 'INTERNET';
+      return 'UNKNOWN';
     }
   }
 
