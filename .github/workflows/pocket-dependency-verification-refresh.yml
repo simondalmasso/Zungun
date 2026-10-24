@@ -42,9 +42,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s android/gradle/verification-metadata.xml
-          cp android/gradle/verification-metadata.xml "$RUNNER_TEMP/verification-metadata.previous.xml"
-          rm android/gradle/verification-metadata.xml
+          metadata="android/gradle/verification-metadata.xml"
+          supplement="android/gradle/order080-verification.patch"
+          test -s "$metadata"
+          cp "$metadata" "$RUNNER_TEMP/verification-metadata.previous.xml"
+          # Preserve the exact existing Order 080 supplement as source evidence.
+          # It will be merged into generated metadata; do not drop its pinned hashes.
+          git apply --check "$supplement"
+          git apply "$supplement"
+          cp "$metadata" "$RUNNER_TEMP/verification-metadata.order080.xml"
+          cp "$RUNNER_TEMP/verification-metadata.previous.xml" "$metadata"
+          rm "$metadata"
 
       - name: Resolve Pocket debug and test graph to generate exact artifact hashes
         shell: bash
@@ -74,7 +82,7 @@ jobs:
           EOF
           python tools/android/complete-gradle-verification.py \
             --metadata android/gradle/verification-metadata.xml \
-            --merge-from "$RUNNER_TEMP/verification-metadata.previous.xml" \
+            --merge-from "$RUNNER_TEMP/verification-metadata.order080.xml" \
             --components "$RUNNER_TEMP/pocket-extra-components.txt" \
             --gradle-user-home "${GRADLE_USER_HOME:-$HOME/.gradle}"
           test -s android/gradle/verification-metadata.xml

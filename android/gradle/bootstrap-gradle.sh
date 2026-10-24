@@ -21,14 +21,32 @@ if [ ! -x "$home/bin/gradle" ]; then
 fi
 backup=""
 if [ -f "$supplement" ] && [ -f "$metadata" ]; then
-  backup="$(mktemp)"
-  cp "$metadata" "$backup"
-  restore_metadata() {
-    cp "$backup" "$metadata"
-    rm -f "$backup"
-  }
-  trap restore_metadata EXIT INT TERM
-  (cd "$repo_root" && git apply --check "$supplement" && git apply "$supplement")
+  if (cd "$repo_root" && git apply --check "$supplement"); then
+    backup="$(mktemp)"
+    cp "$metadata" "$backup"
+    restore_metadata() {
+      cp "$backup" "$metadata"
+      rm -f "$backup"
+    }
+    trap restore_metadata EXIT INT TERM
+    (cd "$repo_root" && git apply "$supplement")
+  else
+    # Newer metadata may already contain the exact supplement artifacts. Skip
+    # only when every pinned SHA-256 from the patch is present; otherwise fail closed.
+    missing_hash=0
+    while IFS= read -r hash; do
+      [ -n "$hash" ] || continue
+      if ! grep -Fq "$hash" "$metadata"; then
+        printf 'ERROR: supplemental verification hash missing from metadata: %s\n' "$hash" >&2
+        missing_hash=1
+      fi
+    done < <(grep -oE 'sha256 value="[0-9a-f]{64}"' "$supplement" | sed -E 's/.*value="([0-9a-f]{64})".*/\1/')
+    if [ "$missing_hash" -ne 0 ]; then
+      echo "ERROR: order080-verification.patch is stale and not fully represented in metadata." >&2
+      exit 1
+    fi
+    echo "All supplemental verification hashes are already present; skipping order080 patch."
+  fi
 fi
 sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [ -n "${GITHUB_PATH:-}" ] && [ -n "$sdkroot" ] && [ -x "$sdkroot/platform-tools/adb" ]; then
