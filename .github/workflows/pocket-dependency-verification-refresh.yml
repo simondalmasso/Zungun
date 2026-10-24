@@ -101,7 +101,6 @@ jobs:
       - name: Commit verified dependency metadata and locks to this PR branch
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
@@ -113,9 +112,7 @@ jobs:
             exit 0
           fi
           git commit -m "build(p2p): lock verified Pocket crypto dependencies"
-          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-            push origin "HEAD:$HEAD_BRANCH"
+          git push origin "HEAD:$HEAD_BRANCH"
 
       - name: Upload generated metadata and any Pocket dependency lockfile
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
