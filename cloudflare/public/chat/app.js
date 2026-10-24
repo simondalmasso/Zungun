@@ -95,7 +95,10 @@ async function openConversation(conversation){
 }
 $('backToChats').addEventListener('click',()=>{$('chatView').classList.remove('in-chat')});
 function messageStatus(message, element){
-  if(message.deliveryState==='QUEUED')return message.transport==='SATELLITE_ONLY'?'Satélite no verificado · pendiente':'En cola';
+  if(message.deliveryState==='QUEUED')return message.transport==='SATELLITE_ONLY'?'Transporte no verificado · pendiente':'En cola';
+  if(message.deliveryState==='ACCEPTED_BY_GATEWAY')return 'Aceptado por gateway · entrega no confirmada';
+  if(message.deliveryState==='SMS_SEND_UNKNOWN')return 'Resultado SMS desconocido · no reintentar';
+  if(message.deliveryState==='RECEIVED')return 'Recibido por SMS';
   if(message.deliveryState==='SENDING')return 'Enviando';
   if(message.deliveryState==='FAILED')return 'No enviado';
   if(message.deliveredAtMs||element?.dataset.deliveryState==='DELIVERED')return 'Entregado';
@@ -205,8 +208,16 @@ $('sendForm').addEventListener('submit',async event=>{
   if(state.busy)return;state.busy=true;$('sendButton').disabled=true;$('sendError').textContent='';
   const message={messageId:'msg_'+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)),body,clientCreatedAtMs:Date.now()};
   try{
-    if(state.transportMode==='SATELLITE_ONLY'){queueMessage(current,message,'SATELLITE_ONLY');return}
-    if(!navigator.onLine){queueMessage(current,message,'INTERNET');return}
+    if(state.transportMode==='SATELLITE_ONLY'){
+      try{const sent=await window.ZungunSmsUi?.sendCurrent(current,message);if(sent){$('messageInput').value='';$('messageInput').focus();return}}
+      catch(error){$('sendError').textContent=error.message||'No se pudo enviar por SMS';return}
+      queueMessage(current,message,'SATELLITE_ONLY');return;
+    }
+    if(!navigator.onLine){
+      try{const sent=await window.ZungunSmsUi?.sendCurrent(current,message);if(sent){$('messageInput').value='';$('messageInput').focus();return}}
+      catch(error){$('sendError').textContent=error.message||'No se pudo enviar por SMS';return}
+      queueMessage(current,message,'INTERNET');return;
+    }
     try{
       const data=await api('/api/v1/conversations/'+current.conversationId+'/messages',{method:'POST',body:JSON.stringify(message)});
       if(state.current?.conversationId===current.conversationId)renderMessage(data.message);
@@ -222,5 +233,6 @@ window.addEventListener('offline',()=>setConnection('Sin conexión',false));
 state.pollTimer=setInterval(()=>{if(state.transportMode!=='INTERNET')return;if(state.current)poll(false);else loadConversations();drainOutbox()},4000);
 if(state.transportMode==='INTERNET'&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 if(location.protocol==='file:')setConnection('Abrí desde el enlace',false);
+window.ZungunChat={getContext:()=>({me:state.me,current:state.current}),renderSmsMessage:message=>renderMessage(message),toast};
 renderTransportMode();boot();
 })();
