@@ -175,7 +175,7 @@ test('satellite-only mode disables every Internet API call, polling and WebSocke
   assert.equal(canUseInternetApi('SATELLITE_ONLY'), false);
   assert.equal(canUseInternetApi('UNKNOWN'), false);
   assert.equal(canUseInternetApi('INTERNET'), true);
-  assert.match(appSource, /if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)[\s\S]{0,150}MODE_VIOLATION/);
+  assert.match(appSource, /const modeViolation=.*MODE_VIOLATION.*console\.warn/);\n  assert.match(appSource, /if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)throw modeViolation\(\)/);
   assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
   assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
   assert.match(appSource, /state\.transportMode==='INTERNET'&&state\.current\?\.conversationId===conversationId\)state\.retry=setTimeout\(connectSocket,3000\)/);
