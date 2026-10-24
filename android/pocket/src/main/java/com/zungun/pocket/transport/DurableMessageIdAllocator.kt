@@ -268,7 +268,7 @@ internal class AndroidMessageIdJournalStorage(context: Context) : MessageIdJourn
             stream.write(bytes)
             atomic.finishWrite(stream)
         } catch (error: Exception) {
-            if (stream != null) runCatching { atomic.failWrite(stream) }
+            stream?.let { failedStream -> runCatching { atomic.failWrite(failedStream) } }
             throw error
         }
     }
