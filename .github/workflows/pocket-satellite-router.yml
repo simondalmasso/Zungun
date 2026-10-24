@@ -49,4 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           export JAVA_HOME="$JAVA_HOME_17_X64"
-          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :pocket:testDebugUnitTest :pocket:assembleDebug
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            -Dorg.gradle.java.installations.paths="$JAVA_HOME_21_X64" \
+            :pocket:testDebugUnitTest :pocket:assembleDebug
