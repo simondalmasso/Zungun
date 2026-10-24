@@ -13,6 +13,7 @@ const {
   persistTransportMode,
 } = globalThis.ZungunOutbox;
 const appSource = readFileSync(new URL('../public/chat/app.js', import.meta.url), 'utf8');
+const serviceWorkerSource = readFileSync(new URL('../public/chat/sw.js', import.meta.url), 'utf8');
 
 function memoryStorage() {
   const values = new Map();
@@ -360,4 +361,13 @@ test('unknown persisted mode remains blocked until the user explicitly enables I
 
   assert.equal(runtime.storage.getItem('zungun-transport-mode-v1'), 'INTERNET');
   assert.ok(runtime.fetchCalls.includes('/api/v1/me'));
+});
+
+
+test('PWA transport policy updates invalidate the previous service-worker cache', () => {
+  const match = serviceWorkerSource.match(/const CACHE='zungun-pocket-chat-v(\\d+)';/);
+  assert.ok(match, 'service worker cache namespace must be explicit');
+  assert.ok(Number(match[1]) > 4, 'transport guard changes must not reuse the pre-guard v4 cache');
+  assert.match(serviceWorkerSource, /'\\/chat\\/app\\.js'/);
+  assert.match(serviceWorkerSource, /'\\/chat\\/outbox\\.js'/);
 });
