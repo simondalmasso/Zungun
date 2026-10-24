@@ -59,7 +59,7 @@
     function authHeaders(config){
       const headers=new Headers({'accept':'application/json'});
       if(config.token)headers.set('authorization','Bearer '+config.token);
-      else headers.set('authorization','Basic '+btoa(unescape(encodeURIComponent(config.username+':'+config.password)));
+      else headers.set('authorization','Basic '+btoa(unescape(encodeURIComponent(config.username+':'+config.password))));
       return headers;
     }
     async function listIncoming({limit=50,offset=0,from}={}){
