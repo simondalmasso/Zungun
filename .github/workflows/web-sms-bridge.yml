@@ -1,0 +1,38 @@
+name: Web SMS bridge contract
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/public/chat/sms-bridge.js'
+      - 'cloudflare/public/chat/app.js'
+      - 'cloudflare/public/chat/transport-guards.js'
+      - 'cloudflare/public/chat/index.html'
+      - 'cloudflare/public/chat/sw.js'
+      - 'cloudflare/test/chat-transport-guards.test.mjs'
+      - 'cloudflare/test/chat-outbox.test.mjs'
+      - 'tests/web-sms-bridge.test.js'
+      - 'package.json'
+      - '.github/workflows/web-sms-bridge.yml'
+  push:
+    branches:
+      - feature/web-sms-bridge
+    paths:
+      - 'cloudflare/public/chat/sms-bridge.js'
+      - 'cloudflare/public/chat/app.js'
+      - 'cloudflare/public/chat/transport-guards.js'
+      - 'cloudflare/public/chat/index.html'
+      - 'cloudflare/public/chat/sw.js'
+      - 'cloudflare/test/chat-transport-guards.test.mjs'
+      - 'tests/web-sms-bridge.test.js'
+      - 'package.json'
+      - '.github/workflows/web-sms-bridge.yml'
+jobs:
+  sms-bridge-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run test:sms-bridge
+      - run: npm run test:chat-transport
+      - run: npm --prefix cloudflare run check

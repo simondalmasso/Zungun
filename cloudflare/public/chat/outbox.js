@@ -109,5 +109,77 @@
     return status === 408 || status === 429 || status >= 500;
   }
 
-  root.ZungunOutbox = { createStore, isRetryableError };
+  const TRANSPORT_MODE_KEY = 'zungun-transport-mode-v1';
+
+  function canSendInternet(mode, online, transport = 'INTERNET') {
+    return mode === 'INTERNET' && online === true && transport === 'INTERNET';
+  }
+
+  function canUseInternetApi(mode) {
+    return mode === 'INTERNET';
+  }
+
+  function connectionStatusForMode(mode, label, connected) {
+    if (mode === 'INTERNET') return { label, connected: Boolean(connected) };
+    if (mode !== 'SATELLITE_ONLY') return { label: 'Transporte no verificado', connected: false };
+    return {
+      label: 'Modo satelital exclusivo · tráfico de chat terrestre bloqueado',
+      connected: false,
+    };
+  }
+
+  function readTransportMode(root) {
+    try {
+      const storage = root && root.localStorage;
+      if (!storage || typeof storage.getItem !== 'function') return 'UNKNOWN';
+      const stored = storage.getItem(TRANSPORT_MODE_KEY);
+      if (stored === null) return 'INTERNET';
+      return stored === 'INTERNET' || stored === 'SATELLITE_ONLY' ? stored : 'UNKNOWN';
+    } catch {
+      return 'UNKNOWN';
+    }
+  }
+
+  function persistTransportMode(root, mode) {
+    if (!root || !['INTERNET', 'SATELLITE_ONLY'].includes(mode)) return false;
+    try {
+      const storage = root.localStorage;
+      if (!storage || typeof storage.setItem !== 'function' || typeof storage.getItem !== 'function') return false;
+      storage.setItem(TRANSPORT_MODE_KEY, mode);
+      return storage.getItem(TRANSPORT_MODE_KEY) === mode;
+    } catch {
+      return false;
+    }
+  }
+
+  function createTransportStateMap(initial = {}) {
+    const states = Object.create(null);
+    for (const transport of ['INTERNET', 'SATELLITE_ONLY']) {
+      states[transport] = initial && typeof initial[transport] === 'string'
+        ? initial[transport]
+        : 'UNKNOWN';
+    }
+    return {
+      get(transport) {
+        return Object.prototype.hasOwnProperty.call(states, transport) ? states[transport] : 'UNKNOWN';
+      },
+      set(transport, status) {
+        if (!Object.prototype.hasOwnProperty.call(states, transport) || typeof status !== 'string' || !status) return false;
+        states[transport] = status;
+        return true;
+      },
+      snapshot() { return { ...states }; },
+    };
+  }
+
+  root.ZungunOutbox = {
+    createStore,
+    isRetryableError,
+    canSendInternet,
+    canUseInternetApi,
+    connectionStatusForMode,
+    readTransportMode,
+    persistTransportMode,
+    createTransportStateMap,
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

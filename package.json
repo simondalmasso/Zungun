@@ -41,7 +41,9 @@
     "test:link-resilience": "npm run build && node --test dist/tests/link-resilience-matrix.test.js dist/tests/link-blackout.test.js",
     "test:seo": "node --test cloudflare/test/public-site-seo.test.mjs",
     "test:e2e:public": "npx e2e run tests/public-site.e2e.ts",
-    "benchmark:assurance": "npm run build && node dist/tools/resilience-lab/src/comparative-benchmark.js"
+    "benchmark:assurance": "npm run build && node dist/tools/resilience-lab/src/comparative-benchmark.js",
+    "test:sms-bridge": "node --test tests/web-sms-bridge.test.js",
+    "test:chat-transport": "node --test cloudflare/test/chat-transport-guards.test.mjs"
   },
   "engines": {
     "node": ">=22.16.0"

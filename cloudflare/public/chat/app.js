@@ -1,17 +1,23 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false,drainingOutbox:false,transportMode:window.localStorage.getItem('zungun-transport-mode-v1')==='SATELLITE_ONLY'?'SATELLITE_ONLY':'INTERNET',outbox:window.ZungunOutbox.createStore(window.localStorage)};
+const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false,drainingOutbox:false,transportMode:window.ZungunOutbox.readTransportMode(window),outbox:window.ZungunOutbox.createStore(window.localStorage),transportStates:window.ZungunOutbox.createTransportStateMap({INTERNET:'UNKNOWN',SATELLITE_ONLY:'UNVERIFIED'}),activeRequests:new Set()};
+const modeViolation=()=>{const error=new Error('Internet API disabled by selected transport mode');error.code='MODE_VIOLATION';console.warn('MODE_VIOLATION');return error};
 const api=async(path,options={})=>{
+  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode))throw modeViolation();
   const headers=new Headers(options.headers||{});headers.set('accept','application/json');
   if(options.body!==undefined)headers.set('content-type','application/json');
-  const response=await fetch(path,{credentials:'same-origin',...options,headers});
-  let data={};try{data=await response.json()}catch{}
-  if(!response.ok){const error=new Error(data.error||('HTTP_'+response.status));error.status=response.status;error.code=data.error||('HTTP_'+response.status);throw error}
-  setConnection('Conectado',true);return data;
+  const controller=new AbortController();state.activeRequests.add(controller);
+  try{
+    const response=await fetch(path,{credentials:'same-origin',...options,signal:controller.signal,headers});
+    let data={};try{data=await response.json()}catch{}
+    if(!window.ZungunOutbox.canUseInternetApi(state.transportMode))throw modeViolation();
+    if(!response.ok){const error=new Error(data.error||('HTTP_'+response.status));error.status=response.status;error.code=data.error||('HTTP_'+response.status);throw error}
+    setConnection('Conectado',true);return data;
+  }finally{state.activeRequests.delete(controller)}
 };
-function setConnection(label,connected){$('connectionState').textContent=label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(connected));$('connectionDot').parentElement.classList.toggle('offline',!connected)}
-function renderTransportMode(){const satellite=state.transportMode==='SATELLITE_ONLY';const button=$('transportMode');button.textContent=satellite?'Mensajes: satélite exclusivo':'Mensajes: Internet';button.setAttribute('aria-pressed',String(satellite));button.title=satellite?'Los mensajes no se envían por Internet; quedan pendientes porque esta PWA no tiene adaptador satelital verificado. La sesión y la sincronización de pantalla siguen usando Internet.':'Los mensajes se envían por Internet.';button.classList.toggle('satellite-active',satellite);if(satellite)setConnection('Satélite no verificado',false)}
-$('transportMode').addEventListener('click',()=>{state.transportMode=state.transportMode==='SATELLITE_ONLY'?'INTERNET':'SATELLITE_ONLY';try{window.localStorage.setItem('zungun-transport-mode-v1',state.transportMode)}catch{}renderTransportMode();if(state.transportMode==='SATELLITE_ONLY')toast('Mensajes sin fallback Internet; sesión/sincronización siguen online');else{toast('Mensajes por Internet activados');drainOutbox()}});
+function setConnection(label,connected){const status=window.ZungunOutbox.connectionStatusForMode(state.transportMode,label,connected);if(state.transportMode==='INTERNET'||state.transportMode==='SATELLITE_ONLY')state.transportStates.set(state.transportMode,state.transportMode==='SATELLITE_ONLY'?'UNVERIFIED':status.connected?'CONNECTED':'DISCONNECTED');$('connectionState').textContent=status.label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(status.connected));$('connectionDot').parentElement.classList.toggle('offline',!status.connected)}
+function renderTransportMode(){const satellite=state.transportMode==='SATELLITE_ONLY';const unknown=state.transportMode!=='INTERNET'&&!satellite;const button=$('transportMode');button.textContent=satellite?'Mensajes: satélite exclusivo':unknown?'Transporte bloqueado':'Mensajes: Internet';button.setAttribute('aria-pressed',String(satellite));button.title=satellite?'Modo estricto: la PWA no hace llamadas API ni abre WebSocket; los mensajes quedan locales porque no hay adaptador satelital verificado.':unknown?'Estado de transporte desconocido: el tráfico de chat está bloqueado. Tocá para habilitar Internet explícitamente.':'Los mensajes y la sincronización usan Internet.';button.classList.toggle('satellite-active',satellite||unknown);if(satellite)setConnection('Modo satelital exclusivo · tráfico de chat terrestre bloqueado',false);else if(unknown)setConnection('Transporte no verificado',false)}
+$('transportMode').addEventListener('click',()=>{const next=state.transportMode==='INTERNET'?'SATELLITE_ONLY':'INTERNET';if(!window.ZungunOutbox.persistTransportMode(window,next)){toast('No se pudo guardar el modo; no se cambió');return}state.transportMode=next;if(next==='SATELLITE_ONLY'){closeSocket();for(const request of state.activeRequests)request.abort();state.activeRequests.clear();}renderTransportMode();if(next==='SATELLITE_ONLY')toast('Modo estricto: llamadas API y WebSocket desactivados');else{toast('Internet activado');const resumeConversation=state.current;boot().then(()=>{if(resumeConversation&&state.me)openConversation(resumeConversation);drainOutbox()})}});
 function toast(message){const el=$('toast');el.textContent=message;el.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('visible'),2100)}
 function showError(id,error){const map={
   UNAUTHORIZED:'Tu sesión terminó. Entrá de nuevo.',
@@ -26,11 +32,12 @@ function openAuth(message=''){
   closeSocket();state.me=null;state.current=null;$('chatView').classList.add('hidden');$('authView').classList.remove('hidden');$('accountError').textContent=message;
 }
 function openApp(){
-  $('authView').classList.add('hidden');$('chatView').classList.remove('hidden');$('myName').textContent=state.me.displayName;$('myCode').textContent=state.me.pairingCode;$('myAvatar').textContent=initial(state.me.displayName);loadConversations();drainOutbox();
+  $('authView').classList.add('hidden');$('chatView').classList.remove('hidden');$('myName').textContent=state.me.displayName;$('myCode').textContent=state.me.pairingCode;$('myAvatar').textContent=initial(state.me.displayName);if(window.ZungunOutbox.canUseInternetApi(state.transportMode)){loadConversations();drainOutbox()}else{renderConversations();setConnection('Satélite no verificado · datos locales',false)}
 }
 function initial(name){return Array.from(String(name||'z').trim())[0]?.toLocaleUpperCase()||'Z'}
 function closeSocket(){if(state.retry){clearTimeout(state.retry);state.retry=null}if(state.socket){state.socket.onclose=null;try{state.socket.close()}catch{}state.socket=null}}
 async function boot(){
+  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)){openAuth('Modo satélite exclusivo: sin verificación de sesión por Internet. Volvé a activar Internet para cargar tu cuenta.');setConnection('Satélite no verificado · sin tráfico API',false);return}
   try{const data=await api('/api/v1/me');state.me=data.identity;openApp()}
   catch(error){if(error.status===401){openAuth();setConnection('Conectado',true)}else{openAuth('No se pudo conectar. Revisá tu conexión e intentá de nuevo.');setConnection('Sin conexión',false)}}
 }
@@ -54,7 +61,8 @@ function renderConversations(){
   }
 }
 async function loadConversations(){
-  try{const data=await api('/api/v1/conversations');state.conversations=data.items||[];renderConversations();
+  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode))return;
+  try{const data=await api('/api/v1/conversations');if(state.transportMode!=='INTERNET')return;state.conversations=data.items||[];renderConversations();
     if(state.current){const updated=state.conversations.find(c=>c.conversationId===state.current.conversationId);if(!updated){state.current=null;showEmpty()}else state.current=updated}
   }catch(error){if(error.status===401)openAuth('Tu sesión terminó. Entrá de nuevo.');else setConnection('Sin conexión',false)}
 }
@@ -79,6 +87,7 @@ $('signOut').addEventListener('click',async()=>{
 });
 function showEmpty(){closeSocket();state.current=null;$('conversationPane').classList.add('hidden');$('emptyChat').classList.remove('hidden');$('chatView').classList.remove('in-chat');renderConversations()}
 async function openConversation(conversation){
+  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)){toast('Modo estricto: no se puede cargar el historial por Internet');return}
   closeSocket();state.current=conversation;state.lastSeq=0;$('chatView').classList.add('in-chat');$('emptyChat').classList.add('hidden');$('conversationPane').classList.remove('hidden');
   $('chatTitle').textContent=conversation.peer.displayName;$('peerCode').textContent=conversation.peer.pairingCode;$('peerAvatar').textContent=initial(conversation.peer.displayName);$('messages').replaceChildren();
   const loading=document.createElement('div');loading.className='loading';loading.textContent='Cargando mensajes…';$('messages').append(loading);renderConversations();
@@ -141,10 +150,11 @@ async function drainOutbox(){
   state.drainingOutbox=true;
   try{
     for(const item of state.outbox.pending(state.me.userId,'INTERNET')){
-      if(!navigator.onLine)break;
+      if(!window.ZungunOutbox.canSendInternet(state.transportMode,navigator.onLine,item.transport))break;
       state.outbox.mark(item.messageId,state.me.userId,'SENDING');
       if(state.current?.conversationId===item.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:'SENDING'});
       try{
+        if(!window.ZungunOutbox.canSendInternet(state.transportMode,navigator.onLine,item.transport)){state.outbox.mark(item.messageId,state.me.userId,'QUEUED');break}
         const data=await api('/api/v1/conversations/'+item.conversationId+'/messages',{method:'POST',body:JSON.stringify({messageId:item.messageId,body:item.body,clientCreatedAtMs:item.clientCreatedAtMs})});
         state.outbox.remove(item.messageId,state.me.userId);
         if(state.current?.conversationId===item.conversationId)renderMessage(data.message);
@@ -168,9 +178,9 @@ async function drainOutbox(){
   }finally{state.drainingOutbox=false}
 }
 async function poll(initial=false){
-  const current=state.current;if(!current)return;
+  const current=state.current;if(!current||!window.ZungunOutbox.canUseInternetApi(state.transportMode))return;
   try{const after=initial?0:Math.max(0,state.lastSeq-5);const data=await api('/api/v1/conversations/'+current.conversationId+'/messages?after='+after);
-    if(state.current?.conversationId!==current.conversationId)return;
+    if(state.transportMode!=='INTERNET'||state.current?.conversationId!==current.conversationId)return;
     if(initial)$('messages').replaceChildren();
     if(!data.items?.length&&initial){const empty=document.createElement('div');empty.className='messages-empty';empty.textContent='Todavía no hay mensajes. Escribí el primero.';$('messages').append(empty)}
     for(const message of (data.items||[]))renderMessage(message);
@@ -179,14 +189,14 @@ async function poll(initial=false){
   }catch(error){if(error.status===401)openAuth('Tu sesión terminó. Entrá de nuevo.');else setConnection('Reconectando',false)}
 }
 function connectSocket(){
-  if(!state.current||!navigator.onLine)return;const conversationId=state.current.conversationId;const protocol=location.protocol==='https:'?'wss:':'ws:';
+  if(!state.current||!navigator.onLine||!window.ZungunOutbox.canUseInternetApi(state.transportMode))return;const conversationId=state.current.conversationId;const protocol=location.protocol==='https:'?'wss:':'ws:';
   try{const socket=new WebSocket(protocol+'//'+location.host+'/api/v1/conversations/'+conversationId+'/ws');state.socket=socket;
-    socket.onopen=()=>{if(state.current?.conversationId!==conversationId){socket.close();return}setConnection('Conectado',true);poll(false)};
-    socket.onmessage=event=>{if(event.data==='pong')return;try{const update=JSON.parse(event.data);
+    socket.onopen=()=>{if(state.transportMode!=='INTERNET'||state.current?.conversationId!==conversationId){socket.close();return}setConnection('Conectado',true);poll(false)};
+    socket.onmessage=event=>{if(state.transportMode!=='INTERNET'||event.data==='pong')return;try{const update=JSON.parse(event.data);
       if(update.type==='message')renderMessage(update.message);
       if(update.type==='delivery_ack'){const el=document.getElementById('message-'+update.messageId);const status=el?.querySelector('.message-status');if(status)status.textContent='Entregado'}
     }catch{}};
-    socket.onclose=()=>{if(state.socket===socket){state.socket=null;if(state.current?.conversationId===conversationId)state.retry=setTimeout(connectSocket,3000)}};
+    socket.onclose=()=>{if(state.socket===socket){state.socket=null;if(state.transportMode==='INTERNET'&&state.current?.conversationId===conversationId)state.retry=setTimeout(connectSocket,3000)}};
     socket.onerror=()=>{setConnection('Reconectando',false)}
   }catch{state.retry=setTimeout(connectSocket,3000)}
 }
@@ -207,10 +217,10 @@ $('sendForm').addEventListener('submit',async event=>{
     }
   }finally{state.busy=false;$('sendButton').disabled=false}
 });
-window.addEventListener('online',()=>{setConnection('Conectando',false);drainOutbox();if(state.current){poll();connectSocket()}else loadConversations()});
+window.addEventListener('online',()=>{if(state.transportMode!=='INTERNET')return;setConnection('Conectando',false);drainOutbox();if(state.current){poll();connectSocket()}else loadConversations()});
 window.addEventListener('offline',()=>setConnection('Sin conexión',false));
-state.pollTimer=setInterval(()=>{if(state.current)poll(false);else loadConversations();drainOutbox()},4000);
-if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+state.pollTimer=setInterval(()=>{if(state.transportMode!=='INTERNET')return;if(state.current)poll(false);else loadConversations();drainOutbox()},4000);
+if(state.transportMode==='INTERNET'&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 if(location.protocol==='file:')setConnection('Abrí desde el enlace',false);
 renderTransportMode();boot();
 })();
