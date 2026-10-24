@@ -3,6 +3,16 @@ on:
   pull_request:
     paths:
       - 'cloudflare/public/chat/sms-bridge.js'
+      - 'cloudflare/public/chat/app.js'
+      - 'cloudflare/public/chat/transport-guards.js'
+      - 'cloudflare/public/chat/index.html'
+      - 'cloudflare/public/chat/sw.js'
+      - 'cloudflare/test/chat-transport-guards.test.mjs'
+      - 'cloudflare/public/chat/app.js'
+      - 'cloudflare/public/chat/transport-guards.js'
+      - 'cloudflare/public/chat/index.html'
+      - 'cloudflare/public/chat/sw.js'
+      - 'cloudflare/test/chat-transport-guards.test.mjs'
       - 'tests/web-sms-bridge.test.js'
       - 'package.json'
       - '.github/workflows/web-sms-bridge.yml'
@@ -23,3 +33,4 @@ jobs:
         with:
           node-version: '22'
       - run: npm run test:sms-bridge
+      - run: npm run test:chat-transport
