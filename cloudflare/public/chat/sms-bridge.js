@@ -91,7 +91,7 @@
         response=await request(config.gatewayUrl+'/messages',{method:'POST',mode:'cors',credentials:'omit',headers,body:JSON.stringify({id:gatewayMessageId,textMessage:{text},phoneNumbers:[phoneNumber],withDeliveryReport:true})});
       }catch(error){const ambiguous=new Error('SMS_SEND_UNKNOWN');ambiguous.code='SMS_SEND_UNKNOWN';ambiguous.cause=error;throw ambiguous}
       let data={};try{data=await response.json()}catch{}
-      if(!response.ok){const error=new Error('SMS_GATEWAY_HTTP_'+response.status);error.status=response.status;error.code=data.error||error.message;error.ambiguous=isAmbiguous(error);throw error}
+      if(!response.ok){const error=new Error('SMS_GATEWAY_HTTP_'+response.status);error.status=response.status;error.code=data.error||error.message;error.ambiguous=isAmbiguous(error);if(error.ambiguous){error.code='SMS_SEND_UNKNOWN';error.message='SMS_SEND_UNKNOWN'}throw error}
       return {state:'ACCEPTED_BY_GATEWAY',gatewayResponse:data,deliveryConfirmed:false,messageId:message.messageId,gatewayMessageId:data.id||gatewayMessageId};
     }
     return {readConfig,saveConfig,clearConfig,send,listIncoming};
