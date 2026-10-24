@@ -180,9 +180,9 @@ class WifiDirectTransport(
             if (!hasP2pCapability(network)) return
             synchronized(lock) {
                 if (closed.get()) return
-                p2pNetwork = network
-                requestGroupInfoLocked(manager, ch)
+                setP2pNetworkLocked(network)
                 updateWaitingStateLocked()
+                requestGroupInfoLocked(manager, ch)
                 openSocketIfReadyLocked()
             }
         }
@@ -201,7 +201,10 @@ class WifiDirectTransport(
     }
 
     private fun setP2pNetworkLocked(network: Network) {
-        if (p2pNetwork != null && p2pNetwork != network) closeSocketLocked()
+        if (p2pNetwork != null && p2pNetwork != network) {
+            closeSocketLocked()
+            groupInfo = null
+        }
         p2pNetwork = network
     }
 
@@ -217,9 +220,12 @@ class WifiDirectTransport(
         synchronized(lock) {
             if (p2pNetwork != network) return
             closeSocketLocked()
-            p2pNetwork = connectivity.allNetworks.firstOrNull { hasP2pCapability(it) }
-            if (p2pNetwork == null) updateWaitingStateLocked()
+            p2pNetwork = null
+            groupInfo = null
+            val alternate = connectivity.allNetworks.firstOrNull { hasP2pCapability(it) }
+            if (alternate == null) updateWaitingStateLocked()
             else {
+                setP2pNetworkLocked(alternate)
                 requestGroupInfoLocked(manager, ch)
                 openSocketIfReadyLocked()
             }
