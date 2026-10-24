@@ -21,6 +21,8 @@ on:
     paths:
       - 'cloudflare/public/chat/sms-bridge.js'
       - 'cloudflare/public/chat/sms-auth.js'
+      - 'cloudflare/public/chat/sms-ui.js'
+      - 'cloudflare/public/chat/sms-pairing.js'
       - 'cloudflare/public/chat/app.js'
       - 'cloudflare/public/chat/transport-guards.js'
       - 'cloudflare/public/chat/index.html'
