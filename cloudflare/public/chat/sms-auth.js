@@ -37,7 +37,7 @@
     }
   }
   function decodeMessage(parts){
-    if(parts.length!==6||parts[0]!==PREFIX||
+    if(parts.length!==6||parts[0]!==PREFIX||! /^[A-Za-z0-9_-]{1,128}$/.test(parts[1])||! /^msg_[A-Za-z0-9_-]{8,}$/.test(parts[2])||!parts[3]||!Number.isSafeInteger(Number(parts[3]))||! /^[A-Za-z0-9_-]{43}$/.test(parts[5])){
       !/^[A-Za-z0-9_-]{1,128}$/.test(parts[1])||
       !/^msg_[A-Za-z0-9_-]{8,}$/.test(parts[2])||
       !/^\\d+$/.test(parts[3])||
