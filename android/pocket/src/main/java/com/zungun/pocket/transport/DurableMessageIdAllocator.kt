@@ -51,6 +51,9 @@ internal class DurableMessageIdAllocator(
             val current = loadCommitted()
             if (current == null) {
                 if (storage.hasAnyState()) throw HandshakeRequiredException("journal exists without a valid commit head")
+                if (authenticator.hasKeyMaterial()) {
+                    throw HandshakeRequiredException("journal is missing while the per-peer HMAC key still exists")
+                }
                 require(epoch == 0) { "first epoch must be zero" }
                 commit(slot = 0, State(generation = 1, epoch = epoch, nextMessageId = 0, sessionId = sessionId.copyOf()))
             } else {
@@ -193,6 +196,15 @@ internal class DurableMessageIdAllocator(
     internal class HandshakeRequiredException(message: String) : IllegalStateException(message)
 
     companion object {
+        /**
+         * Public commitment that binds an allocator journal to the authenticated
+         * era secret without persisting the secret itself.
+         */
+        fun sessionIdForEraSecret(eraSecret: ByteArray): ByteArray {
+            require(eraSecret.size == 32) { "era secret must be 32 bytes" }
+            return MessageDigest.getInstance("SHA-256").digest(eraSecret)
+        }
+
         const val MAX_EPOCH = 0xFFFF
         /** IDs 0..0xFFFD may be used; 0xFFFE is the exhausted sentinel. */
         const val MAX_MESSAGE_ID_EXCLUSIVE = 0xFFFE
@@ -218,6 +230,7 @@ internal interface MessageIdJournalStorage {
 }
 
 internal interface MessageIdHeadAuthenticator {
+    fun hasKeyMaterial(): Boolean
     fun authenticate(bytes: ByteArray): ByteArray
     fun verify(bytes: ByteArray, mac: ByteArray): Boolean
 }
@@ -323,6 +336,8 @@ internal class AndroidKeystoreMessageIdHeadAuthenticator(
         }
         keyAlias = "zungun-p2p-id-head-v1-$peerFingerprintHex"
     }
+    override fun hasKeyMaterial(): Boolean = loadExistingKey() != null
+
     override fun authenticate(bytes: ByteArray): ByteArray {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(loadOrCreateKey())
