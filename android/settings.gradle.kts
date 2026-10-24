@@ -4,4 +4,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "zungun-android"
-include(":runtime", ":sample", ":app")
+include(":runtime", ":sample", ":app", ":pocket")
