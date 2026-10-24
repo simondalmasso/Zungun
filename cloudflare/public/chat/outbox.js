@@ -42,7 +42,7 @@
           .sort((a, b) => a.queuedAtMs - b.queuedAtMs);
       },
       pending(userId) {
-        return this.list(userId).filter(item => item.state !== 'FAILED');
+        return this.list(userId).filter(item => item.state !== 'FAILED' && (Number(item.nextAttemptAtMs) || 0) <= Date.now());
       },
       enqueue(record) {
         if (!record || typeof record.userId !== 'string' || typeof record.conversationId !== 'string' ||
@@ -67,17 +67,28 @@
           clientCreatedAtMs: record.clientCreatedAtMs,
           queuedAtMs: Number.isSafeInteger(record.queuedAtMs) ? record.queuedAtMs : Date.now(),
           state: ['QUEUED', 'SENDING', 'FAILED'].includes(record.state) ? record.state : 'QUEUED',
+          attempts: Number.isSafeInteger(record.attempts) && record.attempts >= 0 ? record.attempts : 0,
+          nextAttemptAtMs: Number.isSafeInteger(record.nextAttemptAtMs) ? record.nextAttemptAtMs : 0,
           ...(typeof record.lastError === 'string' ? { lastError: record.lastError } : {}),
         };
         write([...items, item]);
         return item;
       },
-      mark(messageId, userId, nextState, lastError) {
+      mark(messageId, userId, nextState, lastError, nextAttemptAtMs) {
         if (!['QUEUED', 'SENDING', 'FAILED'].includes(nextState)) throw new TypeError('OUTBOX_STATE_INVALID');
         const items = read();
         const index = items.findIndex(item => item.messageId === messageId && item.userId === userId);
         if (index < 0) return false;
-        items[index] = { ...items[index], state: nextState, ...(lastError ? { lastError } : { lastError: undefined }) };
+        const previous = items[index];
+        const updated = {
+          ...previous,
+          state: nextState,
+          attempts: (Number(previous.attempts) || 0) + (nextState === 'SENDING' ? 1 : 0),
+          nextAttemptAtMs: Number.isSafeInteger(nextAttemptAtMs) ? nextAttemptAtMs : (nextState === 'QUEUED' ? 0 : 0),
+        };
+        if (lastError) updated.lastError = lastError;
+        else delete updated.lastError;
+        items[index] = updated;
         write(items);
         return true;
       },
