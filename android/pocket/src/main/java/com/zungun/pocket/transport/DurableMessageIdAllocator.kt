@@ -38,8 +38,8 @@ internal class DurableMessageIdAllocator(
 
     /**
      * Starts a newly authenticated epoch. For an existing journal, epochs must
-     * strictly increase and session IDs must change. On a new journal, epoch
-     * zero is required. A deleted/corrupt journal is not silently recreated.
+     * advance by exactly one and session IDs must change. On a new journal,
+     * epoch zero is required. A deleted/corrupt journal is not silently recreated.
      *
      * Call only after two-way key confirmation and creation of a fresh root key.
      */
@@ -54,8 +54,8 @@ internal class DurableMessageIdAllocator(
                 require(epoch == 0) { "first epoch must be zero" }
                 commit(slot = 0, State(generation = 1, epoch = epoch, nextMessageId = 0, sessionId = sessionId.copyOf()))
             } else {
-                if (epoch <= current.state.epoch) {
-                    throw HandshakeRequiredException("epoch downgrade or reuse rejected")
+                if (epoch != current.state.epoch + 1) {
+                    throw HandshakeRequiredException("epoch must advance by exactly one; downgrade, reuse, and jumps are rejected")
                 }
                 if (MessageDigest.isEqual(sessionId, current.state.sessionId)) {
                     throw HandshakeRequiredException("new epoch requires a fresh session ID")
