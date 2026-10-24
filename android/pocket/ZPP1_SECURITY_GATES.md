@@ -47,13 +47,21 @@ Before implementing `ZppCodec`, specify and implement a P2P-specific authenticat
 
 A pairing code that merely identifies a user or routes a request through the cloud is not, by itself, cryptographic proof of peer identity. Do not ship an unauthenticated secret exchange.
 
-## 4. Wire-format blocker: nonce length mismatch
+## 4. Canonical nonce layout (corrected before codec implementation)
 
-The proposed expression `EPOCH(2 bytes) || MSGID(2 bytes) || DIR(1 byte) || 17 zero bytes` totals **22 bytes**, not 24. XChaCha20-Poly1305 requires a 24-byte nonce. Before implementing the codec, resolve this in the normative spec: either use 19 trailing zero bytes, or define the missing 2-byte field with an explicit purpose and canonical byte order. Do not silently pad/truncate at runtime. Freeze exact 24-byte vectors for both directions, epoch boundaries, and message-ID boundaries. If any implementation has already emitted packets, changing the nonce layout requires a versioned protocol change.
+No ZPP/1 codec or packets have been emitted by this branch, so the 22-byte arithmetic defect is corrected before wire-format use. The canonical layout is:
+
+`nonce24 = U16BE(epoch) || U16BE(message_id) || direction || 19 * 0x00`
+
+This totals exactly 24 bytes, as required by XChaCha20-Poly1305. The five-byte prefix is epoch (unsigned 16-bit big-endian), message ID (unsigned 16-bit big-endian), and one direction byte; the remaining 19 bytes are zero.
+
+Direction values are fixed: `0x00 = A_TO_B`, `0x01 = B_TO_A`. A/B are stable peer roles assigned at authenticated initial pairing; they must not change during a rekey. Epoch is in `0x0000..0xFFFF`; IDs `0x0000..0xFFFD` are allocatable, while `0xFFFE` is the exhausted sentinel and `0xFFFF` is reserved. The codec must reject other values and must not silently truncate or pad a nonce at call sites.
+
+A pure Kotlin formatter and fixed-vector tests now express this layout. They do not prove the key schedule, peer authentication, nonce uniqueness across storage rollback, or the whole wire protocol. If any external build has already emitted packets using the 17-zero variant, it must use a separately versioned protocol; this repository branch has not implemented such a sender.
 
 ## 5. Codec implementation gates
 
-Only after sections 1–4 are reviewed and testable:
+Only after sections 1–3 are reviewed and testable:
 - implement the exact selected AEAD using a maintained libsodium binding (XChaCha20-Poly1305; no substitution with JCA ChaCha20-Poly1305);
 - derive directional keys with the final, versioned KDF context and epoch encoding;
 - define nonce bytes, message-ID exhaustion, ciphertext persistence, framing, and maximum plaintext/ciphertext sizes in one normative specification;
