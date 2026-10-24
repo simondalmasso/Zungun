@@ -8,13 +8,15 @@ const api=async(path,options={})=>{
   const headers=new Headers(options.headers||{});headers.set('accept','application/json');
   if(options.body!==undefined)headers.set('content-type','application/json');
   const controller=new AbortController();state.activeRequests.add(controller);
-  let response;
-  try{response=await fetch(path,{credentials:'same-origin',...options,signal:controller.signal,headers})}
-  finally{state.activeRequests.delete(controller)}
-  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)){const error=new Error('Internet API disabled by selected transport mode');error.code='TRANSPORT_DISABLED';throw error}
-  let data={};try{data=await response.json()}catch{}
-  if(!response.ok){const error=new Error(data.error||('HTTP_'+response.status));error.status=response.status;error.code=data.error||('HTTP_'+response.status);throw error}
-  setConnection('Conectado',true);return data;
+  try{
+    const response=await fetch(path,{credentials:'same-origin',...options,signal:controller.signal,headers});
+    let data={};try{data=await response.json()}catch{}
+    if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)){
+      const error=new Error('Internet API disabled by selected transport mode');error.code='TRANSPORT_DISABLED';throw error;
+    }
+    if(!response.ok){const error=new Error(data.error||('HTTP_'+response.status));error.status=response.status;error.code=data.error||('HTTP_'+response.status);throw error}
+    setConnection('Conectado',true);return data;
+  }finally{state.activeRequests.delete(controller)}
 };
 function setConnection(label,connected){const status=window.ZungunOutbox.connectionStatusForMode(state.transportMode,label,connected);$('connectionState').textContent=status.label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(status.connected));$('connectionDot').parentElement.classList.toggle('offline',!status.connected)}
 function renderTransportMode(){const satellite=state.transportMode==='SATELLITE_ONLY';const button=$('transportMode');button.textContent=satellite?'Mensajes: satélite exclusivo':'Mensajes: Internet';button.setAttribute('aria-pressed',String(satellite));button.title=satellite?'Modo estricto: esta PWA no hace llamadas API ni abre WebSocket; los mensajes quedan locales porque no hay adaptador satelital verificado.':'Los mensajes y la sincronización usan Internet.';button.classList.toggle('satellite-active',satellite);if(satellite)setConnection('Satélite no verificado · sin tráfico API',false)}
