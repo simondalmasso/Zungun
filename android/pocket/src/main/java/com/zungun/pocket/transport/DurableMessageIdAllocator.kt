@@ -229,17 +229,28 @@ internal class AndroidMessageIdJournalStorage(
 ) : MessageIdJournalStorage {
     init { require(isFingerprint(peerFingerprintHex)) { "peer fingerprint must be 64 lowercase hex characters" } }
     // The fingerprint must be SHA-256 of the verified peer identity public key, not a display name or pairing code.
-    private val directory = File(File(context.noBackupFilesDir, "zungun-p2p-id-journal"), peerFingerprintHex)
+    private val storageRoot = File(context.noBackupFilesDir, "zungun-p2p-id-journal")
+    private val directory = File(storageRoot, peerFingerprintHex)
     private val headFile = File(directory, "head.bin")
     private val slotFiles = arrayOf(File(directory, "slot0.bin"), File(directory, "slot1.bin"))
     private val lockFile = File(directory, "journal.lock")
     private val processLock = processLocks.computeIfAbsent(lockFile.absolutePath) { Any() }
 
     override fun <T> withExclusiveLock(action: () -> T): T = synchronized(processLock) {
-        if (!directory.exists() && !directory.mkdirs()) throw IOException("cannot create P2P journal directory")
+        ensureDirectory(storageRoot, requireNotNull(storageRoot.parentFile))
+        ensureDirectory(directory, storageRoot)
         RandomAccessFile(lockFile, "rw").use { random ->
             random.channel.lock().use { action() }
         }
+    }
+
+    private fun ensureDirectory(path: File, parent: File) {
+        if (!path.exists()) {
+            if (!path.mkdir() && !path.isDirectory) throw IOException("cannot create P2P journal directory")
+            // Persist the directory entry in its parent before committing files inside it.
+            syncDirectory(parent)
+        }
+        if (!path.isDirectory) throw IOException("P2P journal path is not a directory")
     }
 
     override fun hasAnyState(): Boolean =
@@ -258,8 +269,8 @@ internal class AndroidMessageIdJournalStorage(
         writeAtomic(slotFiles[slot], bytes)
     }
 
-    private fun syncDirectory() {
-        val descriptor = Os.open(directory.absolutePath, OsConstants.O_RDONLY, 0)
+    private fun syncDirectory(path: File = directory) {
+        val descriptor = Os.open(path.absolutePath, OsConstants.O_RDONLY, 0)
         try {
             Os.fsync(descriptor)
         } finally {
