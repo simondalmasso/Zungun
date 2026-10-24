@@ -24,7 +24,7 @@ test('Zungun chat route loads the real chat and offline outbox under strict CSP'
   assert.ok(html.includes('<script src="./outbox.js" defer></script>'));
   assert.ok(html.includes('<script src="./app.js" defer></script>'));
   assert.ok(!html.includes('<style>'));
-  assert.ok(!/<script(?![^>]*\\bsrc=)[^>]*>/i.test(html));
+  assert.ok(!/<script(?![^>]*\bsrc=)[^>]*>/i.test(html));
   assert.ok(!html.includes(' style='));
   assert.ok(css.includes('.composer'));
   assert.ok(js.includes("'/api/v1/conversations/'+current.conversationId+'/messages"));
