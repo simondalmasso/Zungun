@@ -18,6 +18,7 @@ name: Public site SEO and browser E2E
     paths:
       - "cloudflare/public/**"
       - "cloudflare/test/public-site-seo.test.mjs"
+      - "cloudflare/test/chat-outbox.test.mjs"
       - "tools/public-site/**"
       - "tests/public-site.e2e.ts"
       - "e2e.config.ts"
