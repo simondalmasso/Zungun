@@ -53,8 +53,7 @@ jobs:
           export JAVA_HOME="$JAVA_HOME_17_X64"
           android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
             --write-locks --write-verification-metadata sha256 \
-            :runtime:dependencies :sample:dependencies :pocket:dependencies \
-            :pocket:testDebugUnitTest :pocket:assembleDebug
+            :pocket:dependencies :pocket:testDebugUnitTest :pocket:assembleDebug
 
       - name: Merge prior policy and exact cached artifact hashes
         shell: bash
