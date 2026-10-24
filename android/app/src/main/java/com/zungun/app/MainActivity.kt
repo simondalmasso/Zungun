@@ -20,6 +20,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var container: LinearLayout
     private var messagesJob: Job? = null
     private var selectedConversation: String? = null
+    private var smsCompanionServer: LocalSmsCompanionServer? = null
+    private var smsCompanionToken: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +31,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         messagesJob?.cancel()
+        smsCompanionServer?.close()
+        smsCompanionServer = null
         super.onDestroy()
     }
 
@@ -57,6 +61,7 @@ class MainActivity : ComponentActivity() {
         nav.addView(navButton("Field") { renderField() })
         nav.addView(navButton("Messages") { renderMessages() })
         nav.addView(navButton("Account") { renderAccount() })
+        nav.addView(navButton("SMS Bridge") { renderSmsBridge() })
         root.addView(title)
         root.addView(nav)
 
@@ -91,6 +96,47 @@ class MainActivity : ComponentActivity() {
             setTextColor(mutedColor())
             setPadding(0, 0, 0, dp(18))
         })
+    }
+
+    private fun renderSmsBridge() {
+        messagesJob?.cancel()
+        header("Local companion", "PWA ↔ SMS Gateway", "Keeps the existing PWA in the browser. This companion exposes only loopback endpoints and never opens a LAN listener.")
+        val username = EditText(this).apply { hint = "SMS Gateway local-server username"; maxLines = 1; minHeight = dp(48) }
+        val password = EditText(this).apply { hint = "SMS Gateway local-server password"; maxLines = 1; minHeight = dp(48); inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        val tokenView = TextView(this).apply { setTextColor(textColor()); textSize = 14f; setTextIsSelectable(true) }
+        val status = TextView(this).apply { setTextColor(mutedColor()); textSize = 14f }
+        val start = Button(this).apply { text = "Start local SMS companion"; minHeight = dp(48) }
+        val stop = Button(this).apply { text = "Stop companion"; minHeight = dp(48); isEnabled = false }
+        container.addView(card("Requirements", "Start SMS Gateway for Android on this same phone, enable Local Server, and confirm it listens on localhost:8080. Then enter its local-server credentials here."))
+        container.addView(username); container.addView(password); container.addView(start); container.addView(stop)
+        container.addView(TextView(this).apply { text = "PWA token (session only)"; setTextColor(mutedColor()); setPadding(0, dp(12), 0, dp(4)) })
+        container.addView(tokenView); container.addView(status)
+        start.setOnClickListener {
+            val user = username.text.toString().trim()
+            val pass = password.text.toString()
+            if (user.isBlank() || pass.isBlank()) { status.text = "Enter the SMS Gateway credentials first."; return@setOnClickListener }
+            try {
+                smsCompanionServer?.close()
+                val bytes = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+                val token = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+                val bridge = LocalSmsCompanionServer(token, user, pass)
+                bridge.start()
+                smsCompanionServer = bridge
+                smsCompanionToken = token
+                tokenView.text = token
+                status.text = "Listening on http://127.0.0.1:8787. Paste this token into Zungun's SMS Companion Token field. Keep this screen open; stop the bridge when finished."
+                start.isEnabled = false; stop.isEnabled = true
+                username.isEnabled = false; password.isEnabled = false
+            } catch (e: Exception) {
+                status.text = "Could not start companion: ${e.message ?: "unknown error"}"
+            }
+        }
+        stop.setOnClickListener {
+            smsCompanionServer?.close(); smsCompanionServer = null; smsCompanionToken = null
+            tokenView.text = ""; status.text = "Companion stopped; token invalidated."
+            start.isEnabled = true; stop.isEnabled = false
+            username.isEnabled = true; password.isEnabled = true
+        }
     }
 
     private fun renderAccount() {
