@@ -24,13 +24,15 @@ test('gateway acceptance is not misreported as handset delivery',async()=>{
   const memory=new Map([['zungun-sms-bridge-v1',JSON.stringify({gatewayUrl:'http://127.0.0.1:8080',username:'u',password:'p'})]]);
   const storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
   let request;
-  const client=bridge.createClient({storage,fetchImpl:async(url,options)=>{request={url,options};return {ok:true,status:201,json:async()=>({id:'gateway-id'})}}});
+  const client=bridge.createClient({storage,fetchImpl:async(url,options)=>{request={url,options};return {ok:true,status:202,json:async()=>({id:'gateway-id'})}}});
   const message={conversationId:'conv_123',messageId:'msg_12345678',clientCreatedAtMs:1,body:'test'};
   const result=await client.send({phoneNumber:'+5491123456789',message});
   assert.equal(result.state,'ACCEPTED_BY_GATEWAY');
   assert.equal(result.deliveryConfirmed,false);
-  assert.equal(request.url,'http://127.0.0.1:8080/message');
+  assert.equal(request.url,'http://127.0.0.1:8080/messages');
   assert.deepEqual(JSON.parse(request.options.body).phoneNumbers,['+5491123456789']);
+  assert.equal(JSON.parse(request.options.body).id,'12345678');
+  assert.equal(JSON.parse(request.options.body).withDeliveryReport,true);
 });
 
 test('network failure returns unknown outcome; caller must not blindly retry SMS',async()=>{
