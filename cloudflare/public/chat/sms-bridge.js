@@ -60,15 +60,17 @@
       if(!config)throw new Error('SMS_BRIDGE_NOT_CONFIGURED');
       if(typeof phoneNumber!=='string'||!/^\+[1-9]\d{7,14}$/.test(phoneNumber))throw new TypeError('SMS_PHONE_E164_REQUIRED');
       const text=encodeEnvelope(message);
+      const gatewayMessageId=message.messageId.replace(/^msg_/,'');
+      if(gatewayMessageId.length>36)throw new TypeError('SMS_GATEWAY_MESSAGE_ID_TOO_LONG');
       const headers=new Headers({'content-type':'application/json','accept':'application/json'});
       headers.set('authorization','Basic '+btoa(unescape(encodeURIComponent(config.username+':'+config.password))));
       let response;
       try{
-        response=await request(config.gatewayUrl+'/message',{method:'POST',mode:'cors',credentials:'omit',headers,body:JSON.stringify({textMessage:{text},phoneNumbers:[phoneNumber]})});
+        response=await request(config.gatewayUrl+'/messages',{method:'POST',mode:'cors',credentials:'omit',headers,body:JSON.stringify({id:gatewayMessageId,textMessage:{text},phoneNumbers:[phoneNumber],withDeliveryReport:true})});
       }catch(error){const ambiguous=new Error('SMS_SEND_UNKNOWN');ambiguous.code='SMS_SEND_UNKNOWN';ambiguous.cause=error;throw ambiguous}
       let data={};try{data=await response.json()}catch{}
       if(!response.ok){const error=new Error('SMS_GATEWAY_HTTP_'+response.status);error.status=response.status;error.code=data.error||error.message;error.ambiguous=isAmbiguous(error);throw error}
-      return {state:'ACCEPTED_BY_GATEWAY',gatewayResponse:data,deliveryConfirmed:false,messageId:message.messageId};
+      return {state:'ACCEPTED_BY_GATEWAY',gatewayResponse:data,deliveryConfirmed:false,messageId:message.messageId,gatewayMessageId:data.id||gatewayMessageId};
     }
     return {readConfig,saveConfig,clearConfig,send};
   }
