@@ -288,6 +288,7 @@ function createIsolationHarness(mode) {
     clearTimeout() {},
   };
   runInNewContext(readFileSync(new URL('../public/chat/outbox.js', import.meta.url), 'utf8'), context);
+  document.getElementById('displayName');
   runInNewContext(appSource, context);
   return { elements, fetchCalls, socketInstances, logs, window, storage, conversation };
 }
