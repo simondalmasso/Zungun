@@ -75,11 +75,12 @@
       if(!Array.isArray(data))throw new Error('SMS_INBOX_RESPONSE_INVALID');
       return data;
     }
-    async function send({phoneNumber,message}){
+    async function send({phoneNumber,message,authKey}){
       const config=readConfig();
       if(!config)throw new Error('SMS_BRIDGE_NOT_CONFIGURED');
       if(typeof phoneNumber!=='string'||!/^\+[1-9]\d{7,14}$/.test(phoneNumber))throw new TypeError('SMS_PHONE_E164_REQUIRED');
-      const text=encodeEnvelope(message);
+      if(!root.ZungunSmsAuth)throw new Error('SMS_AUTH_MODULE_MISSING');
+      const text=await root.ZungunSmsAuth.encodeAuthenticatedEnvelope(message,authKey);
       const gatewayMessageId=message.messageId.replace(/^msg_/,'');
       if(gatewayMessageId.length>36)throw new TypeError('SMS_GATEWAY_MESSAGE_ID_TOO_LONG');
       const headers=authHeaders(config);headers.set('content-type','application/json');
@@ -93,10 +94,11 @@
     }
     return {readConfig,saveConfig,clearConfig,send,listIncoming};
   }
-  function acceptIncoming({incoming,expectedPhoneNumber,conversationId,storage}){
+  async function acceptIncoming({incoming,expectedPhoneNumber,conversationId,storage,authKey}){
     if(!incoming||incoming.type!=='SMS'||typeof incoming.sender!=='string'||typeof incoming.contentPreview!=='string')throw new TypeError('SMS_INCOMING_INVALID');
     if(!/^\+[1-9]\d{7,14}$/.test(expectedPhoneNumber||'')||incoming.sender!==expectedPhoneNumber)throw new Error('SMS_SENDER_NOT_AUTHORIZED');
-    const message=decodeEnvelope(incoming.contentPreview);
+    if(!root.ZungunSmsAuth)throw new Error('SMS_AUTH_MODULE_MISSING');
+    const message=await root.ZungunSmsAuth.decodeAuthenticatedEnvelope(incoming.contentPreview,authKey);
     if(message.conversationId!==conversationId)throw new Error('SMS_CONVERSATION_MISMATCH');
     if(!storage||typeof storage.getItem!=='function'||typeof storage.setItem!=='function')throw new TypeError('SMS_BRIDGE_STORAGE_REQUIRED');
     const key=CONFIG_KEY+':received:'+conversationId;
