@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'cloudflare/public/chat/sms-bridge.js'
+      - 'cloudflare/public/chat/sms-auth.js'
       - 'cloudflare/public/chat/app.js'
       - 'cloudflare/public/chat/transport-guards.js'
       - 'cloudflare/public/chat/index.html'
@@ -17,6 +18,7 @@ on:
       - feature/web-sms-bridge
     paths:
       - 'cloudflare/public/chat/sms-bridge.js'
+      - 'cloudflare/public/chat/sms-auth.js'
       - 'cloudflare/public/chat/app.js'
       - 'cloudflare/public/chat/transport-guards.js'
       - 'cloudflare/public/chat/index.html'
