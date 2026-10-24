@@ -127,6 +127,10 @@ test('a successful Internet API response cannot make satellite-only mode look co
     label: 'Conectado',
     connected: true,
   });
+  assert.deepEqual(connectionStatusForMode('UNKNOWN', 'Conectado', true), {
+    label: 'Transporte no verificado',
+    connected: false,
+  });
 });
 
 test('the selected transport mode must be persisted and verified before changing modes', () => {
