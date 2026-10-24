@@ -9,7 +9,7 @@ const api=async(path,options={})=>{
   if(!response.ok){const error=new Error(data.error||('HTTP_'+response.status));error.status=response.status;error.code=data.error||('HTTP_'+response.status);throw error}
   setConnection('Conectado',true);return data;
 };
-function setConnection(label,connected){$('connectionState').textContent=label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(connected));$('connectionDot').parentElement.classList.toggle('offline',!connected)}
+function setConnection(label,connected){const status=window.ZungunTransportGuards.connectionState(state.transportMode,label,connected);$('connectionState').textContent=status.label;$('connectionDot').parentElement.classList.toggle('connected',status.connected);$('connectionDot').parentElement.classList.toggle('offline',!status.connected)}
 function renderTransportMode(){const satellite=state.transportMode==='SATELLITE_ONLY';const button=$('transportMode');button.textContent=satellite?'Mensajes: satélite exclusivo':'Mensajes: Internet';button.setAttribute('aria-pressed',String(satellite));button.title=satellite?'Los mensajes no se envían por Internet; quedan pendientes porque esta PWA no tiene adaptador satelital verificado. La sesión y la sincronización de pantalla siguen usando Internet.':'Los mensajes se envían por Internet.';button.classList.toggle('satellite-active',satellite);if(satellite)setConnection('Satélite no verificado',false)}
 $('transportMode').addEventListener('click',()=>{state.transportMode=state.transportMode==='SATELLITE_ONLY'?'INTERNET':'SATELLITE_ONLY';try{window.localStorage.setItem('zungun-transport-mode-v1',state.transportMode)}catch{}renderTransportMode();if(state.transportMode==='SATELLITE_ONLY')toast('Mensajes sin fallback Internet; sesión/sincronización siguen online');else{toast('Mensajes por Internet activados');drainOutbox()}});
 function toast(message){const el=$('toast');el.textContent=message;el.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('visible'),2100)}
@@ -137,11 +137,11 @@ function queueMessage(conversation,message,transport='INTERNET'){
   }
 }
 async function drainOutbox(){
-  if(state.drainingOutbox||!state.me||!navigator.onLine||state.transportMode==='SATELLITE_ONLY')return;
+  if(state.drainingOutbox||!state.me||!window.ZungunTransportGuards.allowsInternetSend(state.transportMode,navigator.onLine))return;
   state.drainingOutbox=true;
   try{
     for(const item of state.outbox.pending(state.me.userId,'INTERNET')){
-      if(!navigator.onLine)break;
+      if(!window.ZungunTransportGuards.allowsInternetSend(state.transportMode,navigator.onLine))break;
       state.outbox.mark(item.messageId,state.me.userId,'SENDING');
       if(state.current?.conversationId===item.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:'SENDING'});
       try{
