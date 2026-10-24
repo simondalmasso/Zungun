@@ -419,7 +419,7 @@ async function route(request,env){const url=new URL(request.url);const path=url.
   if(request.method==="GET"&&path==="/chat/")return asset(request,env,"/chat/index.html");
   if(request.method==="GET"&&path==="/")return asset(request,env,"/index.html");
   if(request.method==="GET"&&path==="/control")return asset(request,env,"/control/index.html");
-  if(request.method==="GET"&&path==="/messages")return asset(request,env,"/messages/index.html");
+  if(request.method==="GET"&&(path==="/messages"||path==="/messages/"))return Response.redirect(new URL("/chat/",url).toString(),308);
   if(request.method==="GET"&&path==="/developers")return asset(request,env,"/developers/index.html");
   if(request.method==="GET"&&path==="/ops")return asset(request,env,"/ops/index.html");
   if(request.method==="GET"&&path==="/ops/legacy")return asset(request,env,"/ops/legacy/index.html");
