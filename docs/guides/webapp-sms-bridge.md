@@ -28,4 +28,4 @@ The message ID is preserved to support receiver-side deduplication. The receiver
 3. Test a real SMS to a controlled recipient, then test the receiving-side bridge and deduplication with Internet/Wi-Fi disabled.
 4. Verify send/delivery receipts separately and test ambiguous timeouts before enabling automatic fallback in the production chat.
 
-The current Zungun PWA still relies on the server for session restoration, conversation discovery, and incoming chat synchronization. This module alone does not make those features work offline and is not yet wired into the composer or the inbound receiver.
+The bridge module now includes a tested inbound-envelope validator that requires an explicitly paired sender phone number, exact conversation ID, and local duplicate-ID ledger. It is not yet connected to the PWA inbox/poller, so incoming SMS are not displayed in chat yet. The current Zungun PWA still relies on the server for session restoration, conversation discovery, and incoming chat synchronization. This module alone does not make those features work offline and is not yet wired into the composer or the inbound receiver.
