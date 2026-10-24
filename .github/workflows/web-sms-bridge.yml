@@ -8,6 +8,7 @@ on:
       - 'cloudflare/public/chat/index.html'
       - 'cloudflare/public/chat/sw.js'
       - 'cloudflare/test/chat-transport-guards.test.mjs'
+      - 'cloudflare/test/chat-outbox.test.mjs'
       - 'tests/web-sms-bridge.test.js'
       - 'package.json'
       - '.github/workflows/web-sms-bridge.yml'
@@ -34,3 +35,4 @@ jobs:
           node-version: '22'
       - run: npm run test:sms-bridge
       - run: npm run test:chat-transport
+      - run: npm --prefix cloudflare run check
