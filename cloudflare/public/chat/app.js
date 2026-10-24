@@ -101,9 +101,9 @@ function showEmpty(){closeSocket();state.current=null;$('conversationPane').clas
 async function openConversation(conversation){
   closeSocket();state.current=conversation;state.lastSeq=0;$('chatView').classList.add('in-chat');$('emptyChat').classList.add('hidden');$('conversationPane').classList.remove('hidden');
   $('chatTitle').textContent=conversation.peer.displayName;$('peerCode').textContent=conversation.peer.pairingCode;$('peerAvatar').textContent=initial(conversation.peer.displayName);$('messages').replaceChildren();renderConversations();
-  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)||!navigator.onLine){restoreOutboxMessages();window.ZungunSmsUi?.pollIncoming?.();$('messageInput').focus();return}
+  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)||!navigator.onLine){restoreOutboxMessages();window.ZungunSmsUi?.restoreConversation?.(conversation);window.ZungunSmsUi?.pollIncoming?.();$('messageInput').focus();return}
   const loading=document.createElement('div');loading.className='loading';loading.textContent='Cargando mensajes…';$('messages').append(loading);
-  await poll(true);restoreOutboxMessages();connectSocket();drainOutbox();$('messageInput').focus()
+  await poll(true);restoreOutboxMessages();window.ZungunSmsUi?.restoreConversation?.(conversation);connectSocket();drainOutbox();$('messageInput').focus()
 }
 $('backToChats').addEventListener('click',()=>{$('chatView').classList.remove('in-chat')});
 function messageStatus(message, element){
