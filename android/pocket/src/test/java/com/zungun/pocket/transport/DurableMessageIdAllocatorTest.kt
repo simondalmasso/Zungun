@@ -122,7 +122,7 @@ class DurableMessageIdAllocatorTest {
             executor.shutdownNow()
         }
         assertEquals(600, ids.size)
-        assertEquals(600, DurableMessageIdAllocator(storage, TestAuthenticator()).allocate().messageId)
+        assertEquals(600, DurableMessageIdAllocator(storage, auth).allocate().messageId)
     }
 
     private fun session(seed: Int) = ByteArray(32) { (seed + it).toByte() }
