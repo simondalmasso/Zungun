@@ -334,3 +334,15 @@ test('switching satellite-only off restores the selected conversation and WebSoc
   assert.ok(runtime.fetchCalls.length > fetchCountBeforeSatellite, 'Internet mode should resume API polling');
   assert.equal(runtime.socketInstances.length, 2, 'the selected conversation WebSocket should be recreated');
 });
+
+
+test('raw network entry points stay centralized behind transport guards', () => {
+  assert.equal((appSource.match(/\bfetch\s*\(/g) || []).length, 1, 'fetch must exist only inside the guarded API helper');
+  assert.equal((appSource.match(/\bnew WebSocket\s*\(/g) || []).length, 1, 'WebSocket construction must stay inside connectSocket');
+  const apiStart = appSource.indexOf('const api=async(');
+  const apiEnd = appSource.indexOf('function setConnection(', apiStart);
+  assert.ok(apiStart >= 0 && apiEnd > apiStart, 'central API helper must exist');
+  assert.match(appSource.slice(apiStart, apiEnd), /canUseInternetApi\(state\.transportMode\)\)throw modeViolation\(\)/);
+  assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
+  assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
+});
