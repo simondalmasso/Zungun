@@ -11,6 +11,7 @@ name: Agent Skills Validation
     paths:
       - "skills/**"
       - "tools/quality/validate-agent-skills.py"
+      - "tools/quality/test_validate_agent_skills.py"
       - ".github/workflows/validate-agent-skills.yml"
   workflow_dispatch:
 
