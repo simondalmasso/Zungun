@@ -48,7 +48,8 @@ For public-site SEO and browser checks, see the [public-site guide](docs/guides/
 | / | Product scope and demo entry point | Indexable |
 | /developers | SDK overview and integration boundaries | Indexable |
 | /control | Bounded field-work demo | Noindex |
-| /messages | Honest delivery-state demo | Noindex |
+| /chat/ | Chat and offline outbox demo | Noindex |
+| /messages | Permanent redirect to /chat/ | Redirect |
 | /ops | Persisted execution evidence | Noindex |
 
 The deployed public-site source of truth is cloudflare/public/. Its release uses the existing guarded ORDER-083 deployment procedure and verifies the deployed source identity.
