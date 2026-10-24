@@ -152,6 +152,26 @@
     }
   }
 
+  function createTransportStateMap(initial = {}) {
+    const states = Object.create(null);
+    for (const transport of ['INTERNET', 'SATELLITE_ONLY']) {
+      states[transport] = initial && typeof initial[transport] === 'string'
+        ? initial[transport]
+        : 'UNKNOWN';
+    }
+    return {
+      get(transport) {
+        return Object.prototype.hasOwnProperty.call(states, transport) ? states[transport] : 'UNKNOWN';
+      },
+      set(transport, status) {
+        if (!Object.prototype.hasOwnProperty.call(states, transport) || typeof status !== 'string' || !status) return false;
+        states[transport] = status;
+        return true;
+      },
+      snapshot() { return { ...states }; },
+    };
+  }
+
   root.ZungunOutbox = {
     createStore,
     isRetryableError,
@@ -160,5 +180,6 @@
     connectionStatusForMode,
     readTransportMode,
     persistTransportMode,
+    createTransportStateMap,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
