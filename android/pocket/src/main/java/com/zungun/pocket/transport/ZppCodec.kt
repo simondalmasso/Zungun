@@ -91,7 +91,7 @@ internal class ZppCodec(private val sodium: LazySodium) {
             if (length < 0 || length > MAX_PLAINTEXT_BYTES || length > plaintext.size) {
                 throw ZppAuthenticationException("libsodium returned an invalid plaintext length")
             }
-            return ZppOpenedFrame(header, plaintext.copyOf(length))
+            return ZppOpenedFrame(header, plaintext.copyOf(length.toInt()))
         } finally {
             key.fill(0)
         }
