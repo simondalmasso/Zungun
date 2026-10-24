@@ -74,7 +74,20 @@
     }
     return {readConfig,saveConfig,clearConfig,send};
   }
-  const api={encodeEnvelope,decodeEnvelope,normalizeGatewayUrl,isAmbiguous,createClient,configKey:CONFIG_KEY};
+  function acceptIncoming({incoming,expectedPhoneNumber,conversationId,storage}){
+    if(!incoming||incoming.type!=='SMS'||typeof incoming.sender!=='string'||typeof incoming.contentPreview!=='string')throw new TypeError('SMS_INCOMING_INVALID');
+    if(!/^\\+[1-9]\\d{7,14}$/.test(expectedPhoneNumber||'')||incoming.sender!==expectedPhoneNumber)throw new Error('SMS_SENDER_NOT_AUTHORIZED');
+    const message=decodeEnvelope(incoming.contentPreview);
+    if(message.conversationId!==conversationId)throw new Error('SMS_CONVERSATION_MISMATCH');
+    if(!storage||typeof storage.getItem!=='function'||typeof storage.setItem!=='function')throw new TypeError('SMS_BRIDGE_STORAGE_REQUIRED');
+    const key=CONFIG_KEY+':received:'+conversationId;
+    let ids=[];try{const parsed=JSON.parse(storage.getItem(key)||'[]');if(Array.isArray(parsed))ids=parsed.filter(id=>typeof id==='string')}catch{}
+    if(ids.includes(message.messageId))return {accepted:false,reason:'DUPLICATE',messageId:message.messageId};
+    ids.push(message.messageId);if(ids.length>500)ids=ids.slice(-500);
+    storage.setItem(key,JSON.stringify(ids));
+    return {accepted:true,message};
+  }
+  const api={encodeEnvelope,decodeEnvelope,normalizeGatewayUrl,isAmbiguous,createClient,acceptIncoming,configKey:CONFIG_KEY};
   root.ZungunSmsBridge=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
