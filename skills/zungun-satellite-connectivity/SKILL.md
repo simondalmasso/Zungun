@@ -140,6 +140,7 @@ For each candidate:
 5. Never hardcode provider secrets or commit phone numbers, IMEIs, ICCIDs, or IMSIs.
 6. Write an adapter decision record comparing at least two viable paths when alternatives exist.
 7. Cite official sources and label every unverified assumption.
+8. Create one adapter decision record per candidate using the [adapter decision record template](references/adapter-decision-template.md); do not fill unknown fields with assumptions.
 
 Candidate categories to investigate, not endorsements or existing integrations: direct-to-device satellite on a specific handset/carrier/region; satellite IoT modem/provider with documented API or serial interface; satellite IP terminal exposing an IP bearer; terrestrial SMS bridge as a separate fallback; local mesh/radio as a separate transport family.
 
@@ -187,6 +188,7 @@ For every satellite-integration task, report:
 - Zungun Link architecture: https://github.com/simondalmasso/Zungun/blob/recovery/remote-toolchain-v1/docs/link-architecture.md
 - Zungun delivery assurance assessment: https://github.com/simondalmasso/Zungun/blob/recovery/remote-toolchain-v1/docs/strategy/delivery-assurance-assessment.md
 - MCP Skills extension overview: https://skills.extensions.modelcontextprotocol.io/
+- Agent Skills format specification: https://agentskills.io/specification
 - MCP Skills extension specification: https://skills.extensions.modelcontextprotocol.io/specification/stable/skills
 - MCP server tools/resources/prompts overview: https://modelcontextprotocol.io/specification/draft/server/index
 - Android 15 connectivity and satellite support: https://developer.android.com/about/versions/15/features
