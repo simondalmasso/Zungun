@@ -8,11 +8,6 @@ on:
       - 'cloudflare/public/chat/index.html'
       - 'cloudflare/public/chat/sw.js'
       - 'cloudflare/test/chat-transport-guards.test.mjs'
-      - 'cloudflare/public/chat/app.js'
-      - 'cloudflare/public/chat/transport-guards.js'
-      - 'cloudflare/public/chat/index.html'
-      - 'cloudflare/public/chat/sw.js'
-      - 'cloudflare/test/chat-transport-guards.test.mjs'
       - 'tests/web-sms-bridge.test.js'
       - 'package.json'
       - '.github/workflows/web-sms-bridge.yml'
@@ -21,6 +16,11 @@ on:
       - feature/web-sms-bridge
     paths:
       - 'cloudflare/public/chat/sms-bridge.js'
+      - 'cloudflare/public/chat/app.js'
+      - 'cloudflare/public/chat/transport-guards.js'
+      - 'cloudflare/public/chat/index.html'
+      - 'cloudflare/public/chat/sw.js'
+      - 'cloudflare/test/chat-transport-guards.test.mjs'
       - 'tests/web-sms-bridge.test.js'
       - 'package.json'
       - '.github/workflows/web-sms-bridge.yml'
