@@ -178,14 +178,14 @@ test('satellite-only mode disables every Internet API call, polling and WebSocke
   assert.equal(canUseInternetApi('INTERNET'), true);
   assert.match(appSource, /const modeViolation=.*MODE_VIOLATION.*console\.warn/);
   assert.match(appSource, /if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)throw modeViolation\(\)/);
-  assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
+  assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)(?:\|\|!navigator\.onLine)?\)return/g);
   assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
   assert.match(appSource, /state\.transportMode==='INTERNET'&&state\.current\?\.conversationId===conversationId\)state\.retry=setTimeout\(connectSocket,3000\)/);
   assert.match(appSource, /for\(const request of state\.activeRequests\)request\.abort\(\)/);
   assert.match(appSource, /if\(state\.transportMode==='INTERNET'&&'serviceWorker'in navigator/);
   assert.match(appSource, /unknown\?'Transporte bloqueado'/);
   assert.match(appSource, /if\(state\.transportMode!=='INTERNET'\|\|state\.current\?\.conversationId!==current\.conversationId\)return/);
-  assert.match(appSource, /state\.transportMode!=='INTERNET'\)return;if\(state\.current\)poll\(false\)/);
+  assert.match(appSource, /state\.transportMode!=='INTERNET'(?:\|\|!navigator\.onLine)?\)return;if\(state\.current\)poll\(false\)/);
   assert.match(appSource, /socket\.onmessage=event=>\{if\(state\.transportMode!=='INTERNET'\|\|event\.data==='pong'\)return/);
   assert.match(appSource, /const controller=new AbortController\(\);state\.activeRequests\.add\(controller\);[\s\S]*?const response=await fetch\([\s\S]*?let data=\{\};try\{data=await response\.json\(\)\}catch\{\}[\s\S]*?if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)/);
   assert.match(appSource, /setConnection\('Conectado',true\);return data;[\s\S]*?finally\{state\.activeRequests\.delete\(controller\)\}/);
