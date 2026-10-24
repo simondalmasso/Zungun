@@ -36,4 +36,7 @@ test('Pocket opens on a clean chat entry screen without an explainer', async ({ 
   await expect(screen.getByRole('heading', 'Hablemos.')).toBeVisible();
   await expect(screen.getByRole('textbox', 'Tu nombre')).toBeVisible();
   await expect(screen.getByRole('button', 'Entrar al chat')).toBeVisible();
+  const radioLink = screen.getByRole('link', 'Abrir radio Meshtastic');
+  await expect(radioLink).toBeVisible();
+  await expect(radioLink).toHaveAttribute('href', 'https://client.meshtastic.org/');
 });

@@ -76,3 +76,7 @@ input::placeholder{color:#727a71}input:focus{border-color:var(--accent)}
  .empty-chat h1{font-size:20px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+.radio-link{display:inline-flex;align-items:center;gap:5px;padding:7px 10px;border:1px solid #394239;border-radius:10px;color:var(--text);text-decoration:none;font-size:12px;font-weight:650;white-space:nowrap}
+.radio-link span{color:var(--accent)}
+.radio-link:hover{border-color:var(--accent);background:#202420}
+@media(max-width:420px){.topbar{gap:8px;padding:0 10px}.radio-link{padding:6px 8px}.connection{font-size:11px;gap:5px}}
