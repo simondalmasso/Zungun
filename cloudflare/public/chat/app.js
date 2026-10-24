@@ -47,7 +47,7 @@ async function boot(){
     if(snapshot){state.me=snapshot.me;state.conversations=snapshot.conversations;openApp();setConnection(state.transportMode==='SATELLITE_ONLY'?'Modo SMS local · datos guardados':'Sin conexión · datos locales',false);return}
     if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)){openAuth('No hay una identidad local guardada. Activá Internet una vez para cargar tu identidad y conversaciones antes de usar SMS.');setConnection('SMS sin datos locales',false);return}
   }
-  try{const data=await api('/api/v1/me');state.me=data.identity;saveLocalSnapshot();openApp()}
+  try{const data=await api('/api/v1/me');state.me=data.identity;const cached=readLocalSnapshot();if(cached)state.conversations=cached.conversations;saveLocalSnapshot();openApp()}
   catch(error){
     if(error.status===401){openAuth();setConnection('Sesión no válida',false)}
     else{const snapshot=readLocalSnapshot();if(snapshot){state.me=snapshot.me;state.conversations=snapshot.conversations;openApp();setConnection('Sin conexión · datos locales',false)}else{openAuth('No se pudo conectar. Revisá tu conexión e intentá de nuevo.');setConnection('Sin conexión',false)}}
@@ -73,7 +73,7 @@ function renderConversations(){
   }
 }
 async function loadConversations(){
-  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode))return;
+  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)||!navigator.onLine)return;
   try{const data=await api('/api/v1/conversations');if(state.transportMode!=='INTERNET')return;state.conversations=data.items||[];saveLocalSnapshot();renderConversations();
     if(state.current){const updated=state.conversations.find(c=>c.conversationId===state.current.conversationId);if(!updated){state.current=null;showEmpty()}else state.current=updated}
   }catch(error){if(error.status===401)openAuth('Tu sesión terminó. Entrá de nuevo.');else setConnection('Sin conexión',false)}
@@ -193,7 +193,7 @@ async function drainOutbox(){
   }finally{state.drainingOutbox=false}
 }
 async function poll(initial=false){
-  const current=state.current;if(!current||!window.ZungunOutbox.canUseInternetApi(state.transportMode))return;
+  const current=state.current;if(!current||!window.ZungunOutbox.canUseInternetApi(state.transportMode)||!navigator.onLine)return;
   try{const after=initial?0:Math.max(0,state.lastSeq-5);const data=await api('/api/v1/conversations/'+current.conversationId+'/messages?after='+after);
     if(state.transportMode!=='INTERNET'||state.current?.conversationId!==current.conversationId)return;
     if(initial)$('messages').replaceChildren();
@@ -242,7 +242,7 @@ $('sendForm').addEventListener('submit',async event=>{
 });
 window.addEventListener('online',()=>{if(state.transportMode!=='INTERNET')return;setConnection('Conectando',false);drainOutbox();if(state.current){poll();connectSocket()}else loadConversations()});
 window.addEventListener('offline',()=>setConnection('Sin conexión',false));
-state.pollTimer=setInterval(()=>{if(state.transportMode!=='INTERNET')return;if(state.current)poll(false);else loadConversations();drainOutbox()},4000);
+state.pollTimer=setInterval(()=>{if(state.transportMode!=='INTERNET'||!navigator.onLine)return;if(state.current)poll(false);else loadConversations();drainOutbox()},4000);
 if(state.transportMode==='INTERNET'&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 if(location.protocol==='file:')setConnection('Abrí desde el enlace',false);
 window.ZungunChat={getContext:()=>({me:state.me,current:state.current}),renderSmsMessage:message=>renderMessage(message),toast};
