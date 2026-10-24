@@ -55,6 +55,26 @@
       return {gatewayUrl,username};
     }
     function clearConfig(){store.removeItem(CONFIG_KEY)}
+    function authHeaders(config){
+      const headers=new Headers({'accept':'application/json'});
+      headers.set('authorization','Basic '+btoa(unescape(encodeURIComponent(config.username+':'+config.password))));
+      return headers;
+    }
+    async function listIncoming({limit=50,offset=0,from}={}){
+      const config=readConfig();
+      if(!config)throw new Error('SMS_BRIDGE_NOT_CONFIGURED');
+      if(!Number.isInteger(limit)||limit<1||limit>500||!Number.isInteger(offset)||offset<0)throw new TypeError('SMS_INBOX_PAGINATION_INVALID');
+      const query=new URLSearchParams({type:'SMS',limit:String(limit),offset:String(offset)});
+      if(from){const date=new Date(from);if(!Number.isFinite(date.getTime()))throw new TypeError('SMS_INBOX_FROM_INVALID');query.set('from',date.toISOString())}
+      const headers=authHeaders(config);
+      let response;
+      try{response=await request(config.gatewayUrl+'/inbox?'+query.toString(),{method:'GET',mode:'cors',credentials:'omit',headers})}
+      catch(error){const unknown=new Error('SMS_INBOX_UNAVAILABLE');unknown.code='SMS_INBOX_UNAVAILABLE';unknown.cause=error;throw unknown}
+      let data;try{data=await response.json()}catch{data=null}
+      if(!response.ok){const error=new Error('SMS_GATEWAY_HTTP_'+response.status);error.status=response.status;error.code=data?.error||error.message;throw error}
+      if(!Array.isArray(data))throw new Error('SMS_INBOX_RESPONSE_INVALID');
+      return data;
+    }
     async function send({phoneNumber,message}){
       const config=readConfig();
       if(!config)throw new Error('SMS_BRIDGE_NOT_CONFIGURED');
@@ -62,8 +82,7 @@
       const text=encodeEnvelope(message);
       const gatewayMessageId=message.messageId.replace(/^msg_/,'');
       if(gatewayMessageId.length>36)throw new TypeError('SMS_GATEWAY_MESSAGE_ID_TOO_LONG');
-      const headers=new Headers({'content-type':'application/json','accept':'application/json'});
-      headers.set('authorization','Basic '+btoa(unescape(encodeURIComponent(config.username+':'+config.password))));
+      const headers=authHeaders(config);headers.set('content-type','application/json');
       let response;
       try{
         response=await request(config.gatewayUrl+'/messages',{method:'POST',mode:'cors',credentials:'omit',headers,body:JSON.stringify({id:gatewayMessageId,textMessage:{text},phoneNumbers:[phoneNumber],withDeliveryReport:true})});
