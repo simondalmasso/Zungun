@@ -14,9 +14,9 @@ from yaml.nodes import MappingNode
 
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS_ROOT = ROOT / "skills"
-FRONTMATTER_RE = re.compile(r"\\A---[ \\t]*\\r?\\n(.*?)\\r?\\n---[ \\t]*(?:\\r?\\n|\\Z)", re.DOTALL)
+FRONTMATTER_RE = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL)
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-LINK_RE = re.compile(r"(?<!!)\\[[^\\]]*\\]\\(([^)]+)\\)")
+LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
