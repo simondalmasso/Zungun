@@ -14,7 +14,7 @@ Required state:
 - A crash before the head commit leaves the previous committed state authoritative; the candidate ID must not have been returned. A crash after head commit may consume an ID without sending it; gaps are safe.
 - Retransmission reuses the exact persisted ciphertext bytes. It must not invoke encryption again for the same message ID.
 
-Implementation note: do not treat `SharedPreferences.apply()` or an ordinary preference readback as a durable commit protocol. The chosen Android persistence primitive must document and test write ordering, force-to-storage behavior, atomic replacement, and failure handling. If those guarantees cannot be established on a target device/filesystem, fail closed.
+Implementation note: do not treat `SharedPreferences.apply()` or an ordinary preference readback as a durable commit protocol. The current branch now contains a standalone `DurableMessageIdAllocator` primitive using alternating `AtomicFile` slots, an Android Keystore HMAC-authenticated head, file sync, and parent-directory sync. JVM tests cover crash/failure ordering and corruption. This primitive is not yet integrated with encryption or send flow, and it still requires current-head CI and device verification. If the platform cannot provide the expected durability guarantees, fail closed.
 
 Threat boundary: restoring an older, internally valid app-data snapshot together with all local integrity material is a rollback attack that local storage alone may not detect. If protection against privileged full-snapshot rollback is required, add a trustworthy monotonic anchor or require authenticated re-pairing; do not claim absolute rollback resistance.
 
@@ -45,9 +45,13 @@ Before implementing `ZppCodec`, specify and implement a P2P-specific authenticat
 
 A pairing code that merely identifies a user or routes a request through the cloud is not, by itself, cryptographic proof of peer identity. Do not ship an unauthenticated secret exchange.
 
-## 4. Codec implementation gates
+## 4. Wire-format blocker: nonce length mismatch
 
-Only after sections 1–3 are reviewed and testable:
+The proposed expression `EPOCH(2 bytes) || MSGID(2 bytes) || DIR(1 byte) || 17 zero bytes` totals **22 bytes**, not 24. XChaCha20-Poly1305 requires a 24-byte nonce. Before implementing the codec, resolve this in the normative spec: either use 19 trailing zero bytes, or define the missing 2-byte field with an explicit purpose and canonical byte order. Do not silently pad/truncate at runtime. Freeze exact 24-byte vectors for both directions, epoch boundaries, and message-ID boundaries. If any implementation has already emitted packets, changing the nonce layout requires a versioned protocol change.
+
+## 5. Codec implementation gates
+
+Only after sections 1–4 are reviewed and testable:
 - implement the exact selected AEAD using a maintained libsodium binding (XChaCha20-Poly1305; no substitution with JCA ChaCha20-Poly1305);
 - derive directional keys with the final, versioned KDF context and epoch encoding;
 - define nonce bytes, message-ID exhaustion, ciphertext persistence, framing, and maximum plaintext/ciphertext sizes in one normative specification;
@@ -56,4 +60,4 @@ Only after sections 1–3 are reviewed and testable:
 
 ## Current verified boundary
 
-The Wi-Fi Direct PR currently provides a network-bound UDP transport and policy tests. It does not yet provide authenticated framing, key exchange, nonce allocation, replay protection, ACK/SACK, or a user-facing offline send flow. CI success does not replace a two-device test.
+The Wi-Fi Direct PR provides a network-bound UDP transport and policy tests. A standalone durable ID allocator has been added but is not integrated with cryptographic message creation. There is still no ZPP/1 codec, authenticated key exchange, authenticated framing, replay protection, ACK/SACK, or user-facing offline send flow. CI success does not replace a two-device test.
