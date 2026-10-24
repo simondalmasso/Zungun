@@ -59,15 +59,17 @@ Direction values are fixed: `0x00 = A_TO_B`, `0x01 = B_TO_A`. A/B are stable pee
 
 A pure Kotlin formatter and fixed-vector tests now express this layout. They do not prove the key schedule, peer authentication, nonce uniqueness across storage rollback, or the whole wire protocol. If any external build has already emitted packets using the 17-zero variant, it must use a separately versioned protocol; this repository branch contains no sender for that variant.
 
-## 5. Codec implementation gates
+## 5. Codec and framing status
 
-Only after sections 1–3 are reviewed and testable:
-- implement the exact selected AEAD using a maintained libsodium binding (XChaCha20-Poly1305; no substitution with JCA ChaCha20-Poly1305);
-- derive directional keys with the final, versioned KDF context and epoch encoding;
-- define nonce bytes, message-ID exhaustion, ciphertext persistence, framing, and maximum plaintext/ciphertext sizes in one normative specification;
-- add deterministic interoperability vectors plus tampering, wrong-peer, wrong-epoch, replay, corruption, crash-injection, concurrent-allocation, and retransmission-byte-identity tests;
-- test on real Android devices before claiming the end-to-end transport works.
+The current branch adds a libsodium-backed codec with:
+- an 8-byte header `"ZP" || version(1) || direction(1) || U16BE(epoch) || U16BE(message_id)`;
+- the 24-byte nonce above and directional `crypto_kdf_derive_from_key` contexts `ZPP1K_A_` and `ZPP1K_B_`, both exactly 8 bytes;
+- XChaCha20-Poly1305-IETF, with the complete header authenticated as additional data;
+- a maximum plaintext of 1208 bytes, so header + ciphertext + 16-byte tag fits the 1232-byte UDP budget;
+- a per-peer ciphertext journal that persists an identity reservation before encryption and returns retransmissions from the exact stored frame bytes.
+
+The codec accepts an era secret only as an input; it does not establish or authenticate that secret. The application must provide the verified session's expected epoch and incoming direction to the decoder. The allocator, codec, and ciphertext journal still require current-head CI and two-device validation before relying on them for user messages.
 
 ## Current verified boundary
 
-The Wi-Fi Direct PR provides a network-bound UDP transport and policy tests. A standalone durable ID allocator has been added but is not integrated with cryptographic message creation. There is still no ZPP/1 codec, authenticated key exchange, authenticated framing, replay protection, ACK/SACK, or user-facing offline send flow. CI success does not replace a two-device test.
+The Wi-Fi Direct PR provides a network-bound UDP transport, policy tests, a standalone durable message-ID allocator, nonce encoding, and the initial ZPP/1 AEAD codec. The offline authenticated key exchange, persistent receiver-side replay/dedup ledger, ACK/SACK reliability protocol, and user-facing offline send flow remain open. Protection against full-snapshot rollback by an attacker able to restore valid app files and retain the Android Keystore key also remains outside the local journal's guarantee. CI success does not replace a two-device test.

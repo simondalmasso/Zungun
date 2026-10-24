@@ -15,5 +15,7 @@ android {
 }
 
 dependencies {
+    implementation("com.goterl:lazysodium-android:5.2.0")
+    testImplementation("com.goterl:lazysodium-java:5.2.0")
     testImplementation("junit:junit:4.13.2")
 }
