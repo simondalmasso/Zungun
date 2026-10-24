@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false,drainingOutbox:false,transportMode:window.localStorage.getItem('zungun-transport-mode-v1')==='SATELLITE_ONLY'?'SATELLITE_ONLY':'INTERNET',outbox:window.ZungunOutbox.createStore(window.localStorage)};
+const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false,drainingOutbox:false,transportMode:window.ZungunOutbox.readTransportMode(window),outbox:window.ZungunOutbox.createStore(window.localStorage)};
 const api=async(path,options={})=>{
   const headers=new Headers(options.headers||{});headers.set('accept','application/json');
   if(options.body!==undefined)headers.set('content-type','application/json');
@@ -9,9 +9,9 @@ const api=async(path,options={})=>{
   if(!response.ok){const error=new Error(data.error||('HTTP_'+response.status));error.status=response.status;error.code=data.error||('HTTP_'+response.status);throw error}
   setConnection('Conectado',true);return data;
 };
-function setConnection(label,connected){$('connectionState').textContent=label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(connected));$('connectionDot').parentElement.classList.toggle('offline',!connected)}
+function setConnection(label,connected){const status=window.ZungunOutbox.connectionStatusForMode(state.transportMode,label,connected);$('connectionState').textContent=status.label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(status.connected));$('connectionDot').parentElement.classList.toggle('offline',!status.connected)}
 function renderTransportMode(){const satellite=state.transportMode==='SATELLITE_ONLY';const button=$('transportMode');button.textContent=satellite?'Mensajes: satélite exclusivo':'Mensajes: Internet';button.setAttribute('aria-pressed',String(satellite));button.title=satellite?'Los mensajes no se envían por Internet; quedan pendientes porque esta PWA no tiene adaptador satelital verificado. La sesión y la sincronización de pantalla siguen usando Internet.':'Los mensajes se envían por Internet.';button.classList.toggle('satellite-active',satellite);if(satellite)setConnection('Satélite no verificado',false)}
-$('transportMode').addEventListener('click',()=>{state.transportMode=state.transportMode==='SATELLITE_ONLY'?'INTERNET':'SATELLITE_ONLY';try{window.localStorage.setItem('zungun-transport-mode-v1',state.transportMode)}catch{}renderTransportMode();if(state.transportMode==='SATELLITE_ONLY')toast('Mensajes sin fallback Internet; sesión/sincronización siguen online');else{toast('Mensajes por Internet activados');drainOutbox()}});
+$('transportMode').addEventListener('click',()=>{const next=state.transportMode==='SATELLITE_ONLY'?'INTERNET':'SATELLITE_ONLY';if(!window.ZungunOutbox.persistTransportMode(window,next)){toast('No se pudo guardar el modo; no se cambió');return}state.transportMode=next;renderTransportMode();if(state.transportMode==='SATELLITE_ONLY')toast('Mensajes sin fallback Internet; sesión/sincronización siguen online');else{toast('Mensajes por Internet activados');drainOutbox()}});
 function toast(message){const el=$('toast');el.textContent=message;el.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('visible'),2100)}
 function showError(id,error){const map={
   UNAUTHORIZED:'Tu sesión terminó. Entrá de nuevo.',
@@ -141,10 +141,11 @@ async function drainOutbox(){
   state.drainingOutbox=true;
   try{
     for(const item of state.outbox.pending(state.me.userId,'INTERNET')){
-      if(!navigator.onLine)break;
+      if(!window.ZungunOutbox.canSendInternet(state.transportMode,navigator.onLine,item.transport))break;
       state.outbox.mark(item.messageId,state.me.userId,'SENDING');
       if(state.current?.conversationId===item.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:'SENDING'});
       try{
+        if(!window.ZungunOutbox.canSendInternet(state.transportMode,navigator.onLine,item.transport)){state.outbox.mark(item.messageId,state.me.userId,'QUEUED');break}
         const data=await api('/api/v1/conversations/'+item.conversationId+'/messages',{method:'POST',body:JSON.stringify({messageId:item.messageId,body:item.body,clientCreatedAtMs:item.clientCreatedAtMs})});
         state.outbox.remove(item.messageId,state.me.userId);
         if(state.current?.conversationId===item.conversationId)renderMessage(data.message);
