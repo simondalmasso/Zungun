@@ -2,14 +2,14 @@
 
 ## Source of truth
 
-The deployed Cloudflare Worker serves public assets from cloudflare/public/. The Worker explicitly maps /, /control, /messages, /developers, and /ops to their static HTML entry points; other static assets such as /robots.txt, /sitemap.xml, and /favicon.svg use the asset fallback.
+The deployed Cloudflare Worker serves public assets from cloudflare/public/. The Worker explicitly maps /, /chat, /control, /developers, and /ops; legacy /messages redirects to /chat/ to their static HTML entry points; other static assets such as /robots.txt, /sitemap.xml, and /favicon.svg use the asset fallback.
 
 apps/public-site/index.html is a local static preview, not the production asset source. The deployed HTML source of truth is cloudflare/public/.
 
 ## Indexing contract
 
 - / and /developers are public, indexable landing pages.
-- /control, /messages, and /ops are interactive demo surfaces and carry noindex,nofollow,noarchive.
+- /chat, /control, and /ops are interactive demo surfaces and carry noindex,nofollow,noarchive. The legacy /messages path redirects permanently to /chat/.
 - robots.txt blocks API and diagnostic endpoints, not the noindex pages, so crawlers can read page-level directives.
 - sitemap.xml lists only the homepage and developer guide.
 - Every HTML route has a unique title, concise description, canonical URL, Open Graph metadata, a Twitter card, and the shared SVG brand assets.
