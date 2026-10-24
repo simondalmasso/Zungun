@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createRequire } from 'node:module';
-const require=createRequire(import.meta.url);
-const bridge=require('../cloudflare/public/chat/sms-bridge.js');
+await import('../cloudflare/public/chat/sms-bridge.js');
+const bridge=globalThis.ZungunSmsBridge;
 
 test('SMS envelope round-trips Unicode and preserves the idempotency key',()=>{
   const input={conversationId:'conv_123',messageId:'msg_12345678-abcd',clientCreatedAtMs:1792843200000,body:'Hola, ¿llegó? ñ 🛰️'};
