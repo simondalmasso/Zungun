@@ -124,6 +124,10 @@ test('a successful Internet API response cannot make satellite-only mode look co
     label: 'Satélite no verificado · chat sin conexión',
     connected: false,
   });
+  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Satélite no verificado · sin tráfico API', false), {
+    label: 'Satélite no verificado · sin tráfico API',
+    connected: false,
+  });
   assert.deepEqual(connectionStatusForMode('INTERNET', 'Conectado', true), {
     label: 'Conectado',
     connected: true,
@@ -178,5 +182,7 @@ test('satellite-only mode disables every Internet API call, polling and WebSocke
   assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
   assert.match(appSource, /state\.transportMode==='INTERNET'&&state\.current\?\.conversationId===conversationId\)state\.retry=setTimeout\(connectSocket,3000\)/);
   assert.match(appSource, /for\(const request of state\.activeRequests\)request\.abort\(\)/);
-  assert.match(appSource, /state\.transportMode!=='INTERNET'\)return; if\(state\.current\)poll\(false\)/);
+  assert.match(appSource, /if\(state\.transportMode==='INTERNET'&&'serviceWorker'in navigator/);
+  assert.match(appSource, /if\(state\.transportMode!=='INTERNET'\|\|state\.current\?\.conversationId!==current\.conversationId\)return/);
+  assert.match(appSource, /state\.transportMode!=='INTERNET'\)return;if\(state\.current\)poll\(false\)/);
 });
