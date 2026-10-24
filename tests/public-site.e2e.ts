@@ -39,4 +39,7 @@ test('Pocket opens on a clean chat entry screen without an explainer', async ({ 
   const radioLink = screen.getByRole('link', 'Abrir radio Meshtastic');
   await expect(radioLink).toBeVisible();
   await expect(radioLink).toHaveAttribute('href', 'https://client.meshtastic.org/');
+  const signalsLink = screen.getByRole('link', 'Abrir señales satelitales públicas de SatNOGS');
+  await expect(signalsLink).toBeVisible();
+  await expect(signalsLink).toHaveAttribute('href', 'https://network.satnogs.org/observations/');
 });
