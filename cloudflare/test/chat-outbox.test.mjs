@@ -64,3 +64,13 @@ test('network, rate-limit, timeout and server errors are retryable; other client
   assert.equal(isRetryableError({ status: 403 }), false);
   assert.equal(isRetryableError({ status: 400 }), false);
 });
+test('scheduled retries wait for their backoff window', () => {
+  const store = createStore(memoryStorage());
+  store.enqueue(record());
+  store.mark('msg_stable_001', 'usr_one', 'SENDING');
+  store.mark('msg_stable_001', 'usr_one', 'QUEUED', 'NETWORK_ERROR', Date.now() + 60_000);
+  assert.equal(store.list('usr_one').length, 1);
+  assert.equal(store.pending('usr_one').length, 0);
+  store.mark('msg_stable_001', 'usr_one', 'QUEUED');
+  assert.equal(store.pending('usr_one').length, 1);
+});
