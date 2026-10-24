@@ -156,8 +156,10 @@ class WifiDirectTransport(
             closeSocketLocked()
             networkCallbacks.forEach { runCatching { connectivity.unregisterNetworkCallback(it) } }
             networkCallbacks.clear()
-            if (ownsGroup && wifiP2p != null && channel != null) runCatching {
-                wifiP2p.removeGroup(channel, object : WifiP2pManager.ActionListener {
+            val manager = wifiP2p
+            val activeChannel = channel
+            if (ownsGroup && manager != null && activeChannel != null) runCatching {
+                manager.removeGroup(activeChannel, object : WifiP2pManager.ActionListener {
                     override fun onSuccess() = Unit
                     override fun onFailure(reason: Int) = Unit
                 })
