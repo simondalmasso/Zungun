@@ -175,7 +175,7 @@ test('satellite-only mode disables every Internet API call, polling and WebSocke
   assert.equal(canUseInternetApi('SATELLITE_ONLY'), false);
   assert.equal(canUseInternetApi('UNKNOWN'), false);
   assert.equal(canUseInternetApi('INTERNET'), true);
-  assert.match(appSource, /if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)[\s\S]{0,150}TRANSPORT_DISABLED/);
+  assert.match(appSource, /if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)[\s\S]{0,150}MODE_VIOLATION/);
   assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
   assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
   assert.match(appSource, /state\.transportMode==='INTERNET'&&state\.current\?\.conversationId===conversationId\)state\.retry=setTimeout\(connectSocket,3000\)/);
@@ -187,4 +187,149 @@ test('satellite-only mode disables every Internet API call, polling and WebSocke
   assert.match(appSource, /socket\.onmessage=event=>\{if\(state\.transportMode!=='INTERNET'\|\|event\.data==='pong'\)return/);
   assert.match(appSource, /const controller=new AbortController\(\);state\.activeRequests\.add\(controller\);[\s\S]*?const response=await fetch\([\s\S]*?let data=\{\};try\{data=await response\.json\(\)\}catch\{\}[\s\S]*?if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)/);
   assert.match(appSource, /setConnection\('Conectado',true\);return data;[\s\S]*?finally\{state\.activeRequests\.delete\(controller\)\}/);
+});
+
+
+import { runInNewContext } from 'node:vm';
+
+test('transport state map isolates Internet state from satellite state', () => {
+  const states = globalThis.ZungunOutbox.createTransportStateMap({
+    INTERNET: 'CONNECTED',
+    SATELLITE_ONLY: 'UNVERIFIED',
+  });
+  assert.equal(states.set('INTERNET', 'DISCONNECTED'), true);
+  assert.equal(states.get('SATELLITE_ONLY'), 'UNVERIFIED');
+  assert.equal(states.set('SATELLITE_ONLY', 'QUEUED_LOCAL'), true);
+  assert.equal(states.get('INTERNET'), 'DISCONNECTED');
+  assert.equal(states.set('UNKNOWN_TRANSPORT', 'CONNECTED'), false);
+});
+
+function fakeClassList() {
+  const values = new Set();
+  return {
+    add(...names) { names.forEach(name => values.add(name)); },
+    remove(...names) { names.forEach(name => values.delete(name)); },
+    contains(name) { return values.has(name); },
+    toggle(name, force) {
+      if (force === true || (force === undefined && !values.has(name))) values.add(name);
+      else values.delete(name);
+      return values.has(name);
+    },
+  };
+}
+
+function fakeElement() {
+  const handlers = new Map();
+  return {
+    handlers, children: [], dataset: {}, style: {}, value: '', textContent: '', disabled: false,
+    classList: fakeClassList(),
+    parentElement: { classList: fakeClassList() },
+    addEventListener(name, handler) { handlers.set(name, handler); },
+    setAttribute() {},
+    append(...children) { this.children.push(...children); },
+    appendChild(child) { this.children.push(child); },
+    replaceChildren(...children) { this.children = [...children]; },
+    querySelector() { return fakeElement(); },
+    focus() {},
+    scrollIntoView() {},
+  };
+}
+
+function createIsolationHarness(mode) {
+  const elements = new Map();
+  const fetchCalls = [];
+  const socketInstances = [];
+  const logs = [];
+  const conversation = {
+    conversationId: 'conv_runtime_001',
+    peer: { displayName: 'Peer', pairingCode: 'BBBBBB' },
+  };
+  const storage = memoryStorage();
+  storage.setItem('zungun-transport-mode-v1', mode);
+  const document = {
+    getElementById(id) {
+      if (!elements.has(id)) elements.set(id, fakeElement());
+      return elements.get(id);
+    },
+    createElement() { return fakeElement(); },
+  };
+  const window = { localStorage: storage, addEventListener() {} };
+  class FakeWebSocket {
+    constructor(url) { this.url = url; socketInstances.push(this); }
+    close() { this.closed = true; }
+  }
+  async function fetchMock(path) {
+    fetchCalls.push(String(path));
+    let payload = {};
+    if (path === '/api/v1/me') {
+      payload = { identity: { userId: 'usr_runtime_001', displayName: 'Me', pairingCode: 'AAAAAA' } };
+    } else if (path === '/api/v1/conversations') {
+      payload = { items: [conversation] };
+    } else if (String(path).includes('/messages?after=')) {
+      payload = { items: [] };
+    } else if (String(path).includes('/messages')) {
+      payload = { items: [] };
+    }
+    return { ok: true, status: 200, json: async () => payload };
+  }
+  const context = {
+    window, document,
+    navigator: { onLine: true },
+    location: { protocol: 'https:', host: 'test.invalid' },
+    fetch: fetchMock,
+    WebSocket: FakeWebSocket,
+    Headers,
+    AbortController,
+    console: { warn: (...parts) => logs.push(parts.join(' ')), log() {}, error() {} },
+    setInterval: () => 1,
+    clearInterval() {},
+    setTimeout: () => 1,
+    clearTimeout() {},
+  };
+  runInNewContext(readFileSync(new URL('../public/chat/outbox.js', import.meta.url), 'utf8'), context);
+  runInNewContext(appSource, context);
+  return { elements, fetchCalls, socketInstances, logs, window, storage, conversation };
+}
+
+async function flushAsyncWork() {
+  for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve));
+}
+
+test('satellite-only runtime startup opens zero fetches and zero WebSockets', () => {
+  const runtime = createIsolationHarness('SATELLITE_ONLY');
+  assert.equal(runtime.fetchCalls.length, 0);
+  assert.equal(runtime.socketInstances.length, 0);
+});
+
+test('unexpected API entry in satellite-only mode logs MODE_VIOLATION and does not fetch', async () => {
+  const runtime = createIsolationHarness('SATELLITE_ONLY');
+  const before = runtime.fetchCalls.length;
+  runtime.elements.get('displayName').value = 'test';
+  await runtime.elements.get('accountForm').handlers.get('submit')({ preventDefault() {} });
+  assert.equal(runtime.fetchCalls.length, before);
+  assert.ok(runtime.logs.includes('MODE_VIOLATION'));
+});
+
+test('switching satellite-only off restores the selected conversation and WebSocket', async () => {
+  const runtime = createIsolationHarness('INTERNET');
+  await flushAsyncWork();
+  const conversationButton = runtime.elements.get('conversationList').children.find(
+    child => child.handlers && child.handlers.has('click')
+  );
+  assert.ok(conversationButton, 'the mock Internet response should render a conversation');
+  conversationButton.handlers.get('click')();
+  await flushAsyncWork();
+  assert.equal(runtime.socketInstances.length, 1, 'opening the conversation should create one WebSocket');
+
+  const toggle = runtime.elements.get('transportMode').handlers.get('click');
+  const fetchCountBeforeSatellite = runtime.fetchCalls.length;
+  toggle();
+  await flushAsyncWork();
+  assert.equal(runtime.fetchCalls.length, fetchCountBeforeSatellite, 'satellite-only mode must not start new fetches');
+  assert.equal(runtime.socketInstances.length, 1, 'satellite-only mode must not create another WebSocket');
+
+  toggle();
+  await flushAsyncWork();
+  assert.ok(runtime.fetchCalls.length > fetchCountBeforeSatellite, 'Internet mode should resume API polling');
+  assert.equal(runtime.socketInstances.length, 2, 'the selected conversation WebSocket should be recreated');
 });
