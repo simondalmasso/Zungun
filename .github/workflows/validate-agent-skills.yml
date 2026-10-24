@@ -1,0 +1,52 @@
+name: Agent Skills Validation
+
+"on":
+  pull_request:
+    paths:
+      - "skills/**"
+      - "tools/quality/validate-agent-skills.py"
+      - "tools/quality/test_validate_agent_skills.py"
+      - ".github/workflows/validate-agent-skills.yml"
+  push:
+    paths:
+      - "skills/**"
+      - "tools/quality/validate-agent-skills.py"
+      - "tools/quality/test_validate_agent_skills.py"
+      - ".github/workflows/validate-agent-skills.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-agent-skills-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate skill metadata and references
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Install pinned YAML parser
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv-skill-validation
+          . .venv-skill-validation/bin/activate
+          python -m pip install --disable-pip-version-check --no-input "PyYAML==6.0.3"
+      - name: Validate Agent Skills
+        shell: bash
+        run: |
+          set -euo pipefail
+          . .venv-skill-validation/bin/activate
+          python tools/quality/validate-agent-skills.py
+      - name: Test validation guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          . .venv-skill-validation/bin/activate
+          python -m unittest discover -s tools/quality -p "test_validate_agent_skills.py"
