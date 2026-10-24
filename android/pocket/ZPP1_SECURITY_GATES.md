@@ -22,6 +22,8 @@ Threat boundary: restoring an older, internally valid app-data snapshot together
 
 The 16-bit epoch cannot wrap. Before advancing beyond `0xFFFF`, the session must stop allocating IDs and require a fresh authenticated pairing/session root. There is no modulo arithmetic and no silent reset to epoch zero.
 
+The current allocator implementation also rejects epoch jumps: same-peer rekey must advance by exactly one; 16-bit exhaustion requires a new peer identity namespace rather than wrap/reset.
+
 For every received message:
 - Reject an epoch below the highest authenticated epoch accepted for that peer/session.
 - Accept a higher epoch only after the authenticated key-establishment protocol completes and key confirmation succeeds.
