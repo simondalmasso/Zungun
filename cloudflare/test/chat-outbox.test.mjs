@@ -7,6 +7,7 @@ const {
   createStore,
   isRetryableError,
   canSendInternet,
+  canUseInternetApi,
   connectionStatusForMode,
   readTransportMode,
   persistTransportMode,
@@ -164,4 +165,18 @@ test('outbox draining re-checks exclusive mode before starting every HTTP send',
 test('connection updates and mode toggles are routed through the guarded helpers', () => {
   assert.match(appSource, /connectionStatusForMode\(state\.transportMode,label,connected\)/);
   assert.match(appSource, /if\(!window\.ZungunOutbox\.persistTransportMode\(window,next\)\)/);
+});
+
+
+test('satellite-only mode disables every Internet API call, polling and WebSocket reconnect', () => {
+  assert.equal(typeof canUseInternetApi, 'function');
+  assert.equal(canUseInternetApi('SATELLITE_ONLY'), false);
+  assert.equal(canUseInternetApi('UNKNOWN'), false);
+  assert.equal(canUseInternetApi('INTERNET'), true);
+  assert.match(appSource, /if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)[\s\S]{0,150}TRANSPORT_DISABLED/);
+  assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
+  assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
+  assert.match(appSource, /state\.transportMode==='INTERNET'&&state\.current\?\.conversationId===conversationId\)state\.retry=setTimeout\(connectSocket,3000\)/);
+  assert.match(appSource, /for\(const request of state\.activeRequests\)request\.abort\(\)/);
+  assert.match(appSource, /state\.transportMode!=='INTERNET'\)return; if\(state\.current\)poll\(false\)/);
 });
