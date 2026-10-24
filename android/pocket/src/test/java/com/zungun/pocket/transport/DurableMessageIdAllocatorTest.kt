@@ -6,8 +6,6 @@ import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -22,9 +20,8 @@ class DurableMessageIdAllocatorTest {
         assertEquals(1, allocator.allocate().messageId)
         val afterRestart = DurableMessageIdAllocator(storage, auth)
         assertEquals(0, afterRestart.allocate().epoch)
-        assertEquals(2, DurableMessageIdAllocator(storage, auth).also {
-            // The previous allocation committed nextMessageId=3.
-        }.let { it.allocate().messageId })
+        assertEquals(2, afterRestart.allocate().messageId)
+        assertEquals(3, DurableMessageIdAllocator(storage, auth).allocate().messageId)
     }
 
     @Test fun failedHeadCommitDoesNotReturnOrConsumeAnId() {
