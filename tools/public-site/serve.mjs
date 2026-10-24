@@ -8,7 +8,6 @@ const routeFiles = new Map([
   ['/', 'index.html'],
   ['/developers', 'developers/index.html'],
   ['/control', 'control/index.html'],
-  ['/messages', 'messages/index.html'],
   ['/ops', 'ops/index.html'],
   ['/ops/legacy', 'ops/legacy/index.html'],
   ['/chat/', 'chat/index.html'],
@@ -32,7 +31,7 @@ const server = createServer(async (request, response) => {
   }
 
   const url = new URL(request.url || '/', 'http://127.0.0.1');
-  if (url.pathname === '/chat') {
+  if (url.pathname === '/chat' || url.pathname === '/messages' || url.pathname === '/messages/') {
     response.writeHead(308, { location: '/chat/', 'cache-control': 'no-store' });
     response.end();
     return;

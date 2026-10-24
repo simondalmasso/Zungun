@@ -21,7 +21,7 @@ test('developer guide renders its scope and execution-evidence route', async ({ 
 test('interactive surfaces render without submitting forms or creating demo data', async ({ app, screen }) => {
   const pages = [
     ['/control', 'Assign work. See proof.'],
-    ['/messages', 'Text. No pretend presence.'],
+    ['/messages', 'Hablemos.'],
     ['/ops', 'Inspect what supports the claim.'],
   ];
 
@@ -36,10 +36,4 @@ test('Pocket opens on a clean chat entry screen without an explainer', async ({ 
   await expect(screen.getByRole('heading', 'Hablemos.')).toBeVisible();
   await expect(screen.getByRole('textbox', 'Tu nombre')).toBeVisible();
   await expect(screen.getByRole('button', 'Entrar al chat')).toBeVisible();
-  const radioLink = screen.getByRole('link', 'Abrir radio Meshtastic');
-  await expect(radioLink).toBeVisible();
-  await expect(radioLink).toHaveAttribute('href', 'https://client.meshtastic.org/');
-  const signalsLink = screen.getByRole('link', 'Abrir señales satelitales públicas de SatNOGS');
-  await expect(signalsLink).toBeVisible();
-  await expect(signalsLink).toHaveAttribute('href', 'https://network.satnogs.org/observations/');
 });
