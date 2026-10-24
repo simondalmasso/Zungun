@@ -53,11 +53,12 @@ class DurableMessageIdAllocatorTest {
         assertHandshakeRequired { allocator.allocate() }
     }
 
-    @Test fun epochMustIncreaseAndSessionIdMustChange() {
+    @Test fun epochMustAdvanceExactlyOneAndSessionIdMustChange() {
         val storage = MemoryStorage()
         val allocator = DurableMessageIdAllocator(storage, TestAuthenticator())
         allocator.initializeAfterKeyConfirmation(0, session(5))
         assertHandshakeRequired { allocator.initializeAfterKeyConfirmation(0, session(6)) }
+        assertHandshakeRequired { allocator.initializeAfterKeyConfirmation(2, session(6)) }
         assertHandshakeRequired { allocator.initializeAfterKeyConfirmation(1, session(5)) }
         allocator.initializeAfterKeyConfirmation(1, session(6))
         val allocation = allocator.allocate()
@@ -83,6 +84,8 @@ class DurableMessageIdAllocatorTest {
             assertEquals(expected, allocator.allocate().messageId)
         }
         assertHandshakeRequired { allocator.allocate() }
+        allocator.initializeAfterKeyConfirmation(1, session(91))
+        assertEquals(0, allocator.allocate().messageId)
     }
 
     @Test fun concurrentAllocationsAreUnique() {
