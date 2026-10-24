@@ -72,6 +72,8 @@ def parse_frontmatter(path: Path, text: str) -> dict:
     description = metadata["description"]
     if not isinstance(name, str) or not name:
         raise ValueError("frontmatter name must be a non-empty string")
+    if len(name) > 64:
+        raise ValueError("name exceeds the 64-character limit")
     if not NAME_RE.fullmatch(name):
         raise ValueError("name must use lowercase letters, digits, and single hyphens only")
     if name != path.parent.name:
@@ -80,7 +82,7 @@ def parse_frontmatter(path: Path, text: str) -> dict:
         raise ValueError("frontmatter description must be a non-empty string")
     if len(description) > 1024:
         raise ValueError("frontmatter description exceeds 1024 characters")
-    if "\\n" in description.strip("\\n"):
+    if "\n" in description:
         raise ValueError("frontmatter description must be a single line")
     return metadata
 
@@ -159,7 +161,7 @@ def main() -> int:
         validated += 1
 
     if errors:
-        print("\\n".join(f"ERROR: {error}" for error in errors), file=sys.stderr)
+        print("\n".join(f"ERROR: {error}" for error in errors), file=sys.stderr)
         print(f"Skill validation failed: {len(errors)} issue(s), {validated} skill file(s) inspected.", file=sys.stderr)
         return 1
 
