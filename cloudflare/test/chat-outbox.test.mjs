@@ -347,3 +347,17 @@ test('raw network entry points stay centralized behind transport guards', () => 
   assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
   assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
 });
+
+
+test('unknown persisted mode remains blocked until the user explicitly enables Internet', async () => {
+  const runtime = createIsolationHarness('UNKNOWN');
+  await flushAsyncWork();
+  assert.equal(runtime.fetchCalls.length, 0);
+  assert.equal(runtime.elements.get('transportMode').textContent, 'Transporte bloqueado');
+
+  runtime.elements.get('transportMode').handlers.get('click')();
+  await flushAsyncWork();
+
+  assert.equal(runtime.storage.getItem('zungun-transport-mode-v1'), 'INTERNET');
+  assert.ok(runtime.fetchCalls.includes('/api/v1/me'));
+});
