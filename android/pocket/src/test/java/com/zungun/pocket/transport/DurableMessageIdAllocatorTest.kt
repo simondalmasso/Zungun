@@ -104,7 +104,8 @@ class DurableMessageIdAllocatorTest {
 
     @Test fun concurrentAllocationsAreUnique() {
         val storage = MemoryStorage()
-        val allocator = DurableMessageIdAllocator(storage, TestAuthenticator())
+        val auth = TestAuthenticator()
+        val allocator = DurableMessageIdAllocator(storage, auth)
         allocator.initializeAfterKeyConfirmation(0, session(10))
         val ids = Collections.synchronizedSet(mutableSetOf<Int>())
         val start = CountDownLatch(1)
