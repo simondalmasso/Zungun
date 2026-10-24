@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import '../public/chat/outbox.js';
 
-const { createStore, isRetryableError } = globalThis.ZungunOutbox;
+const {
+  createStore,
+  isRetryableError,
+  canSendInternet,
+  connectionStatusForMode,
+  readTransportMode,
+  persistTransportMode,
+} = globalThis.ZungunOutbox;
+const appSource = readFileSync(new URL('../public/chat/app.js', import.meta.url), 'utf8');
 
 function memoryStorage() {
   const values = new Map();
@@ -64,6 +73,7 @@ test('network, rate-limit, timeout and server errors are retryable; other client
   assert.equal(isRetryableError({ status: 403 }), false);
   assert.equal(isRetryableError({ status: 400 }), false);
 });
+
 test('scheduled retries wait for their backoff window', () => {
   const store = createStore(memoryStorage());
   store.enqueue(record());
@@ -90,4 +100,64 @@ test('legacy outbox records without a transport remain Internet records', () => 
   const store = createStore(storage);
   assert.equal(store.pending('usr_one', 'INTERNET').length, 1);
   assert.equal(store.pending('usr_one', 'SATELLITE_ONLY').length, 0);
+});
+
+test('Internet sending is fail-closed while satellite-only mode is selected', () => {
+  assert.equal(typeof canSendInternet, 'function', 'the transport guard must exist');
+  assert.equal(canSendInternet('SATELLITE_ONLY', true, 'INTERNET'), false);
+  assert.equal(canSendInternet('SATELLITE_ONLY', true, 'SATELLITE_ONLY'), false);
+  assert.equal(canSendInternet('INTERNET', true, 'INTERNET'), true);
+  assert.equal(canSendInternet('INTERNET', true, 'SATELLITE_ONLY'), false);
+  assert.equal(canSendInternet('INTERNET', false, 'INTERNET'), false);
+  assert.equal(canSendInternet('UNKNOWN', true, 'INTERNET'), false);
+  assert.equal(canSendInternet('INTERNET', true), true, 'legacy records default to Internet');
+});
+
+test('a successful Internet API response cannot make satellite-only mode look connected', () => {
+  assert.equal(typeof connectionStatusForMode, 'function', 'connection status must be mode-aware');
+  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Conectado', true), {
+    label: 'Satélite no verificado · chat online',
+    connected: false,
+  });
+  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Sin conexión', false), {
+    label: 'Satélite no verificado · chat sin conexión',
+    connected: false,
+  });
+  assert.deepEqual(connectionStatusForMode('INTERNET', 'Conectado', true), {
+    label: 'Conectado',
+    connected: true,
+  });
+});
+
+test('the selected transport mode must be persisted and verified before changing modes', () => {
+  assert.equal(typeof readTransportMode, 'function', 'transport mode reader must exist');
+  assert.equal(typeof persistTransportMode, 'function', 'transport mode persistence guard must exist');
+  const root = { localStorage: memoryStorage() };
+  assert.equal(readTransportMode(root), 'INTERNET');
+  assert.equal(persistTransportMode(root, 'SATELLITE_ONLY'), true);
+  assert.equal(readTransportMode(root), 'SATELLITE_ONLY');
+  assert.equal(persistTransportMode(root, 'INTERNET'), true);
+  assert.equal(readTransportMode(root), 'INTERNET');
+
+  const storageThatSilentlyDropsWrites = {
+    getItem() { return null; },
+    setItem() {},
+  };
+  assert.equal(persistTransportMode({ localStorage: storageThatSilentlyDropsWrites }, 'SATELLITE_ONLY'), false);
+});
+
+test('outbox draining re-checks exclusive mode before starting every HTTP send', () => {
+  const start = appSource.indexOf('async function drainOutbox()');
+  const end = appSource.indexOf('async function poll(', start);
+  assert.ok(start >= 0 && end > start, 'outbox drain function must be present');
+  const drain = appSource.slice(start, end);
+  assert.match(
+    drain,
+    /for\(const item of state\.outbox\.pending\(state\.me\.userId,'INTERNET'\)\)\{[\s\S]*?if\(!window\.ZungunOutbox\.canSendInternet\(state\.transportMode,navigator\.onLine,item\.transport\)\)break;[\s\S]*?state\.outbox\.mark/
+  );
+});
+
+test('connection updates and mode toggles are routed through the guarded helpers', () => {
+  assert.match(appSource, /connectionStatusForMode\(state\.transportMode,label,connected\)/);
+  assert.match(appSource, /if\(!window\.ZungunOutbox\.persistTransportMode\(window,next\)\)/);
 });
