@@ -115,6 +115,10 @@
     return mode === 'INTERNET' && online === true && transport === 'INTERNET';
   }
 
+  function canUseInternetApi(mode) {
+    return mode === 'INTERNET';
+  }
+
   function connectionStatusForMode(mode, label, connected) {
     if (mode === 'INTERNET') return { label, connected: Boolean(connected) };
     if (mode !== 'SATELLITE_ONLY') return { label: 'Transporte no verificado', connected: false };
@@ -149,6 +153,7 @@
     createStore,
     isRetryableError,
     canSendInternet,
+    canUseInternetApi,
     connectionStatusForMode,
     readTransportMode,
     persistTransportMode,
