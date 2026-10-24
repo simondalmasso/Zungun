@@ -138,6 +138,9 @@ test('the selected transport mode must be persisted and verified before changing
   assert.equal(typeof persistTransportMode, 'function', 'transport mode persistence guard must exist');
   const root = { localStorage: memoryStorage() };
   assert.equal(readTransportMode(root), 'INTERNET');
+  assert.equal(readTransportMode({ localStorage: { getItem() { throw new Error('storage blocked'); } } }), 'UNKNOWN');
+  assert.equal(readTransportMode({ localStorage: { getItem() { return 'CORRUPT'; } } }), 'UNKNOWN');
+  assert.equal(readTransportMode({}), 'UNKNOWN');
   assert.equal(persistTransportMode(root, 'SATELLITE_ONLY'), true);
   assert.equal(readTransportMode(root), 'SATELLITE_ONLY');
   assert.equal(persistTransportMode(root, 'INTERNET'), true);
@@ -178,6 +181,7 @@ test('satellite-only mode disables every Internet API call, polling and WebSocke
   assert.match(appSource, /state\.transportMode==='INTERNET'&&state\.current\?\.conversationId===conversationId\)state\.retry=setTimeout\(connectSocket,3000\)/);
   assert.match(appSource, /for\(const request of state\.activeRequests\)request\.abort\(\)/);
   assert.match(appSource, /if\(state\.transportMode==='INTERNET'&&'serviceWorker'in navigator/);
+  assert.match(appSource, /unknown\?'Transporte bloqueado'/);
   assert.match(appSource, /if\(state\.transportMode!=='INTERNET'\|\|state\.current\?\.conversationId!==current\.conversationId\)return/);
   assert.match(appSource, /state\.transportMode!=='INTERNET'\)return;if\(state\.current\)poll\(false\)/);
   assert.match(appSource, /socket\.onmessage=event=>\{if\(state\.transportMode!=='INTERNET'\|\|event\.data==='pong'\)return/);
