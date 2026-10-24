@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:name=".ZungunApplication" android:allowBackup="false" android:label="Zungun" android:usesCleartextTraffic="false" android:theme="@style/AppTheme">
+    <application android:name=".ZungunApplication" android:allowBackup="false" android:label="Zungun" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/network_security_config" android:theme="@style/AppTheme">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
