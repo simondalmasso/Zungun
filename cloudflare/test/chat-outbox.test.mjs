@@ -178,7 +178,7 @@ test('satellite-only mode disables every Internet API call, polling and WebSocke
   assert.equal(canUseInternetApi('INTERNET'), true);
   assert.match(appSource, /const modeViolation=.*MODE_VIOLATION.*console\.warn/);
   assert.match(appSource, /if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)throw modeViolation\(\)/);
-  assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)(?:\|\|!navigator\.onLine)?\)return/g);
+  assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)(?:\|\|!navigator\.onLine)?\)return/);
   assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
   assert.match(appSource, /state\.transportMode==='INTERNET'&&state\.current\?\.conversationId===conversationId\)state\.retry=setTimeout\(connectSocket,3000\)/);
   assert.match(appSource, /for\(const request of state\.activeRequests\)request\.abort\(\)/);
@@ -345,7 +345,7 @@ test('raw network entry points stay centralized behind transport guards', () => 
   const apiEnd = appSource.indexOf('function setConnection(', apiStart);
   assert.ok(apiStart >= 0 && apiEnd > apiStart, 'central API helper must exist');
   assert.match(appSource.slice(apiStart, apiEnd), /canUseInternetApi\(state\.transportMode\)\)throw modeViolation\(\)/);
-  assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
+  assert.match(appSource, /async function poll\(initial=false\)\{\s*const current=state\.current;if\(!current\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)(?:\|\|!navigator\.onLine)?\)return/);
   assert.match(appSource, /function connectSocket\(\)\{\s*if\(!state\.current\|\|!navigator\.onLine\|\|!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)return/);
 });
 
