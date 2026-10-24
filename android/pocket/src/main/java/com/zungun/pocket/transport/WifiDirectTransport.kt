@@ -191,13 +191,18 @@ class WifiDirectTransport(
             if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P)) {
                 synchronized(lock) {
                     if (closed.get()) return
-                    p2pNetwork = network
+                    setP2pNetworkLocked(network)
                     openSocketIfReadyLocked()
                 }
             } else onNetworkUnavailable(network, manager, ch)
         }
 
         override fun onLost(network: Network) = onNetworkUnavailable(network, manager, ch)
+    }
+
+    private fun setP2pNetworkLocked(network: Network) {
+        if (p2pNetwork != null && p2pNetwork != network) closeSocketLocked()
+        p2pNetwork = network
     }
 
     private fun hasP2pCapability(network: Network): Boolean =
