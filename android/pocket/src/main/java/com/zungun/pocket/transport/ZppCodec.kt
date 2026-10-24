@@ -5,6 +5,7 @@ import com.goterl.lazysodium.LazySodiumAndroid
 import com.goterl.lazysodium.SodiumAndroid
 import com.goterl.lazysodium.interfaces.AEAD
 import com.goterl.lazysodium.interfaces.KeyDerivation
+import java.security.MessageDigest
 
 /**
  * ZPP/1 record codec backed by libsodium XChaCha20-Poly1305-IETF.
@@ -29,6 +30,12 @@ internal class ZppCodec(private val sodium: LazySodium) {
         require(plaintext.size <= MAX_PLAINTEXT_BYTES) { "plaintext exceeds the UDP MTU budget" }
         require(allocation.epoch in 0..ZppNonce.MAX_EPOCH)
         require(allocation.messageId in 0..ZppNonce.MAX_MESSAGE_ID)
+        require(
+            MessageDigest.isEqual(
+                allocation.sessionId,
+                DurableMessageIdAllocator.sessionIdForEraSecret(eraSecret)
+            )
+        ) { "allocation belongs to a different authenticated session secret" }
 
         val recordKey = ZppRecordKey(allocation.epoch, allocation.messageId, direction)
         return store.sealOnce(recordKey) {
