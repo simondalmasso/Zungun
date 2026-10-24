@@ -74,12 +74,12 @@ class ZppCodecTest {
         val secret = ByteArray(32) { it.toByte() }
         val reservedAllocation = allocation(2, 77)
         val store = MemoryStore()
-        val first = codec.sealNew(secret, allocation( ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
+        val first = codec.sealNew(secret, reservedAllocation, ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
         val retransmitted = codec.loadForRetransmission(2, 77, ZppDirection.B_TO_A, store)
         assertArrayEquals(first, retransmitted)
 
         assertThrows<ZppRecordAlreadySealedException> {
-            codec.sealNew(secret, allocation( ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
+            codec.sealNew(secret, reservedAllocation, ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
         }
         assertEquals(1, store.encryptions)
         val otherDirection = codec.sealNew(
