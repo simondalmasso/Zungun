@@ -29,7 +29,7 @@ The vault protects secrets at rest in browser storage, but it is not hardware-ba
 - Network failure after a POST is SMS_SEND_UNKNOWN; the gateway may already have accepted it, so automatic retries are unsafe.
 - The bridge polls the local /inbox endpoint and rejects unauthenticated/tampered envelopes, sender mismatches, conversation mismatches, and duplicate message IDs.
 - The current receiver depends on the gateway exposing a complete concatenated SMS body in contentPreview. Multipart/segment behavior and carrier delivery reports have not been verified. Avoid assuming long messages are safe or free of extra charges.
-- The PWA still needs an online session to restore identity and discover conversations after a reload. The SMS UI can operate while a conversation remains loaded, but it is not a complete independent offline identity/session system.
+- The PWA now stores a local snapshot of identity metadata and known conversations (no session token) so a previously loaded conversation can be selected after reload while offline. Initial identity/conversation discovery and creation of new conversations still require Internet; the local snapshot is not a server-authenticated session and does not restore online sync.
 
 ## Verification still required
 
