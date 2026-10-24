@@ -31,6 +31,10 @@ class WifiDirectTransport(
         context.applicationContext.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager,
     private val port: Int = DEFAULT_PORT
 ) : AutoCloseable {
+    init {
+        require(port in 1..65535) { "UDP port must be in 1..65535" }
+    }
+
     enum class State { IDLE, WAITING_FOR_P2P_NETWORK, WAITING_FOR_GROUP, READY, FAILED, CLOSED }
 
     interface Listener {
@@ -146,7 +150,10 @@ class WifiDirectTransport(
                 info.groupOwnerAddress?.let { InetSocketAddress(it, port) }
             }
             requireNotNull(target) { "no peer address is known yet" }
-            socket!!.send(DatagramPacket(bytes.copyOf(), bytes.size, target.address, target.port))
+            require(!target.isUnresolved) { "peer address must be resolved before sending" }
+            require(target.port in 1..65535) { "peer UDP port must be in 1..65535" }
+            val address = requireNotNull(target.address) { "peer address must be resolved before sending" }
+            socket!!.send(DatagramPacket(bytes.copyOf(), bytes.size, address, target.port))
         }
     }
 
