@@ -12,11 +12,11 @@ class ZppCodecTest {
     @Test fun canonicalSodiumVectorMatchesWireFormat() {
         val codec = testCodec()
         val secret = ByteArray(32) { it.toByte() }
-        val allocation = allocation(epoch = 0x1234, messageId = 0xABCD)
+        val reservedAllocation = allocation(epoch = 0x1234, messageId = 0xABCD)
         val store = MemoryStore()
         val frame = codec.sealNew(
             secret,
-            allocation,
+            reservedAllocation,
             ZppDirection.B_TO_A,
             "ZPP1 vector payload".toByteArray(Charsets.US_ASCII),
             store
@@ -72,14 +72,14 @@ class ZppCodecTest {
     @Test fun sealedIdentityCannotBeEncryptedTwiceAndRetransmissionUsesStoredBytes() {
         val codec = testCodec()
         val secret = ByteArray(32) { it.toByte() }
-        val allocation = allocation(2, 77)
+        val reservedAllocation = allocation(2, 77)
         val store = MemoryStore()
-        val first = codec.sealNew(secret, allocation, ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
+        val first = codec.sealNew(secret, allocation( ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
         val retransmitted = codec.loadForRetransmission(2, 77, ZppDirection.B_TO_A, store)
         assertArrayEquals(first, retransmitted)
 
         assertThrows<ZppRecordAlreadySealedException> {
-            codec.sealNew(secret, allocation, ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
+            codec.sealNew(secret, allocation( ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
         }
         assertEquals(1, store.encryptions)
         val otherDirection = codec.sealNew(
