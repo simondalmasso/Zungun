@@ -12,7 +12,7 @@ class ZppCodecTest {
     @Test fun canonicalSodiumVectorMatchesWireFormat() {
         val codec = testCodec()
         val secret = ByteArray(32) { it.toByte() }
-        val reservedAllocation = allocation(epoch = 0x1234, messageId = 0xABCD)
+        val reservedAllocation = allocation(epoch = 0x1234, messageId = 0xABCD, secret = secret)
         val store = MemoryStore()
         val frame = codec.sealNew(
             secret,
@@ -34,16 +34,34 @@ class ZppCodecTest {
     @Test fun wrongEpochOrDirectionIsRejectedBeforeDecrypting() {
         val codec = testCodec()
         val secret = ByteArray(32) { (it * 3).toByte() }
-        val frame = codec.sealNew(secret, allocation(7, 4), ZppDirection.A_TO_B, byteArrayOf(1, 2, 3), MemoryStore())
+        val frame = codec.sealNew(secret, allocation(7, 4, secret), ZppDirection.A_TO_B, byteArrayOf(1, 2, 3), MemoryStore())
 
         assertThrows<ZppProtocolException> { codec.open(secret, frame, 8, ZppDirection.A_TO_B) }
         assertThrows<ZppProtocolException> { codec.open(secret, frame, 7, ZppDirection.B_TO_A) }
     }
 
+    @Test fun allocationMustMatchTheSecretBeforeAnyEncryptionReservation() {
+        val codec = testCodec()
+        val secret = ByteArray(32) { (it + 1).toByte() }
+        val differentSession = ByteArray(32) { (it + 17).toByte() }
+        val store = MemoryStore()
+
+        assertThrows<IllegalArgumentException> {
+            codec.sealNew(
+                secret,
+                allocation(8, 9, differentSession),
+                ZppDirection.A_TO_B,
+                byteArrayOf(1, 2, 3),
+                store
+            )
+        }
+        assertEquals(0, store.encryptions)
+    }
+
     @Test fun modifiedHeaderCiphertextOrTagFailsAuthentication() {
         val codec = testCodec()
         val secret = ByteArray(32) { (it + 9).toByte() }
-        val frame = codec.sealNew(secret, allocation(21, 66), ZppDirection.A_TO_B, "secret".toByteArray(), MemoryStore())
+        val frame = codec.sealNew(secret, allocation(21, 66, secret), ZppDirection.A_TO_B, "secret".toByteArray(), MemoryStore())
 
         val headerTampered = frame.copyOf().also { it[7] = (it[7].toInt() xor 1).toByte() }
         val ciphertextTampered = frame.copyOf().also {
@@ -59,12 +77,12 @@ class ZppCodecTest {
     @Test fun datagramIsBoundedByConservativeMtu() {
         val codec = testCodec()
         val secret = ByteArray(32) { 0x4A.toByte() }
-        val max = codec.sealNew(secret, allocation(3, 0), ZppDirection.A_TO_B, ByteArray(ZppCodec.MAX_PLAINTEXT_BYTES), MemoryStore())
+        val max = codec.sealNew(secret, allocation(3, 0, secret), ZppDirection.A_TO_B, ByteArray(ZppCodec.MAX_PLAINTEXT_BYTES), MemoryStore())
         assertEquals(P2pDatagramPolicy.MAX_DATAGRAM_BYTES, max.size)
         assertArrayEquals(ByteArray(ZppCodec.MAX_PLAINTEXT_BYTES), codec.open(secret, max, 3, ZppDirection.A_TO_B).plaintext)
 
         assertThrows<IllegalArgumentException> {
-            codec.sealNew(secret, allocation(3, 1), ZppDirection.A_TO_B, ByteArray(ZppCodec.MAX_PLAINTEXT_BYTES + 1), MemoryStore())
+            codec.sealNew(secret, allocation(3, 1, secret), ZppDirection.A_TO_B, ByteArray(ZppCodec.MAX_PLAINTEXT_BYTES + 1), MemoryStore())
         }
         assertTrue(max.size <= 1232)
     }
@@ -72,7 +90,7 @@ class ZppCodecTest {
     @Test fun sealedIdentityCannotBeEncryptedTwiceAndRetransmissionUsesStoredBytes() {
         val codec = testCodec()
         val secret = ByteArray(32) { it.toByte() }
-        val reservedAllocation = allocation(2, 77)
+        val reservedAllocation = allocation(2, 77, secret)
         val store = MemoryStore()
         val first = codec.sealNew(secret, reservedAllocation, ZppDirection.B_TO_A, byteArrayOf(4, 5, 6), store)
         val retransmitted = codec.loadForRetransmission(2, 77, ZppDirection.B_TO_A, store)
@@ -83,7 +101,7 @@ class ZppCodecTest {
         }
         assertEquals(1, store.encryptions)
         val otherDirection = codec.sealNew(
-            secret, allocation(2, 77), ZppDirection.A_TO_B, byteArrayOf(4, 5, 6), MemoryStore()
+            secret, allocation(2, 77, secret), ZppDirection.A_TO_B, byteArrayOf(4, 5, 6), MemoryStore()
         )
         assertNotEquals(first.toList(), otherDirection.toList())
     }
@@ -96,8 +114,12 @@ class ZppCodecTest {
 
     private fun testCodec() = ZppCodec(LazySodiumJava(SodiumJava()))
 
-    private fun allocation(epoch: Int, messageId: Int) =
-        DurableMessageIdAllocator.Allocation(epoch, messageId, ByteArray(32))
+    private fun allocation(epoch: Int, messageId: Int, secret: ByteArray) =
+        DurableMessageIdAllocator.Allocation(
+            epoch,
+            messageId,
+            DurableMessageIdAllocator.sessionIdForEraSecret(secret)
+        )
 
     private class MemoryStore : ZppCiphertextStore {
         private val values = linkedMapOf<ZppRecordKey, ByteArray>()
