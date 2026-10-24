@@ -46,6 +46,19 @@ class DurableMessageIdAllocatorTest {
         assertHandshakeRequired { allocator.allocate() }
     }
 
+    @Test fun deletedEntireJournalCannotBeReinitializedWhileHmacKeyExists() {
+        val storage = MemoryStorage()
+        val auth = TestAuthenticator()
+        val allocator = DurableMessageIdAllocator(storage, auth)
+        allocator.initializeAfterKeyConfirmation(0, session(44))
+        assertEquals(0, allocator.allocate().messageId)
+
+        // Simulates every file disappearing while the per-peer Keystore HMAC key survives.
+        storage.clearAll()
+        assertHandshakeRequired { allocator.initializeAfterKeyConfirmation(0, session(45)) }
+        assertHandshakeRequired { allocator.allocate() }
+    }
+
     @Test fun corruptedCommitHeadFailsClosed() {
         val storage = MemoryStorage()
         val allocator = DurableMessageIdAllocator(storage, TestAuthenticator())
@@ -152,6 +165,10 @@ class DurableMessageIdAllocatorTest {
             head = bytes.copyOf()
         }
         override fun writeSlot(slot: Int, bytes: ByteArray) { slots[slot] = bytes.copyOf() }
+        fun clearAll() {
+            head = null
+            slots.indices.forEach { slots[it] = null }
+        }
         fun corruptHead() { head = head?.also { it[it.lastIndex] = (it.last().toInt() xor 0x55).toByte() } }
         fun corruptSlot(slot: Int) {
             slots[slot]?.let { it[it.lastIndex] = (it.last().toInt() xor 0x55).toByte() }
@@ -160,9 +177,16 @@ class DurableMessageIdAllocatorTest {
 
     /** Deterministic test-only authenticator; production uses Android Keystore HMAC-SHA-256. */
     private class TestAuthenticator : MessageIdHeadAuthenticator {
-        override fun authenticate(bytes: ByteArray): ByteArray =
-            MessageDigest.getInstance("SHA-256").digest(bytes)
+        private var hasKey = false
+
+        override fun hasKeyMaterial(): Boolean = hasKey
+
+        override fun authenticate(bytes: ByteArray): ByteArray {
+            hasKey = true
+            return MessageDigest.getInstance("SHA-256").digest(bytes)
+        }
+
         override fun verify(bytes: ByteArray, mac: ByteArray): Boolean =
-            MessageDigest.isEqual(authenticate(bytes), mac)
+            hasKey && MessageDigest.isEqual(authenticate(bytes), mac)
     }
 }
