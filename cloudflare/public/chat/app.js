@@ -2,6 +2,10 @@
 const $=id=>document.getElementById(id);
 const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false,drainingOutbox:false,transportMode:window.ZungunOutbox.readTransportMode(window),outbox:window.ZungunOutbox.createStore(window.localStorage),transportStates:window.ZungunOutbox.createTransportStateMap({INTERNET:'UNKNOWN',SATELLITE_ONLY:'UNVERIFIED'}),activeRequests:new Set()};
 const modeViolation=()=>{const error=new Error('Internet API disabled by selected transport mode');error.code='MODE_VIOLATION';console.warn('MODE_VIOLATION');return error};
+const SNAPSHOT_KEY='zungun-local-chat-snapshot-v1';
+function readLocalSnapshot(){try{const value=JSON.parse(window.localStorage.getItem(SNAPSHOT_KEY)||'null');if(!value||!value.me||typeof value.me.userId!=='string'||!Array.isArray(value.conversations))return null;return {me:value.me,conversations:value.conversations.filter(c=>c&&typeof c.conversationId==='string'&&c.peer&&typeof c.peer.displayName==='string')}}catch{return null}}
+function saveLocalSnapshot(){if(!state.me)return;try{window.localStorage.setItem(SNAPSHOT_KEY,JSON.stringify({version:1,me:state.me,conversations:state.conversations}))}catch{}}
+function clearLocalSnapshot(){try{window.localStorage.removeItem(SNAPSHOT_KEY)}catch{}}
 const api=async(path,options={})=>{
   if(!window.ZungunOutbox.canUseInternetApi(state.transportMode))throw modeViolation();
   const headers=new Headers(options.headers||{});headers.set('accept','application/json');
@@ -32,14 +36,22 @@ function openAuth(message=''){
   closeSocket();state.me=null;state.current=null;$('chatView').classList.add('hidden');$('authView').classList.remove('hidden');$('accountError').textContent=message;
 }
 function openApp(){
-  $('authView').classList.add('hidden');$('chatView').classList.remove('hidden');$('myName').textContent=state.me.displayName;$('myCode').textContent=state.me.pairingCode;$('myAvatar').textContent=initial(state.me.displayName);if(window.ZungunOutbox.canUseInternetApi(state.transportMode)){loadConversations();drainOutbox()}else{renderConversations();setConnection('Satélite no verificado · datos locales',false)}
+  $('authView').classList.add('hidden');$('chatView').classList.remove('hidden');$('myName').textContent=state.me.displayName;$('myCode').textContent=state.me.pairingCode;$('myAvatar').textContent=initial(state.me.displayName);saveLocalSnapshot();
+  if(window.ZungunOutbox.canUseInternetApi(state.transportMode)&&navigator.onLine){loadConversations();drainOutbox()}else{renderConversations();setConnection(state.transportMode==='SATELLITE_ONLY'?'Modo SMS local · datos guardados':'Sin conexión · datos locales',false)}
 }
 function initial(name){return Array.from(String(name||'z').trim())[0]?.toLocaleUpperCase()||'Z'}
 function closeSocket(){if(state.retry){clearTimeout(state.retry);state.retry=null}if(state.socket){state.socket.onclose=null;try{state.socket.close()}catch{}state.socket=null}}
 async function boot(){
-  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)){openAuth('Modo satélite exclusivo: sin verificación de sesión por Internet. Volvé a activar Internet para cargar tu cuenta.');setConnection('Satélite no verificado · sin tráfico API',false);return}
-  try{const data=await api('/api/v1/me');state.me=data.identity;openApp()}
-  catch(error){if(error.status===401){openAuth();setConnection('Conectado',true)}else{openAuth('No se pudo conectar. Revisá tu conexión e intentá de nuevo.');setConnection('Sin conexión',false)}}
+  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)||!navigator.onLine){
+    const snapshot=readLocalSnapshot();
+    if(snapshot){state.me=snapshot.me;state.conversations=snapshot.conversations;openApp();setConnection(state.transportMode==='SATELLITE_ONLY'?'Modo SMS local · datos guardados':'Sin conexión · datos locales',false);return}
+    if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)){openAuth('No hay una identidad local guardada. Activá Internet una vez para cargar tu identidad y conversaciones antes de usar SMS.');setConnection('SMS sin datos locales',false);return}
+  }
+  try{const data=await api('/api/v1/me');state.me=data.identity;saveLocalSnapshot();openApp()}
+  catch(error){
+    if(error.status===401){openAuth();setConnection('Sesión no válida',false)}
+    else{const snapshot=readLocalSnapshot();if(snapshot){state.me=snapshot.me;state.conversations=snapshot.conversations;openApp();setConnection('Sin conexión · datos locales',false)}else{openAuth('No se pudo conectar. Revisá tu conexión e intentá de nuevo.');setConnection('Sin conexión',false)}}
+  }
 }
 $('accountForm').addEventListener('submit',async event=>{
   event.preventDefault();if(state.busy)return;const name=$('displayName').value.trim();if(!name)return;
@@ -62,7 +74,7 @@ function renderConversations(){
 }
 async function loadConversations(){
   if(!window.ZungunOutbox.canUseInternetApi(state.transportMode))return;
-  try{const data=await api('/api/v1/conversations');if(state.transportMode!=='INTERNET')return;state.conversations=data.items||[];renderConversations();
+  try{const data=await api('/api/v1/conversations');if(state.transportMode!=='INTERNET')return;state.conversations=data.items||[];saveLocalSnapshot();renderConversations();
     if(state.current){const updated=state.conversations.find(c=>c.conversationId===state.current.conversationId);if(!updated){state.current=null;showEmpty()}else state.current=updated}
   }catch(error){if(error.status===401)openAuth('Tu sesión terminó. Entrá de nuevo.');else setConnection('Sin conexión',false)}
 }
@@ -81,16 +93,16 @@ $('copyCode').addEventListener('click',async()=>{
 });
 $('signOut').addEventListener('click',async()=>{
   $('signOut').disabled=true;
-  try{await api('/api/v1/session/revoke',{method:'POST',body:'{}'});state.me=null;state.current=null;state.conversations=[];openAuth();$('displayName').value='';toast('Sesión cerrada')}
+  try{if(window.ZungunOutbox.canUseInternetApi(state.transportMode)&&navigator.onLine)await api('/api/v1/session/revoke',{method:'POST',body:'{}'});clearLocalSnapshot();state.me=null;state.current=null;state.conversations=[];openAuth();$('displayName').value='';toast('Sesión local cerrada')}
   catch(error){showError('accountError',error)}
   finally{$('signOut').disabled=false}
 });
 function showEmpty(){closeSocket();state.current=null;$('conversationPane').classList.add('hidden');$('emptyChat').classList.remove('hidden');$('chatView').classList.remove('in-chat');renderConversations()}
 async function openConversation(conversation){
-  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)){toast('Modo estricto: no se puede cargar el historial por Internet');return}
   closeSocket();state.current=conversation;state.lastSeq=0;$('chatView').classList.add('in-chat');$('emptyChat').classList.add('hidden');$('conversationPane').classList.remove('hidden');
-  $('chatTitle').textContent=conversation.peer.displayName;$('peerCode').textContent=conversation.peer.pairingCode;$('peerAvatar').textContent=initial(conversation.peer.displayName);$('messages').replaceChildren();
-  const loading=document.createElement('div');loading.className='loading';loading.textContent='Cargando mensajes…';$('messages').append(loading);renderConversations();
+  $('chatTitle').textContent=conversation.peer.displayName;$('peerCode').textContent=conversation.peer.pairingCode;$('peerAvatar').textContent=initial(conversation.peer.displayName);$('messages').replaceChildren();renderConversations();
+  if(!window.ZungunOutbox.canUseInternetApi(state.transportMode)||!navigator.onLine){restoreOutboxMessages();window.ZungunSmsUi?.pollIncoming?.();$('messageInput').focus();return}
+  const loading=document.createElement('div');loading.className='loading';loading.textContent='Cargando mensajes…';$('messages').append(loading);
   await poll(true);restoreOutboxMessages();connectSocket();drainOutbox();$('messageInput').focus()
 }
 $('backToChats').addEventListener('click',()=>{$('chatView').classList.remove('in-chat')});
