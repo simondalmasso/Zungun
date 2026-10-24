@@ -20,6 +20,8 @@ test('Zungun chat route loads the real chat and offline outbox under strict CSP'
   const sw=fs.readFileSync(path.join(root,'cloudflare/public/chat/sw.js'),'utf8');
   assert.ok(worker.includes('path==="/chat"'));
   assert.ok(worker.includes('path==="/chat/"'));
+  assert.ok(worker.includes('path==="/messages"||path==="/messages/"'));
+  assert.ok(worker.includes('Response.redirect(new URL("/chat/",url).toString(),308)'));
   assert.ok(html.includes('<link rel="stylesheet" href="./app.css">'));
   assert.ok(html.includes('<script src="./outbox.js" defer></script>'));
   assert.ok(html.includes('<script src="./app.js" defer></script>'));
