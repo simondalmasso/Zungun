@@ -72,7 +72,7 @@
       if(!response.ok){const error=new Error('SMS_GATEWAY_HTTP_'+response.status);error.status=response.status;error.code=data.error||error.message;error.ambiguous=isAmbiguous(error);throw error}
       return {state:'ACCEPTED_BY_GATEWAY',gatewayResponse:data,deliveryConfirmed:false,messageId:message.messageId,gatewayMessageId:data.id||gatewayMessageId};
     }
-    return {readConfig,saveConfig,clearConfig,send};
+    return {readConfig,saveConfig,clearConfig,send,listIncoming};
   }
   function acceptIncoming({incoming,expectedPhoneNumber,conversationId,storage}){
     if(!incoming||incoming.type!=='SMS'||typeof incoming.sender!=='string'||typeof incoming.contentPreview!=='string')throw new TypeError('SMS_INCOMING_INVALID');
