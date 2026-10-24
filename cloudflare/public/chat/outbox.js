@@ -109,5 +109,45 @@
     return status === 408 || status === 429 || status >= 500;
   }
 
-  root.ZungunOutbox = { createStore, isRetryableError };
+  const TRANSPORT_MODE_KEY = 'zungun-transport-mode-v1';
+
+  function canSendInternet(mode, online, transport = 'INTERNET') {
+    return mode === 'INTERNET' && online === true && transport === 'INTERNET';
+  }
+
+  function connectionStatusForMode(mode, label, connected) {
+    if (mode !== 'SATELLITE_ONLY') return { label, connected: Boolean(connected) };
+    const chatState = connected ? 'chat online' :
+      (/sin conexión/i.test(String(label)) ? 'chat sin conexión' : 'chat reconectando');
+    return { label: 'Satélite no verificado · ' + chatState, connected: false };
+  }
+
+  function readTransportMode(root) {
+    try {
+      return root && root.localStorage &&
+        root.localStorage.getItem(TRANSPORT_MODE_KEY) === 'SATELLITE_ONLY'
+        ? 'SATELLITE_ONLY' : 'INTERNET';
+    } catch {
+      return 'INTERNET';
+    }
+  }
+
+  function persistTransportMode(root, mode) {
+    if (!root || !root.localStorage || !['INTERNET', 'SATELLITE_ONLY'].includes(mode)) return false;
+    try {
+      root.localStorage.setItem(TRANSPORT_MODE_KEY, mode);
+      return root.localStorage.getItem(TRANSPORT_MODE_KEY) === mode;
+    } catch {
+      return false;
+    }
+  }
+
+  root.ZungunOutbox = {
+    createStore,
+    isRetryableError,
+    canSendInternet,
+    connectionStatusForMode,
+    readTransportMode,
+    persistTransportMode,
+  };
 })(typeof window !== 'undefined' ? window : globalThis);
