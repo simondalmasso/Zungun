@@ -18,7 +18,7 @@ The message ID is preserved to support receiver-side deduplication. The receiver
 
 - `ACCEPTED_BY_GATEWAY` means only that the local gateway returned a successful HTTP response. It does not prove that the carrier sent the SMS or that the recipient received it.
 - A network failure after a POST is `SMS_SEND_UNKNOWN`: the gateway may already have accepted the message. Do not automatically retry an ambiguous SMS request, because that can create duplicates.
-- SMS billing, carrier delivery reports, multipart segmentation, sender-number verification, inbound message handling, and reconciliation must be wired and tested before calling this a complete transport.
+- SMS billing, carrier delivery reports, multipart segmentation, cryptographic sender authentication, PWA composer/inbox wiring, and reconciliation must be implemented and tested before calling this a complete transport.
 - Credentials are stored in the browser's local storage by this client. Use a dedicated local gateway account and do not expose its API to the public Internet. Browser storage is not a hardware-backed secret store.
 
 ## Manual device verification still required
@@ -28,4 +28,4 @@ The message ID is preserved to support receiver-side deduplication. The receiver
 3. Test a real SMS to a controlled recipient, then test the receiving-side bridge and deduplication with Internet/Wi-Fi disabled.
 4. Verify send/delivery receipts separately and test ambiguous timeouts before enabling automatic fallback in the production chat.
 
-The bridge module now includes a tested inbound-envelope validator that requires an explicitly paired sender phone number, exact conversation ID, and local duplicate-ID ledger. It is not yet connected to the PWA inbox/poller, so incoming SMS are not displayed in chat yet. The current Zungun PWA still relies on the server for session restoration, conversation discovery, and incoming chat synchronization. This module alone does not make those features work offline and is not yet wired into the composer or the inbound receiver.
+The bridge module now includes a tested local `/inbox` poller and an inbound-envelope validator that checks an explicitly paired sender phone number, exact conversation ID, and a local duplicate-ID ledger. These helpers are not yet connected to the PWA inbox/poller, so incoming SMS are not displayed in chat yet. Sender-number matching is not cryptographic authentication: do not trust SMS contents as authenticated until a signed/MACed envelope with a securely paired key is implemented. The current Zungun PWA still relies on the server for session restoration, conversation discovery, and incoming chat synchronization. This module alone does not make those features work offline and is not yet wired into the composer or the inbound receiver.
