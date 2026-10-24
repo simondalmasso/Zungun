@@ -112,3 +112,20 @@ test('pairing validates E.164 numbers and rejects weak vault passphrases',async(
   const memory=new Map(),storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v)};
   const vault=pairing.createVault(storage);await assert.rejects(()=>vault.unlock('short'),/SMS_VAULT_PASSPHRASE_TOO_SHORT/);
 });
+
+test('loopback companion client uses a bearer token rather than gateway credentials',async()=>{
+  const memory=new Map([['zungun-sms-bridge-v1',JSON.stringify({gatewayUrl:'http://127.0.0.1:8787',token:'session-token'})]]);
+  const storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+  let request;
+  const client=bridge.createClient({storage,fetchImpl:async(url,options)=>{request={url,options};return {ok:true,status:200,json:async()=>[]}}});
+  await client.listIncoming({limit:1,offset:0});
+  assert.equal(request.options.headers.get('authorization'),'Bearer session-token');
+  assert.equal(request.url,'http://127.0.0.1:8787/inbox?type=SMS&limit=1&offset=0');
+});
+
+test('HTTP 5xx after an SMS POST is treated as ambiguous and not safe to retry',async()=>{
+  const storage={getItem:()=>JSON.stringify({gatewayUrl:'http://127.0.0.1:8080',username:'u',password:'p'}),setItem(){},removeItem(){}};
+  const client=bridge.createClient({storage,fetchImpl:async()=>({ok:false,status:500,json:async()=>({error:'temporary failure'})})});
+  const message={conversationId:'conv_123',messageId:'msg_12345678',clientCreatedAtMs:1,body:'hello'};
+  await assert.rejects(()=>client.send({phoneNumber:'+5491123456789',message,authKey:auth.generateKey()}),e=>e.code==='SMS_SEND_UNKNOWN'&&e.ambiguous===true);
+});
