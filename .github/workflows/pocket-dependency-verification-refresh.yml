@@ -1,0 +1,90 @@
+name: Pocket dependency verification metadata generation (temporary)
+
+on:
+  pull_request:
+    branches: [recovery/remote-toolchain-v1]
+    paths:
+      - "android/pocket/**"
+      - "android/gradle/**"
+      - "android/settings.gradle.kts"
+      - ".github/workflows/pocket-dependency-verification-refresh.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pocket-dependency-verification-refresh-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Java and Android SDK inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+
+      - name: Snapshot current strict verification policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s android/gradle/verification-metadata.xml
+          cp android/gradle/verification-metadata.xml "$RUNNER_TEMP/verification-metadata.previous.xml"
+          rm android/gradle/verification-metadata.xml
+
+      - name: Resolve Pocket debug and test graph to generate exact artifact hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace \
+            --write-locks --write-verification-metadata sha256 \
+            :runtime:dependencies :sample:dependencies :pocket:dependencies \
+            :pocket:testDebugUnitTest :pocket:assembleDebug
+
+      - name: Merge prior policy and exact cached artifact hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/pocket-extra-components.txt" <<'EOF'
+          androidx.core:core:1.16.0
+          androidx.core:core-ktx:1.16.0
+          androidx.core:core-viewtree:1.0.0
+          com.goterl:lazysodium-android:5.2.0
+          net.java.dev.jna:jna:5.17.0
+          org.jetbrains.kotlin:kotlin-stdlib:2.1.21
+          org.jetbrains.kotlin:kotlin-stdlib-common:2.1.21
+          org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4
+          org.jspecify:jspecify:1.0.0
+          EOF
+          python tools/android/complete-gradle-verification.py \
+            --metadata android/gradle/verification-metadata.xml \
+            --merge-from "$RUNNER_TEMP/verification-metadata.previous.xml" \
+            --components "$RUNNER_TEMP/pocket-extra-components.txt" \
+            --gradle-user-home "${GRADLE_USER_HOME:-$HOME/.gradle}"
+          test -s android/gradle/verification-metadata.xml
+          grep -F 'com.goterl' android/gradle/verification-metadata.xml >/dev/null
+
+      - name: Upload generated metadata and any Pocket dependency lockfile
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: pocket-verification-refresh-${{ github.event.pull_request.head.sha }}
+          path: |
+            android/gradle/verification-metadata.xml
+            android/pocket/gradle.lockfile
+          if-no-files-found: error
+          retention-days: 3
