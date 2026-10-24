@@ -3,6 +3,8 @@ package com.zungun.pocket.transport
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.system.Os
+import android.system.OsConstants
 import android.util.AtomicFile
 import java.io.File
 import java.io.FileOutputStream
@@ -256,6 +258,15 @@ internal class AndroidMessageIdJournalStorage(
         writeAtomic(slotFiles[slot], bytes)
     }
 
+    private fun syncDirectory() {
+        val descriptor = Os.open(directory.absolutePath, OsConstants.O_RDONLY or OsConstants.O_DIRECTORY, 0)
+        try {
+            Os.fsync(descriptor)
+        } finally {
+            runCatching { Os.close(descriptor) }
+        }
+    }
+
     private fun readAtomic(file: File): ByteArray? {
         val atomic = AtomicFile(file)
         return try {
@@ -271,7 +282,12 @@ internal class AndroidMessageIdJournalStorage(
         try {
             stream = atomic.startWrite()
             stream.write(bytes)
+            // AtomicFile.finishWrite syncs too, but does not report a failed sync.
+            // Force explicitly so an I/O error aborts before the allocator can return an ID.
+            stream.fd.sync()
             atomic.finishWrite(stream)
+            // A durable file payload is insufficient if the rename itself is lost on power failure.
+            syncDirectory()
         } catch (error: Exception) {
             stream?.let { failedStream -> runCatching { atomic.failWrite(failedStream) } }
             throw error
