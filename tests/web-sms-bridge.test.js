@@ -79,10 +79,10 @@ test('authenticated SMS v2 envelopes reject tampering and malformed peer keys',a
   assert.match(key,/^[A-Za-z0-9_-]{43}$/);
   assert.deepEqual(await auth.decodeAuthenticatedEnvelope(await auth.encodeAuthenticatedEnvelope(message,key),key),message);
   await assert.rejects(()=>auth.encodeAuthenticatedEnvelope(message,'short'),/SMS_AUTH_KEY_REQUIRED/);
-  await assert.rejects(()=>auth.decodeAuthenticatedEnvelope(await auth.encodeAuthenticatedEnvelope(message,key)+'x',key));
   const signed=await auth.encodeAuthenticatedEnvelope(message,key);
-  const parts=signed.split('|');parts[4]=parts[4].slice(0,-1)+'A';
-  await assert.rejects(()=>auth.decodeAuthenticatedEnvelope(parts.join('|'),key),/SMS_ENVELOPE_AUTH_FAILED|SMS_ENVELOPE_INVALID/);
+  await assert.rejects(()=>auth.decodeAuthenticatedEnvelope(signed+'x',key),/SMS_ENVELOPE_INVALID/);
+  const parts=signed.split('|');parts[1]='conv_other';
+  await assert.rejects(()=>auth.decodeAuthenticatedEnvelope(parts.join('|'),key),/SMS_ENVELOPE_AUTH_FAILED/);
   await assert.rejects(()=>auth.decodeAuthenticatedEnvelope(signed,auth.generateKey()),/SMS_ENVELOPE_AUTH_FAILED/);
 });
 
