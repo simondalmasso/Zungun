@@ -126,7 +126,18 @@ internal class LocalSmsCompanionServer(
         try {
             if (method == "POST") connection.outputStream.use { it.write(body) }
             val status = connection.responseCode
-            val response = (if (status >= 400) connection.errorStream else connection.inputStream)?.use { stream ->\n                val out = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192); var total = 0\n                while (total < MAX_RESPONSE_BYTES) { val count = stream.read(buffer, 0, minOf(buffer.size, MAX_RESPONSE_BYTES - total)); if (count < 0) break; out.write(buffer, 0, count); total += count }\n                out.toByteArray()\n            } ?: ByteArray(0)
+            val response = (if (status >= 400) connection.errorStream else connection.inputStream)?.use { stream ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var total = 0
+                while (total < MAX_RESPONSE_BYTES) {
+                    val count = stream.read(buffer, 0, minOf(buffer.size, MAX_RESPONSE_BYTES - total))
+                    if (count < 0) break
+                    out.write(buffer, 0, count)
+                    total += count
+                }
+                out.toByteArray()
+            } ?: ByteArray(0)
             respond(output, status, reason(status), response.toString(Charsets.UTF_8), origin, contentType = connection.contentType ?: "application/json")
         } finally { connection.disconnect() }
     }
