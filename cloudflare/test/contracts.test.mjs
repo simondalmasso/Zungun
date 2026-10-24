@@ -12,26 +12,27 @@ test('Android witness ingest is authenticated, bounded, hash-validated, and neve
   assert.doesNotMatch(worker,/ANDROID_WITNESS_\$\{item\.state\}[^;]{0,180}"VERIFIED"/s);
 });
 
-test('Pocket chat route is explicit and complies with the production CSP',()=>{
+test('Zungun chat route loads the real chat and offline outbox under strict CSP',()=>{
   const html=fs.readFileSync(path.join(root,'cloudflare/public/chat/index.html'),'utf8');
   const css=fs.readFileSync(path.join(root,'cloudflare/public/chat/app.css'),'utf8');
   const js=fs.readFileSync(path.join(root,'cloudflare/public/chat/app.js'),'utf8');
+  const outbox=fs.readFileSync(path.join(root,'cloudflare/public/chat/outbox.js'),'utf8');
   const sw=fs.readFileSync(path.join(root,'cloudflare/public/chat/sw.js'),'utf8');
   assert.ok(worker.includes('path==="/chat"'));
   assert.ok(worker.includes('path==="/chat/"'));
   assert.ok(html.includes('<link rel="stylesheet" href="./app.css">'));
+  assert.ok(html.includes('<script src="./outbox.js" defer></script>'));
   assert.ok(html.includes('<script src="./app.js" defer></script>'));
   assert.ok(!html.includes('<style>'));
-  assert.ok(!/<script(?![^>]*src=)[^>]*>/i.test(html));
+  assert.ok(!/<script(?![^>]*\\bsrc=)[^>]*>/i.test(html));
   assert.ok(!html.includes(' style='));
-  assert.ok(css.includes('.install-button'));
-  assert.ok(js.includes('serviceWorker.register'));
-  assert.ok(html.includes('No se verifica el número por SMS.'));
-  assert.ok(html.includes('esta web no accede al módem'));
-  assert.ok(js.includes("window.location.href='sms:'"));
-  assert.ok(js.includes("'https://wa.me/'"));
-  assert.ok(js.includes('localStorage.setItem'));
-  assert.doesNotMatch(js,/\bfetch\s*\(|XMLHttpRequest|new WebSocket/);
-  assert.ok(sw.includes("'./app.js'"));
-  assert.ok(sw.includes("'./app.css'"));
+  assert.ok(css.includes('.composer'));
+  assert.ok(js.includes("'/api/v1/conversations/'+current.conversationId+'/messages"));
+  assert.ok(js.includes('window.ZungunOutbox.createStore'));
+  assert.ok(js.includes('drainOutbox'));
+  assert.ok(outbox.includes('MAX_MESSAGES'));
+  assert.ok(outbox.includes('messageId'));
+  assert.ok(sw.includes("'/chat/app.js'"));
+  assert.ok(sw.includes("'/chat/outbox.js'"));
+  assert.ok(sw.includes("'/chat/app.css'"));
 });
