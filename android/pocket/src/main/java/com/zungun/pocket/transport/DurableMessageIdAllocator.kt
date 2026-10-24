@@ -221,8 +221,13 @@ internal interface MessageIdHeadAuthenticator {
 }
 
 /** Android storage adapter. Files live in noBackupFilesDir and each file uses AtomicFile. */
-internal class AndroidMessageIdJournalStorage(context: Context) : MessageIdJournalStorage {
-    private val directory = File(context.noBackupFilesDir, "zungun-p2p-id-journal")
+internal class AndroidMessageIdJournalStorage(
+    context: Context,
+    peerFingerprintHex: String
+) : MessageIdJournalStorage {
+    init { require(isFingerprint(peerFingerprintHex)) { "peer fingerprint must be 64 lowercase hex characters" } }
+    // The fingerprint must be SHA-256 of the verified peer identity public key, not a display name or pairing code.
+    private val directory = File(File(context.noBackupFilesDir, "zungun-p2p-id-journal"), peerFingerprintHex)
     private val headFile = File(directory, "head.bin")
     private val slotFiles = arrayOf(File(directory, "slot0.bin"), File(directory, "slot1.bin"))
     private val lockFile = File(directory, "journal.lock")
@@ -275,11 +280,22 @@ internal class AndroidMessageIdJournalStorage(context: Context) : MessageIdJourn
 
     companion object {
         private val processLocks = ConcurrentHashMap<String, Any>()
+        private fun isFingerprint(value: String) = value.length == 64 && value.all { it in '0'..'9' || it in 'a'..'f' }
     }
 }
 
 /** HMAC key is hardware/OS-managed in Android Keystore, not stored beside the mutable journal. */
-internal class AndroidKeystoreMessageIdHeadAuthenticator : MessageIdHeadAuthenticator {
+internal class AndroidKeystoreMessageIdHeadAuthenticator(
+    peerFingerprintHex: String
+) : MessageIdHeadAuthenticator {
+    private val keyAlias: String
+
+    init {
+        require(peerFingerprintHex.length == 64 && peerFingerprintHex.all { it in '0'..'9' || it in 'a'..'f' }) {
+            "peer fingerprint must be 64 lowercase hex characters"
+        }
+        keyAlias = "zungun-p2p-id-head-v1-$peerFingerprintHex"
+    }
     override fun authenticate(bytes: ByteArray): ByteArray {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(loadOrCreateKey())
@@ -295,7 +311,7 @@ internal class AndroidKeystoreMessageIdHeadAuthenticator : MessageIdHeadAuthenti
 
     private fun loadExistingKey(): SecretKey? {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        return store.getKey(KEY_ALIAS, null) as? SecretKey
+        return store.getKey(keyAlias, null) as? SecretKey
     }
 
     private fun loadOrCreateKey(): SecretKey {
@@ -303,7 +319,7 @@ internal class AndroidKeystoreMessageIdHeadAuthenticator : MessageIdHeadAuthenti
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_HMAC_SHA256, "AndroidKeyStore").run {
             init(
                 KeyGenParameterSpec.Builder(
-                    KEY_ALIAS,
+                    keyAlias,
                     KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
                 ).setDigests(KeyProperties.DIGEST_SHA256).build()
             )
@@ -311,7 +327,4 @@ internal class AndroidKeystoreMessageIdHeadAuthenticator : MessageIdHeadAuthenti
         }
     }
 
-    private companion object {
-        const val KEY_ALIAS = "zungun-p2p-id-head-v1"
-    }
 }
