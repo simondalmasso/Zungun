@@ -122,11 +122,10 @@
   function connectionStatusForMode(mode, label, connected) {
     if (mode === 'INTERNET') return { label, connected: Boolean(connected) };
     if (mode !== 'SATELLITE_ONLY') return { label: 'Transporte no verificado', connected: false };
-    if (/sin tráfico API/i.test(String(label))) return { label: 'Satélite no verificado · sin tráfico API', connected: false };
-    if (/datos locales/i.test(String(label))) return { label: 'Satélite no verificado · datos locales', connected: false };
-    const chatState = connected ? 'chat online' :
-      (/sin conexión/i.test(String(label)) ? 'chat sin conexión' : 'chat reconectando');
-    return { label: 'Satélite no verificado · ' + chatState, connected: false };
+    return {
+      label: 'Modo satelital exclusivo · tráfico de chat terrestre bloqueado',
+      connected: false,
+    };
   }
 
   function readTransportMode(root) {
