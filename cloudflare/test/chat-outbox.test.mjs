@@ -74,3 +74,20 @@ test('scheduled retries wait for their backoff window', () => {
   store.mark('msg_stable_001', 'usr_one', 'QUEUED');
   assert.equal(store.pending('usr_one').length, 1);
 });
+
+test('satellite-only messages never enter the Internet retry queue', () => {
+  const store = createStore(memoryStorage());
+  store.enqueue(record({ messageId: 'msg_satellite_001', transport: 'SATELLITE_ONLY' }));
+  store.enqueue(record({ messageId: 'msg_internet_001', transport: 'INTERNET' }));
+  assert.deepEqual(store.pending('usr_one', 'INTERNET').map(item => item.messageId), ['msg_internet_001']);
+  assert.deepEqual(store.pending('usr_one', 'SATELLITE_ONLY').map(item => item.messageId), ['msg_satellite_001']);
+  assert.equal(store.list('usr_one').find(item => item.messageId === 'msg_satellite_001').state, 'QUEUED');
+});
+
+test('legacy outbox records without a transport remain Internet records', () => {
+  const storage = memoryStorage();
+  storage.setItem('zungun-chat-outbox-v1', JSON.stringify([record()]));
+  const store = createStore(storage);
+  assert.equal(store.pending('usr_one', 'INTERNET').length, 1);
+  assert.equal(store.pending('usr_one', 'SATELLITE_ONLY').length, 0);
+});
