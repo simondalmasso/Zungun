@@ -57,7 +57,7 @@ This totals exactly 24 bytes, as required by XChaCha20-Poly1305. The five-byte p
 
 Direction values are fixed: `0x00 = A_TO_B`, `0x01 = B_TO_A`. A/B are stable peer roles assigned at authenticated initial pairing; they must not change during a rekey. Epoch is in `0x0000..0xFFFF`; IDs `0x0000..0xFFFD` are allocatable, while `0xFFFE` is the exhausted sentinel and `0xFFFF` is reserved. The codec must reject other values and must not silently truncate or pad a nonce at call sites.
 
-A pure Kotlin formatter and fixed-vector tests now express this layout. They do not prove the key schedule, peer authentication, nonce uniqueness across storage rollback, or the whole wire protocol. If any external build has already emitted packets using the 17-zero variant, it must use a separately versioned protocol; this repository branch has not implemented such a sender.
+A pure Kotlin formatter and fixed-vector tests now express this layout. They do not prove the key schedule, peer authentication, nonce uniqueness across storage rollback, or the whole wire protocol. If any external build has already emitted packets using the 17-zero variant, it must use a separately versioned protocol; this repository branch contains no sender for that variant.
 
 ## 5. Codec implementation gates
 
