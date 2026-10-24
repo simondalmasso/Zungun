@@ -51,3 +51,14 @@ test('incoming SMS is accepted only from the paired phone and conversation, and 
   assert.equal(bridge.acceptIncoming({incoming,expectedPhoneNumber:'+5491123456789',conversationId:'conv_123',storage}).accepted,true);
   assert.deepEqual(bridge.acceptIncoming({incoming,expectedPhoneNumber:'+5491123456789',conversationId:'conv_123',storage}),{accepted:false,reason:'DUPLICATE',messageId:'msg_12345678'});
 });
+
+test('inbox client uses the local inbox endpoint and validates pagination',async()=>{
+  const storage={getItem:()=>JSON.stringify({gatewayUrl:'http://127.0.0.1:8080/api',username:'u',password:'p'}),setItem(){},removeItem(){}};
+  let request;
+  const client=bridge.createClient({storage,fetchImpl:async(url,options)=>{request={url,options};return {ok:true,status:200,json:async()=>[{id:'in_1',type:'SMS',sender:'+5491123456789',contentPreview:'payload',createdAt:'2026-10-24T00:00:00Z'}]}}});
+  const messages=await client.listIncoming({limit:25,offset:5,from:'2026-10-24T00:00:00Z'});
+  assert.equal(request.url,'http://127.0.0.1:8080/api/inbox?type=SMS&limit=25&offset=5&from=2026-10-24T00%3A00%3A00.000Z');
+  assert.equal(request.options.method,'GET');
+  assert.equal(messages[0].id,'in_1');
+  await assert.rejects(()=>client.listIncoming({limit:501}),/SMS_INBOX_PAGINATION_INVALID/);
+});
