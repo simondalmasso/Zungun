@@ -40,3 +40,14 @@ test('network failure returns unknown outcome; caller must not blindly retry SMS
   const client=bridge.createClient({storage,fetchImpl:async()=>{throw new TypeError('network unavailable')}});
   await assert.rejects(()=>client.send({phoneNumber:'+5491123456789',message:{conversationId:'c',messageId:'msg_12345678',clientCreatedAtMs:1,body:'hello'}}),e=>e.code==='SMS_SEND_UNKNOWN');
 });
+
+test('incoming SMS is accepted only from the paired phone and conversation, and duplicates are rejected',()=>{
+  const memory=new Map();
+  const storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+  const message={conversationId:'conv_123',messageId:'msg_12345678',clientCreatedAtMs:1,body:'hola desde SMS'};
+  const incoming={type:'SMS',sender:'+5491123456789',contentPreview:bridge.encodeEnvelope(message)};
+  assert.throws(()=>bridge.acceptIncoming({incoming,expectedPhoneNumber:'+5491199999999',conversationId:'conv_123',storage}),/SMS_SENDER_NOT_AUTHORIZED/);
+  assert.throws(()=>bridge.acceptIncoming({incoming,expectedPhoneNumber:'+5491123456789',conversationId:'conv_other',storage}),/SMS_CONVERSATION_MISMATCH/);
+  assert.equal(bridge.acceptIncoming({incoming,expectedPhoneNumber:'+5491123456789',conversationId:'conv_123',storage}).accepted,true);
+  assert.deepEqual(bridge.acceptIncoming({incoming,expectedPhoneNumber:'+5491123456789',conversationId:'conv_123',storage}),{accepted:false,reason:'DUPLICATE',messageId:'msg_12345678'});
+});
