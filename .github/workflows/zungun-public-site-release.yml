@@ -5,7 +5,8 @@ name: Zungun public-site production release
     branches: [recovery/remote-toolchain-v1]
     paths:
       - "cloudflare/public/**"
-      - "cloudflare/test/public-site-seo.test.mjs"
+      - "cloudflare/test/**"
+      - "cloudflare/package.json"
       - "tools/public-site/**"
       - "tests/public-site.e2e.ts"
       - "e2e.config.ts"
@@ -52,6 +53,8 @@ jobs:
         run: npm install --no-save --no-package-lock --no-audit --no-fund e2e@0.21.2 @e2e-dev/web@0.15.2 playwright@1.64.0
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Verify Worker contracts and chat outbox
+        run: npm --prefix cloudflare run check
       - name: Verify SEO contract before deployment
         run: npm run test:seo
       - name: Browser E2E against the exact local public assets
