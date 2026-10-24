@@ -1,0 +1,52 @@
+name: Pocket satellite router verification
+
+on:
+  pull_request:
+    branches: [recovery/remote-toolchain-v1]
+    paths:
+      - "android/pocket/**"
+      - "android/settings.gradle.kts"
+      - "android/gradle/**"
+      - "docs/guides/pocket-satellite-router.md"
+      - ".github/workflows/pocket-satellite-router.yml"
+  push:
+    branches: [recovery/remote-toolchain-v1]
+    paths:
+      - "android/pocket/**"
+      - "android/settings.gradle.kts"
+      - "android/gradle/**"
+      - "docs/guides/pocket-satellite-router.md"
+      - ".github/workflows/pocket-satellite-router.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pocket-satellite-router-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Set up Android SDK inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+          printf 'ANDROID_SDK_ROOT=%s\nANDROID_HOME=%s\n' "$sdkroot" "$sdkroot" >> "$GITHUB_ENV"
+      - name: Run fail-closed policy tests and compile Pocket module
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :pocket:testDebugUnitTest :pocket:assembleDebug
