@@ -10,8 +10,8 @@ const api=async(path,options={})=>{
   setConnection('Conectado',true);return data;
 };
 function setConnection(label,connected){$('connectionState').textContent=label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(connected));$('connectionDot').parentElement.classList.toggle('offline',!connected)}
-function renderTransportMode(){const satellite=state.transportMode==='SATELLITE_ONLY';const button=$('transportMode');button.textContent=satellite?'Satélite: exclusivo':'Transporte: Internet';button.setAttribute('aria-pressed',String(satellite));button.title=satellite?'Solo cola local; esta PWA no dispone de un adaptador satelital verificado.':'Mensajería por Internet.';button.classList.toggle('satellite-active',satellite);if(satellite)setConnection('Satélite no verificado',false)}
-$('transportMode').addEventListener('click',()=>{state.transportMode=state.transportMode==='SATELLITE_ONLY'?'INTERNET':'SATELLITE_ONLY';try{window.localStorage.setItem('zungun-transport-mode-v1',state.transportMode)}catch{}renderTransportMode();toast(state.transportMode==='SATELLITE_ONLY'?'Modo exclusivo: no se usará Internet':'Modo Internet activado');});
+function renderTransportMode(){const satellite=state.transportMode==='SATELLITE_ONLY';const button=$('transportMode');button.textContent=satellite?'Mensajes: satélite exclusivo':'Mensajes: Internet';button.setAttribute('aria-pressed',String(satellite));button.title=satellite?'Los mensajes no se envían por Internet; quedan pendientes porque esta PWA no tiene adaptador satelital verificado. La sesión y la sincronización de pantalla siguen usando Internet.':'Los mensajes se envían por Internet.';button.classList.toggle('satellite-active',satellite);if(satellite)setConnection('Satélite no verificado',false)}
+$('transportMode').addEventListener('click',()=>{state.transportMode=state.transportMode==='SATELLITE_ONLY'?'INTERNET':'SATELLITE_ONLY';try{window.localStorage.setItem('zungun-transport-mode-v1',state.transportMode)}catch{}renderTransportMode();if(state.transportMode==='SATELLITE_ONLY')toast('Mensajes sin fallback Internet; sesión/sincronización siguen online');else{toast('Mensajes por Internet activados');drainOutbox()}});
 function toast(message){const el=$('toast');el.textContent=message;el.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('visible'),2100)}
 function showError(id,error){const map={
   UNAUTHORIZED:'Tu sesión terminó. Entrá de nuevo.',
@@ -137,7 +137,7 @@ function queueMessage(conversation,message,transport='INTERNET'){
   }
 }
 async function drainOutbox(){
-  if(state.drainingOutbox||!state.me||!navigator.onLine)return;
+  if(state.drainingOutbox||!state.me||!navigator.onLine||state.transportMode==='SATELLITE_ONLY')return;
   state.drainingOutbox=true;
   try{
     for(const item of state.outbox.pending(state.me.userId,'INTERNET')){
