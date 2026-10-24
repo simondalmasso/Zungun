@@ -50,14 +50,16 @@
       const gatewayUrl=normalizeGatewayUrl(config&&config.gatewayUrl);
       const username=String(config&&config.username||'');
       const password=String(config&&config.password||'');
-      if(!username||!password)throw new TypeError('SMS_GATEWAY_CREDENTIALS_REQUIRED');
-      store.setItem(CONFIG_KEY,JSON.stringify({gatewayUrl,username,password}));
-      return {gatewayUrl,username};
+      const token=String(config&&config.token||'');
+      if(!token&&(!username||!password))throw new TypeError('SMS_GATEWAY_CREDENTIALS_REQUIRED');
+      store.setItem(CONFIG_KEY,JSON.stringify(token?{gatewayUrl,token}:{gatewayUrl,username,password}));
+      return token?{gatewayUrl,tokenConfigured:true}:{gatewayUrl,username};
     }
     function clearConfig(){store.removeItem(CONFIG_KEY)}
     function authHeaders(config){
       const headers=new Headers({'accept':'application/json'});
-      headers.set('authorization','Basic '+btoa(unescape(encodeURIComponent(config.username+':'+config.password))));
+      if(config.token)headers.set('authorization','Bearer '+config.token);
+      else headers.set('authorization','Basic '+btoa(unescape(encodeURIComponent(config.username+':'+config.password)));
       return headers;
     }
     async function listIncoming({limit=50,offset=0,from}={}){
