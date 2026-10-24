@@ -1,0 +1,36 @@
+name: SMS companion Android build
+on:
+  pull_request:
+    paths:
+      - 'android/app/**'
+      - 'android/settings.gradle.kts'
+      - 'android/build.gradle.kts'
+      - '.github/workflows/sms-companion-android.yml'
+  push:
+    branches:
+      - feature/web-sms-bridge
+    paths:
+      - 'android/app/**'
+      - 'android/settings.gradle.kts'
+      - 'android/build.gradle.kts'
+      - '.github/workflows/sms-companion-android.yml'
+jobs:
+  companion-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Build companion APK and run JVM tests
+        run: |
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          export ANDROID_SDK_ROOT
+          android/gradle/bootstrap-gradle.sh -p android --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest
