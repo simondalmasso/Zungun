@@ -116,18 +116,13 @@ test('Internet sending is fail-closed while satellite-only mode is selected', ()
 
 test('a successful Internet API response cannot make satellite-only mode look connected', () => {
   assert.equal(typeof connectionStatusForMode, 'function', 'connection status must be mode-aware');
-  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Conectado', true), {
-    label: 'Satélite no verificado · chat online',
+  const strictStatus = {
+    label: 'Modo satelital exclusivo · tráfico de chat terrestre bloqueado',
     connected: false,
-  });
-  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Sin conexión', false), {
-    label: 'Satélite no verificado · chat sin conexión',
-    connected: false,
-  });
-  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Satélite no verificado · sin tráfico API', false), {
-    label: 'Satélite no verificado · sin tráfico API',
-    connected: false,
-  });
+  };
+  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Conectado', true), strictStatus);
+  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Sin conexión', false), strictStatus);
+  assert.deepEqual(connectionStatusForMode('SATELLITE_ONLY', 'Reconectando', false), strictStatus);
   assert.deepEqual(connectionStatusForMode('INTERNET', 'Conectado', true), {
     label: 'Conectado',
     connected: true,
@@ -185,4 +180,7 @@ test('satellite-only mode disables every Internet API call, polling and WebSocke
   assert.match(appSource, /if\(state\.transportMode==='INTERNET'&&'serviceWorker'in navigator/);
   assert.match(appSource, /if\(state\.transportMode!=='INTERNET'\|\|state\.current\?\.conversationId!==current\.conversationId\)return/);
   assert.match(appSource, /state\.transportMode!=='INTERNET'\)return;if\(state\.current\)poll\(false\)/);
+  assert.match(appSource, /socket\.onmessage=event=>\{if\(state\.transportMode!=='INTERNET'\|\|event\.data==='pong'\)return/);
+  assert.match(appSource, /const controller=new AbortController\(\);state\.activeRequests\.add\(controller\);[\s\S]*?const response=await fetch\([\s\S]*?let data=\{\};try\{data=await response\.json\(\)\}catch\{\}[\s\S]*?if\(!window\.ZungunOutbox\.canUseInternetApi\(state\.transportMode\)\)/);
+  assert.match(appSource, /setConnection\('Conectado',true\);return data;[\s\S]*?finally\{state\.activeRequests\.delete\(controller\)\}/);
 });
