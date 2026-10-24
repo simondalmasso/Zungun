@@ -93,3 +93,22 @@ test('SMS sender requires an authenticated peer key before making a gateway requ
   await assert.rejects(()=>client.send({phoneNumber:'+5491123456789',message:{conversationId:'c',messageId:'msg_12345678',clientCreatedAtMs:1,body:'hello'}}),/SMS_AUTH_KEY_REQUIRED/);
   assert.equal(requests,0);
 });
+
+
+await import('../cloudflare/public/chat/sms-pairing.js');
+const pairing=globalThis.ZungunSmsPairing;
+test('pairing vault encrypts peer keys at rest and unlocks with the correct passphrase',async()=>{
+  const memory=new Map(),storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+  const vault=pairing.createVault(storage);await vault.unlock('a-long-passphrase-123');
+  const authKey=auth.generateKey(),bundle={version:1,conversationId:'conv_123',peerPairingCode:'ABC12345',peerPhoneNumber:'+5491123456789',authKey};
+  await vault.add(bundle);
+  const ciphertext=memory.get(pairing.createVault(storage).storageKey);
+  assert.ok(ciphertext);assert.equal(ciphertext.includes(authKey),false);assert.equal(ciphertext.includes('5491123456789'),false);
+  vault.lock();await assert.rejects(()=>pairing.createVault(storage).unlock('wrong-passphrase-000'),/SMS_VAULT_UNLOCK_FAILED/);
+  const reopened=pairing.createVault(storage);await reopened.unlock('a-long-passphrase-123');assert.deepEqual(reopened.list()[0],bundle);
+});
+test('pairing validates E.164 numbers and rejects weak vault passphrases',async()=>{
+  assert.throws(()=>pairing.validatePhone('12345'),/SMS_PHONE_E164_REQUIRED/);
+  const memory=new Map(),storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v)};
+  const vault=pairing.createVault(storage);await assert.rejects(()=>vault.unlock('short'),/SMS_VAULT_PASSPHRASE_TOO_SHORT/);
+});
