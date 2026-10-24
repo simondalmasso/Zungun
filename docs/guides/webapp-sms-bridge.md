@@ -1,33 +1,42 @@
 # Zungun webapp SMS bridge — integration contract
 
-## Current scope
+## Current implementation state
 
-This module defines a versioned SMS envelope and an outbound client for the **local** API of [SMS Gateway for Android](https://github.com/capcom6/android-sms-gateway). It is a transport foundation, not a claim that Zungun SMS chat is already operational.
+The SMS bridge is integrated into the PWA UI on the feature branch, but is **not enabled in production**. The implementation now includes:
+- ZUNGUN-SMS/2 envelopes authenticated with HMAC-SHA256 and a 256-bit per-peer key.
+- A passphrase-unlocked vault that encrypts per-peer phone numbers and keys at rest with AES-GCM; PBKDF2-SHA-256 (310,000 iterations) derives the encryption key. The passphrase and gateway credentials are kept in session memory, not persisted in plaintext.
+- Manual peer pairing bundle import/export. Exchange the bundle only over a trusted, independent channel and verify pairing codes/phone numbers out of band. Never send the bundle or secret in SMS.
+- UI controls for the gateway URL and credentials, a browser-side /inbox connectivity check, an explicit SMS enable checkbox, composer fallback when offline or in strict transport mode, incoming inbox polling, HMAC/sender/conversation validation, and duplicate suppression.
+- Delivery status distinguishes gateway acceptance from confirmed recipient delivery. An ambiguous POST outcome is SMS_SEND_UNKNOWN; it must not be blindly retried.
 
-The primary UI remains the Zungun webapp. A separate Android SMS-gateway component with a SIM and the Android SMS permissions is required. The gateway's local HTTP API must be reachable from the browser, and the browser must permit that local request. A browser can block this because of CORS, mixed-content, or local-network access restrictions; configuring a URL does not bypass those controls.
+## Gateway browser-access constraints
 
-## Wire format and authentication
+The PWA does not bypass browser security. From an HTTPS origin, browsers can block a plain-HTTP gateway on a LAN address due to mixed content and local-network access policy, and CORS can independently prevent requests. The UI permits HTTPS endpoints and loopback addresses for local testing, but it does not make a LAN HTTP endpoint reachable. If Chrome blocks the local endpoint, the remaining implementation requirement is a supported local companion/TLS bridge with an explicit origin allowlist; do not disable browser protections or expose the gateway to the public Internet. Gateway credentials are kept in memory for this session only.
 
-The helper now emits `ZUNGUN-SMS/2` envelopes:
+## Pairing workflow
 
-`ZUNGUN-SMS/2|<conversationId>|<messageId>|<clientCreatedAtMs>|<base64url-utf8-body>|<base64url-HMAC-SHA256>`
+1. Open a Zungun conversation while the server-backed identity and conversation are available.
+2. Unlock the SMS vault using a strong passphrase (12+ characters).
+3. On the initiating device, enter its own E.164 phone number and the contact's E.164 number and Zungun pairing code, then create a key and export the bundle.
+4. Exchange the bundle through a private, independent channel (prefer in-person QR or another end-to-end encrypted channel), not through SMS. The receiving side imports the bundle, then exports its own contact bundle using the same shared key and its own phone number/code. Exchange that bundle back and import it on the first device.
+5. Compare the Zungun pairing code and phone number over an independent channel before enabling SMS.
 
-The MAC covers the exact first five fields and uses a per-peer 256-bit random key. Generate a key with `ZungunSmsAuth.generateKey()`; pass that key into both outbound `send({ ..., authKey })` and inbound `acceptIncoming({ ..., authKey })`. Missing keys, malformed MACs, and unauthenticated v1 envelopes are rejected by the send/receive helpers. The message ID remains stable for deduplication.
+The vault protects secrets at rest in browser storage, but it is not hardware-backed. Anyone who obtains the export bundle can use the shared secret until the pair is re-keyed. The current implementation uses a manually exchanged JSON bundle; it does not yet render a QR code.
 
-**Key pairing is not yet implemented in the PWA.** The key must not be hard-coded or sent in the same SMS as the message; it needs an explicit trusted pairing ceremony, and the app needs a secure per-peer key store before production use. The envelope MAC authenticates message integrity for holders of the paired secret; the sender phone and conversation checks remain additional routing checks, not substitutes for the key.
+## Delivery semantics and limitations
 
-## Delivery semantics
+- ACCEPTED_BY_GATEWAY means only that the local gateway accepted the request. It does not prove carrier submission or recipient delivery.
+- Network failure after a POST is SMS_SEND_UNKNOWN; the gateway may already have accepted it, so automatic retries are unsafe.
+- The bridge polls the local /inbox endpoint and rejects unauthenticated/tampered envelopes, sender mismatches, conversation mismatches, and duplicate message IDs.
+- The current receiver depends on the gateway exposing a complete concatenated SMS body in contentPreview. Multipart/segment behavior and carrier delivery reports have not been verified. Avoid assuming long messages are safe or free of extra charges.
+- The PWA still needs an online session to restore identity and discover conversations after a reload. The SMS UI can operate while a conversation remains loaded, but it is not a complete independent offline identity/session system.
 
-- `ACCEPTED_BY_GATEWAY` means only that the local gateway returned a successful HTTP response. It does not prove that the carrier sent the SMS or that the recipient received it.
-- A network failure after a POST is `SMS_SEND_UNKNOWN`: the gateway may already have accepted the message. Do not automatically retry an ambiguous SMS request, because that can create duplicates.
-- SMS billing, carrier delivery reports, multipart segmentation/size bounds, secure key pairing and storage, PWA composer/inbox wiring, and reconciliation must be implemented and tested before calling this a complete transport.
-- Credentials are stored in the browser's local storage by this client. Use a dedicated local gateway account and do not expose its API to the public Internet. Browser storage is not a hardware-backed secret store.
+## Verification still required
 
-## Manual device verification still required
+1. Configure the separate SMS Gateway for Android app (https://github.com/capcom6/android-sms-gateway) on a SIM-equipped Android phone and grant SMS permissions.
+2. Open Zungun on that phone, unlock the vault, configure the local gateway and run the connectivity check. Record whether CORS, mixed content or local-network permission blocks the request.
+3. Pair two devices with a private channel; test authenticated send and receive, duplicate/reordered messages, invalid keys and wrong sender numbers.
+4. Turn off Internet/Wi-Fi and send a real SMS to a controlled recipient, then verify the reverse direction and carrier/device delivery evidence.
+5. Test ambiguous POST timeouts, multipart SMS limits, Android gateway API compatibility and actual carrier billing before considering production enablement.
 
-1. Install and configure SMS Gateway for Android on a SIM-equipped Android device; start its **Local Server** and grant SMS permissions.
-2. Open Zungun in Chrome on that same device and verify that the local gateway API is reachable from the secure web origin. If the browser blocks the request, do not disable browser security; a purpose-built local bridge endpoint with explicit origin policy is needed.
-3. Test a real SMS to a controlled recipient, then test the receiving-side bridge and deduplication with Internet/Wi-Fi disabled.
-4. Verify send/delivery receipts separately and test ambiguous timeouts before enabling automatic fallback in the production chat.
-
-The bridge module now includes a tested local `/inbox` poller, HMAC-SHA256 envelope v2 helpers, incoming sender/conversation checks, and a local duplicate-ID ledger. These helpers are not yet connected to the PWA inbox/poller, so incoming SMS are not displayed in chat yet. Key pairing and secure key storage are not implemented; do not enable the SMS transport in production. The current Zungun PWA still relies on the server for session restoration, conversation discovery, and incoming chat synchronization. This module alone does not make those features work offline and is not yet wired into the composer or the inbound receiver.
+No physical SIM/device test has been performed by CI. Unit/contract tests cannot prove radio, carrier or handset delivery. Keep this PR as draft until the browser-to-gateway path and two-device SIM test are verified.
