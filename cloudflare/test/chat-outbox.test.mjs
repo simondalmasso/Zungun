@@ -364,10 +364,11 @@ test('unknown persisted mode remains blocked until the user explicitly enables I
 });
 
 
+
 test('PWA transport policy updates invalidate the previous service-worker cache', () => {
-  const match = serviceWorkerSource.match(/const CACHE='zungun-pocket-chat-v(\\d+)';/);
+  const match = serviceWorkerSource.match(/const CACHE='zungun-pocket-chat-v(\d+)';/);
   assert.ok(match, 'service worker cache namespace must be explicit');
   assert.ok(Number(match[1]) > 4, 'transport guard changes must not reuse the pre-guard v4 cache');
-  assert.match(serviceWorkerSource, /'\\/chat\\/app\\.js'/);
-  assert.match(serviceWorkerSource, /'\\/chat\\/outbox\\.js'/);
+  assert.ok(serviceWorkerSource.includes("'/chat/app.js'"));
+  assert.ok(serviceWorkerSource.includes("'/chat/outbox.js'"));
 });
