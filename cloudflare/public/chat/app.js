@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false};
+const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false,drainingOutbox:false,outbox:window.ZungunOutbox.createStore(window.localStorage)};
 const api=async(path,options={})=>{
   const headers=new Headers(options.headers||{});headers.set('accept','application/json');
   if(options.body!==undefined)headers.set('content-type','application/json');
@@ -24,7 +24,7 @@ function openAuth(message=''){
   closeSocket();state.me=null;state.current=null;$('chatView').classList.add('hidden');$('authView').classList.remove('hidden');$('accountError').textContent=message;
 }
 function openApp(){
-  $('authView').classList.add('hidden');$('chatView').classList.remove('hidden');$('myName').textContent=state.me.displayName;$('myCode').textContent=state.me.pairingCode;$('myAvatar').textContent=initial(state.me.displayName);loadConversations();
+  $('authView').classList.add('hidden');$('chatView').classList.remove('hidden');$('myName').textContent=state.me.displayName;$('myCode').textContent=state.me.pairingCode;$('myAvatar').textContent=initial(state.me.displayName);loadConversations();drainOutbox();
 }
 function initial(name){return Array.from(String(name||'z').trim())[0]?.toLocaleUpperCase()||'Z'}
 function closeSocket(){if(state.retry){clearTimeout(state.retry);state.retry=null}if(state.socket){state.socket.onclose=null;try{state.socket.close()}catch{}state.socket=null}}
@@ -80,16 +80,90 @@ async function openConversation(conversation){
   closeSocket();state.current=conversation;state.lastSeq=0;$('chatView').classList.add('in-chat');$('emptyChat').classList.add('hidden');$('conversationPane').classList.remove('hidden');
   $('chatTitle').textContent=conversation.peer.displayName;$('peerCode').textContent=conversation.peer.pairingCode;$('peerAvatar').textContent=initial(conversation.peer.displayName);$('messages').replaceChildren();
   const loading=document.createElement('div');loading.className='loading';loading.textContent='Cargando mensajes…';$('messages').append(loading);renderConversations();
-  await poll(true);connectSocket();$('messageInput').focus()
+  await poll(true);restoreOutboxMessages();connectSocket();drainOutbox();$('messageInput').focus()
 }
 $('backToChats').addEventListener('click',()=>{$('chatView').classList.remove('in-chat')});
+function messageStatus(message, element){
+  if(message.deliveryState==='QUEUED')return 'En cola';
+  if(message.deliveryState==='SENDING')return 'Enviando';
+  if(message.deliveryState==='FAILED')return 'No enviado';
+  if(message.deliveredAtMs||element?.dataset.deliveryState==='DELIVERED')return 'Entregado';
+  return 'Enviado';
+}
 function renderMessage(message){
-  const id='message-'+message.messageId;let element=document.getElementById(id);const mine=message.senderId===state.me.userId;
-  if(!element){$('messages').querySelectorAll('.messages-empty,.loading').forEach(el=>el.remove());element=document.createElement('article');element.id=id;element.className='message'+(mine?' mine':'');element.dataset.sequence=String(message.sequence||0);const body=document.createElement('div');body.className='message-text';body.textContent=message.body;const meta=document.createElement('div');meta.className='message-meta';const time=document.createElement('time');time.textContent=new Date(message.clientCreatedAtMs||message.acceptedAtMs||Date.now()).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});meta.append(time);if(mine){const status=document.createElement('span');status.className='message-status';status.textContent=message.deliveredAtMs?'Entregado':'Enviado';meta.append(status)}element.append(body,meta);$('messages').append(element)}
-  else if(mine){const status=element.querySelector('.message-status');if(status)status.textContent=message.deliveredAtMs?'Entregado':'Enviado'}
+  const id='message-'+message.messageId;const mine=message.senderId===state.me.userId;
+  if(mine&&Number(message.sequence)>0)state.outbox.remove(message.messageId,state.me.userId);
+  let element=document.getElementById(id);
+  if(!element){
+    $('messages').querySelectorAll('.messages-empty,.loading').forEach(el=>el.remove());
+    element=document.createElement('article');element.id=id;element.className='message'+(mine?' mine':'');element.dataset.sequence=String(message.sequence||0);
+    const body=document.createElement('div');body.className='message-text';body.textContent=message.body;
+    const meta=document.createElement('div');meta.className='message-meta';
+    const time=document.createElement('time');time.textContent=new Date(message.clientCreatedAtMs||message.acceptedAtMs||Date.now()).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    meta.append(time);
+    if(mine){const status=document.createElement('span');status.className='message-status';status.textContent=messageStatus(message,element);meta.append(status)}
+    element.append(body,meta);$('messages').append(element);
+  }else if(mine){
+    const status=element.querySelector('.message-status');if(status)status.textContent=messageStatus(message,element);
+    element.dataset.sequence=String(Math.max(Number(element.dataset.sequence)||0,Number(message.sequence)||0));
+  }
+  if(mine){
+    if(message.deliveryState)element.dataset.deliveryState=message.deliveryState;
+    else if(message.deliveredAtMs)element.dataset.deliveryState='DELIVERED';
+    else if(!element.dataset.deliveryState||element.dataset.deliveryState==='QUEUED'||element.dataset.deliveryState==='SENDING')element.dataset.deliveryState='SENT';
+  }
   state.lastSeq=Math.max(state.lastSeq,Number(message.sequence)||0);
   if(!mine&&!message.deliveredAtMs&&state.current)api('/api/v1/conversations/'+state.current.conversationId+'/messages/'+encodeURIComponent(message.messageId)+'/ack',{method:'POST',body:'{}'}).catch(()=>{});
   $('messages').scrollTop=$('messages').scrollHeight;
+}
+function restoreOutboxMessages(){
+  if(!state.me||!state.current)return;
+  for(const item of state.outbox.list(state.me.userId,state.current.conversationId)){
+    renderMessage({messageId:item.messageId,senderId:item.userId,body:item.body,clientCreatedAtMs:item.clientCreatedAtMs,sequence:0,deliveryState:item.state});
+  }
+}
+function queueMessage(conversation,message){
+  try{
+    const item=state.outbox.enqueue({userId:state.me.userId,conversationId:conversation.conversationId,messageId:message.messageId,body:message.body,clientCreatedAtMs:message.clientCreatedAtMs,queuedAtMs:Date.now(),state:'QUEUED'});
+    if(state.current?.conversationId===conversation.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:item.state});
+    $('messageInput').value='';$('messageInput').focus();$('sendError').textContent='';
+    setConnection(navigator.onLine?'Reintentando':'Sin conexión',false);toast('Mensaje guardado para enviar');
+    return true;
+  }catch(error){
+    $('sendError').textContent=error.message==='OUTBOX_FULL'?'Hay demasiados mensajes pendientes. Conectate para liberar espacio.':'No se pudo guardar el mensaje en este dispositivo.';
+    return false;
+  }
+}
+async function drainOutbox(){
+  if(state.drainingOutbox||!state.me||!navigator.onLine)return;
+  state.drainingOutbox=true;
+  try{
+    for(const item of state.outbox.pending(state.me.userId)){
+      if(!navigator.onLine)break;
+      state.outbox.mark(item.messageId,state.me.userId,'SENDING');
+      if(state.current?.conversationId===item.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:'SENDING'});
+      try{
+        const data=await api('/api/v1/conversations/'+item.conversationId+'/messages',{method:'POST',body:JSON.stringify({messageId:item.messageId,body:item.body,clientCreatedAtMs:item.clientCreatedAtMs})});
+        state.outbox.remove(item.messageId,state.me.userId);
+        if(state.current?.conversationId===item.conversationId)renderMessage(data.message);
+      }catch(error){
+        if(error.status===401){
+          state.outbox.mark(item.messageId,state.me.userId,'QUEUED');
+          if(state.current?.conversationId===item.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:'QUEUED'});
+          openAuth('Tu sesión terminó. Entrá de nuevo.');break;
+        }
+        if(window.ZungunOutbox.isRetryableError(error)){
+          const attempts=(Number(item.attempts)||0)+1;
+          const delay=error.status===429?60000:Math.min(60000,1000*Math.pow(2,Math.min(attempts,6)));
+          state.outbox.mark(item.messageId,state.me.userId,'QUEUED',error.code||'NETWORK_ERROR',Date.now()+delay);
+          if(state.current?.conversationId===item.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:'QUEUED'});
+          setConnection(navigator.onLine?'Reintentando':'Sin conexión',false);break;
+        }
+        state.outbox.mark(item.messageId,state.me.userId,'FAILED',error.code||'DELIVERY_FAILED');
+        if(state.current?.conversationId===item.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:'FAILED'});
+      }
+    }
+  }finally{state.drainingOutbox=false}
 }
 async function poll(initial=false){
   const current=state.current;if(!current)return;
@@ -98,7 +172,7 @@ async function poll(initial=false){
     if(initial)$('messages').replaceChildren();
     if(!data.items?.length&&initial){const empty=document.createElement('div');empty.className='messages-empty';empty.textContent='Todavía no hay mensajes. Escribí el primero.';$('messages').append(empty)}
     for(const message of (data.items||[]))renderMessage(message);
-    if(!initial&&!state.lastSeq&&!(data.items||[]).length){$('messages').replaceChildren();const empty=document.createElement('div');empty.className='messages-empty';empty.textContent='Todavía no hay mensajes. Escribí el primero.';$('messages').append(empty)}
+    if(!initial&&!state.lastSeq&&!(data.items||[]).length&&!state.outbox.list(state.me.userId,current.conversationId).length){$('messages').replaceChildren();const empty=document.createElement('div');empty.className='messages-empty';empty.textContent='Todavía no hay mensajes. Escribí el primero.';$('messages').append(empty)}
     setConnection('Conectado',true)
   }catch(error){if(error.status===401)openAuth('Tu sesión terminó. Entrá de nuevo.');else setConnection('Reconectando',false)}
 }
@@ -117,15 +191,22 @@ function connectSocket(){
 $('sendForm').addEventListener('submit',async event=>{
   event.preventDefault();const body=$('messageInput').value.trim();const current=state.current;if(!body||!current)return;
   if(state.busy)return;state.busy=true;$('sendButton').disabled=true;$('sendError').textContent='';
-  const id='msg_'+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));
-  try{const data=await api('/api/v1/conversations/'+current.conversationId+'/messages',{method:'POST',body:JSON.stringify({messageId:id,body,clientCreatedAtMs:Date.now()})});
-    if(state.current?.conversationId===current.conversationId)renderMessage(data.message);$('messageInput').value='';$('messageInput').focus();await loadConversations()
-  }catch(error){showError('sendError',error)}
-  finally{state.busy=false;$('sendButton').disabled=false}
+  const message={messageId:'msg_'+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)),body,clientCreatedAtMs:Date.now()};
+  try{
+    if(!navigator.onLine){queueMessage(current,message);return}
+    try{
+      const data=await api('/api/v1/conversations/'+current.conversationId+'/messages',{method:'POST',body:JSON.stringify(message)});
+      if(state.current?.conversationId===current.conversationId)renderMessage(data.message);
+      $('messageInput').value='';$('messageInput').focus();await loadConversations();
+    }catch(error){
+      if(window.ZungunOutbox.isRetryableError(error)){queueMessage(current,message)}
+      else{showError('sendError',error)}
+    }
+  }finally{state.busy=false;$('sendButton').disabled=false}
 });
-window.addEventListener('online',()=>{setConnection('Conectando',false);poll();connectSocket()});
+window.addEventListener('online',()=>{setConnection('Conectando',false);drainOutbox();if(state.current){poll();connectSocket()}else loadConversations()});
 window.addEventListener('offline',()=>setConnection('Sin conexión',false));
-state.pollTimer=setInterval(()=>{if(state.current)poll(false);else loadConversations()},4000);
+state.pollTimer=setInterval(()=>{if(state.current)poll(false);else loadConversations();drainOutbox()},4000);
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 if(location.protocol==='file:')setConnection('Abrí desde el enlace',false);
 boot();
