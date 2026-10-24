@@ -19,8 +19,9 @@ class DurableMessageIdAllocatorTest {
         assertEquals(0, allocator.allocate().messageId)
         assertEquals(1, allocator.allocate().messageId)
         val afterRestart = DurableMessageIdAllocator(storage, auth)
-        assertEquals(0, afterRestart.allocate().epoch)
-        assertEquals(2, afterRestart.allocate().messageId)
+        val resumed = afterRestart.allocate()
+        assertEquals(0, resumed.epoch)
+        assertEquals(2, resumed.messageId)
         assertEquals(3, DurableMessageIdAllocator(storage, auth).allocate().messageId)
     }
 
