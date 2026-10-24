@@ -76,7 +76,7 @@
   }
   function acceptIncoming({incoming,expectedPhoneNumber,conversationId,storage}){
     if(!incoming||incoming.type!=='SMS'||typeof incoming.sender!=='string'||typeof incoming.contentPreview!=='string')throw new TypeError('SMS_INCOMING_INVALID');
-    if(!/^\\+[1-9]\\d{7,14}$/.test(expectedPhoneNumber||'')||incoming.sender!==expectedPhoneNumber)throw new Error('SMS_SENDER_NOT_AUTHORIZED');
+    if(!/^\+[1-9]\d{7,14}$/.test(expectedPhoneNumber||'')||incoming.sender!==expectedPhoneNumber)throw new Error('SMS_SENDER_NOT_AUTHORIZED');
     const message=decodeEnvelope(incoming.contentPreview);
     if(message.conversationId!==conversationId)throw new Error('SMS_CONVERSATION_MISMATCH');
     if(!storage||typeof storage.getItem!=='function'||typeof storage.setItem!=='function')throw new TypeError('SMS_BRIDGE_STORAGE_REQUIRED');
