@@ -129,3 +129,17 @@ test('HTTP 5xx after an SMS POST is treated as ambiguous and not safe to retry',
   const message={conversationId:'conv_123',messageId:'msg_12345678',clientCreatedAtMs:1,body:'hello'};
   await assert.rejects(()=>client.send({phoneNumber:'+5491123456789',message,authKey:auth.generateKey()}),e=>e.code==='SMS_SEND_UNKNOWN'&&e.ambiguous===true);
 });
+
+test('SMS message history is encrypted with the peer vault and restored after unlock',async()=>{
+  const memory=new Map(),storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
+  const vault=pairing.createVault(storage);await vault.unlock('a-long-passphrase-123');
+  const authKey=auth.generateKey();
+  await vault.add({version:1,conversationId:'conv_123',peerPairingCode:'ABC12345',peerPhoneNumber:'+5491123456789',authKey});
+  const message={messageId:'msg_12345678',body:'sms-history-plaintext-secret',clientCreatedAtMs:1792843200000,senderId:'peer-user',deliveryState:'RECEIVED',transport:'SMS'};
+  await vault.addMessage('conv_123',message);
+  const stored=memory.get(pairing.createVault(storage).storageKey);
+  assert.equal(stored.includes(message.body),false);
+  vault.lock();
+  const reopened=pairing.createVault(storage);await reopened.unlock('a-long-passphrase-123');
+  assert.deepEqual(reopened.getMessages('conv_123'),[message]);
+});
