@@ -11,7 +11,7 @@ The SMS bridge is integrated into the PWA UI on the feature branch, but is **not
 
 ## Gateway browser-access constraints
 
-The PWA does not bypass browser security. From an HTTPS origin, browsers can block a plain-HTTP gateway on a LAN address due to mixed content and local-network access policy, and CORS can independently prevent requests. The UI permits HTTPS endpoints and loopback addresses for local testing, but it does not make a LAN HTTP endpoint reachable. If Chrome blocks the local endpoint, the remaining implementation requirement is a supported local companion/TLS bridge with an explicit origin allowlist; do not disable browser protections or expose the gateway to the public Internet. Gateway credentials are kept in memory for this session only.
+The Android app now includes a local companion listener bound only to 127.0.0.1:8787. It accepts only the production Zungun origin, supports CORS preflight (including the local-network preflight header), requires a random per-run bearer token, and proxies only GET /inbox and POST /messages to http://localhost:8080 with the gateway credentials entered in the Android app. It does not listen on the LAN and does not expose the gateway password to the PWA. The companion is session-scoped and stops when the app activity is destroyed. The PWA must use http://127.0.0.1:8787 and the token shown in the Android app. This design is intended to avoid direct browser-to-gateway CORS failures without disabling browser protections; Chrome's local-network permission behavior still requires verification on the target device.
 
 ## Pairing workflow
 
@@ -21,7 +21,7 @@ The PWA does not bypass browser security. From an HTTPS origin, browsers can blo
 4. Exchange the bundle through a private, independent channel (prefer in-person QR or another end-to-end encrypted channel), not through SMS. The receiving side imports the bundle, then exports its own contact bundle using the same shared key and its own phone number/code. Exchange that bundle back and import it on the first device.
 5. Compare the Zungun pairing code and phone number over an independent channel before enabling SMS.
 
-The vault protects secrets at rest in browser storage, but it is not hardware-backed. Anyone who obtains the export bundle can use the shared secret until the pair is re-keyed. The current implementation uses a manually exchanged JSON bundle; it does not yet render a QR code.
+The vault protects secrets at rest in browser storage, but it is not hardware-backed. Anyone who obtains the export bundle can use the shared secret until the pair is re-keyed. The current implementation uses a manually exchanged JSON bundle; it does not yet render a QR code. The local companion server is covered by JVM contract tests for origin allowlisting, preflight and bearer-token enforcement, but still needs on-device Chrome validation.
 
 ## Delivery semantics and limitations
 
@@ -33,8 +33,9 @@ The vault protects secrets at rest in browser storage, but it is not hardware-ba
 
 ## Verification still required
 
-1. Configure the separate SMS Gateway for Android app (https://github.com/capcom6/android-sms-gateway) on a SIM-equipped Android phone and grant SMS permissions.
-2. Open Zungun on that phone, unlock the vault, configure the local gateway and run the connectivity check. Record whether CORS, mixed content or local-network permission blocks the request.
+1. Configure the separate SMS Gateway for Android app (https://github.com/capcom6/android-sms-gateway) on a SIM-equipped Android phone, enable Local Server, and grant SMS permissions.
+2. Install the Zungun Android debug/release APK built by CI on the same phone. Open its SMS Bridge screen, enter the gateway's local-server username/password, start the companion, and keep the screen open.
+3. Open Zungun in Chrome on that phone, unlock the vault, set the companion URL to http://127.0.0.1:8787, paste the temporary token shown by the Android app, and run the connectivity check. Record whether Chrome's local-network permission or the OS blocks the request.
 3. Pair two devices with a private channel; test authenticated send and receive, duplicate/reordered messages, invalid keys and wrong sender numbers.
 4. Turn off Internet/Wi-Fi and send a real SMS to a controlled recipient, then verify the reverse direction and carrier/device delivery evidence.
 5. Test ambiguous POST timeouts, multipart SMS limits, Android gateway API compatibility and actual carrier billing before considering production enablement.
