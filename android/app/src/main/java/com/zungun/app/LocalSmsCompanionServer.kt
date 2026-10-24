@@ -28,22 +28,23 @@ internal class LocalSmsCompanionServer(
 
     fun start() {
         check(running.compareAndSet(false, true)) { "SMS_COMPANION_ALREADY_RUNNING" }
+        val listener = try { ServerSocket(PORT, 16, InetAddress.getByName("127.0.0.1")) }
+        catch (e: Exception) { running.set(false); throw e }
+        server = listener
         thread = Thread({
             try {
-                ServerSocket(PORT, 16, InetAddress.getByName("127.0.0.1")).use { listener ->
-                    server = listener
+                listener.use {
                     while (running.get()) {
                         try {
                             val socket = listener.accept()
-                            Thread({ handle(socket) }, "zungun-sms-client").start()
+                            Thread({ handle(socket) }, "zungun-sms-client").apply { isDaemon = true; start() }
                         } catch (_: Exception) {
                             if (running.get()) { /* accept loop continues */ }
                         }
                     }
                 }
-            } catch (e: Exception) {
-                running.set(false)
             } finally {
+                running.set(false)
                 server = null
             }
         }, "zungun-sms-companion").apply { isDaemon = true; start() }
@@ -125,7 +126,7 @@ internal class LocalSmsCompanionServer(
         try {
             if (method == "POST") connection.outputStream.use { it.write(body) }
             val status = connection.responseCode
-            val response = (if (status >= 400) connection.errorStream else connection.inputStream)?.use { it.readNBytes(MAX_RESPONSE_BYTES) } ?: ByteArray(0)
+            val response = (if (status >= 400) connection.errorStream else connection.inputStream)?.use { stream ->\n                val out = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192); var total = 0\n                while (total < MAX_RESPONSE_BYTES) { val count = stream.read(buffer, 0, minOf(buffer.size, MAX_RESPONSE_BYTES - total)); if (count < 0) break; out.write(buffer, 0, count); total += count }\n                out.toByteArray()\n            } ?: ByteArray(0)
             respond(output, status, reason(status), response.toString(Charsets.UTF_8), origin, contentType = connection.contentType ?: "application/json")
         } finally { connection.disconnect() }
     }
