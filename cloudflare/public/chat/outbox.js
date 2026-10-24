@@ -116,7 +116,8 @@
   }
 
   function connectionStatusForMode(mode, label, connected) {
-    if (mode !== 'SATELLITE_ONLY') return { label, connected: Boolean(connected) };
+    if (mode === 'INTERNET') return { label, connected: Boolean(connected) };
+    if (mode !== 'SATELLITE_ONLY') return { label: 'Transporte no verificado', connected: false };
     const chatState = connected ? 'chat online' :
       (/sin conexión/i.test(String(label)) ? 'chat sin conexión' : 'chat reconectando');
     return { label: 'Satélite no verificado · ' + chatState, connected: false };
@@ -133,10 +134,12 @@
   }
 
   function persistTransportMode(root, mode) {
-    if (!root || !root.localStorage || !['INTERNET', 'SATELLITE_ONLY'].includes(mode)) return false;
+    if (!root || !['INTERNET', 'SATELLITE_ONLY'].includes(mode)) return false;
     try {
-      root.localStorage.setItem(TRANSPORT_MODE_KEY, mode);
-      return root.localStorage.getItem(TRANSPORT_MODE_KEY) === mode;
+      const storage = root.localStorage;
+      if (!storage || typeof storage.setItem !== 'function' || typeof storage.getItem !== 'function') return false;
+      storage.setItem(TRANSPORT_MODE_KEY, mode);
+      return storage.getItem(TRANSPORT_MODE_KEY) === mode;
     } catch {
       return false;
     }
