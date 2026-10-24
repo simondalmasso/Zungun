@@ -41,8 +41,8 @@
           .filter(item => item.userId === userId && (!conversationId || item.conversationId === conversationId))
           .sort((a, b) => a.queuedAtMs - b.queuedAtMs);
       },
-      pending(userId) {
-        return this.list(userId).filter(item => item.state !== 'FAILED' && (Number(item.nextAttemptAtMs) || 0) <= Date.now());
+      pending(userId, transport = 'INTERNET') {
+        return this.list(userId).filter(item => (item.transport || 'INTERNET') === transport && item.state !== 'FAILED' && (Number(item.nextAttemptAtMs) || 0) <= Date.now());
       },
       enqueue(record) {
         if (!record || typeof record.userId !== 'string' || typeof record.conversationId !== 'string' ||
@@ -67,6 +67,7 @@
           clientCreatedAtMs: record.clientCreatedAtMs,
           queuedAtMs: Number.isSafeInteger(record.queuedAtMs) ? record.queuedAtMs : Date.now(),
           state: ['QUEUED', 'SENDING', 'FAILED'].includes(record.state) ? record.state : 'QUEUED',
+          transport: record.transport === 'SATELLITE_ONLY' ? 'SATELLITE_ONLY' : 'INTERNET',
           attempts: Number.isSafeInteger(record.attempts) && record.attempts >= 0 ? record.attempts : 0,
           nextAttemptAtMs: Number.isSafeInteger(record.nextAttemptAtMs) ? record.nextAttemptAtMs : 0,
           ...(typeof record.lastError === 'string' ? { lastError: record.lastError } : {}),

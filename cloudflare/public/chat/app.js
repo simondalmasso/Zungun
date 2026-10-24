@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false,drainingOutbox:false,outbox:window.ZungunOutbox.createStore(window.localStorage)};
+const state={me:null,conversations:[],current:null,lastSeq:0,socket:null,retry:null,pollTimer:null,busy:false,drainingOutbox:false,transportMode:window.localStorage.getItem('zungun-transport-mode-v1')==='SATELLITE_ONLY'?'SATELLITE_ONLY':'INTERNET',outbox:window.ZungunOutbox.createStore(window.localStorage)};
 const api=async(path,options={})=>{
   const headers=new Headers(options.headers||{});headers.set('accept','application/json');
   if(options.body!==undefined)headers.set('content-type','application/json');
@@ -10,6 +10,8 @@ const api=async(path,options={})=>{
   setConnection('Conectado',true);return data;
 };
 function setConnection(label,connected){$('connectionState').textContent=label;$('connectionDot').parentElement.classList.toggle('connected',Boolean(connected));$('connectionDot').parentElement.classList.toggle('offline',!connected)}
+function renderTransportMode(){const satellite=state.transportMode==='SATELLITE_ONLY';const button=$('transportMode');button.textContent=satellite?'Mensajes: satélite exclusivo':'Mensajes: Internet';button.setAttribute('aria-pressed',String(satellite));button.title=satellite?'Los mensajes no se envían por Internet; quedan pendientes porque esta PWA no tiene adaptador satelital verificado. La sesión y la sincronización de pantalla siguen usando Internet.':'Los mensajes se envían por Internet.';button.classList.toggle('satellite-active',satellite);if(satellite)setConnection('Satélite no verificado',false)}
+$('transportMode').addEventListener('click',()=>{state.transportMode=state.transportMode==='SATELLITE_ONLY'?'INTERNET':'SATELLITE_ONLY';try{window.localStorage.setItem('zungun-transport-mode-v1',state.transportMode)}catch{}renderTransportMode();if(state.transportMode==='SATELLITE_ONLY')toast('Mensajes sin fallback Internet; sesión/sincronización siguen online');else{toast('Mensajes por Internet activados');drainOutbox()}});
 function toast(message){const el=$('toast');el.textContent=message;el.classList.add('visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('visible'),2100)}
 function showError(id,error){const map={
   UNAUTHORIZED:'Tu sesión terminó. Entrá de nuevo.',
@@ -84,7 +86,7 @@ async function openConversation(conversation){
 }
 $('backToChats').addEventListener('click',()=>{$('chatView').classList.remove('in-chat')});
 function messageStatus(message, element){
-  if(message.deliveryState==='QUEUED')return 'En cola';
+  if(message.deliveryState==='QUEUED')return message.transport==='SATELLITE_ONLY'?'Satélite no verificado · pendiente':'En cola';
   if(message.deliveryState==='SENDING')return 'Enviando';
   if(message.deliveryState==='FAILED')return 'No enviado';
   if(message.deliveredAtMs||element?.dataset.deliveryState==='DELIVERED')return 'Entregado';
@@ -119,15 +121,15 @@ function renderMessage(message){
 function restoreOutboxMessages(){
   if(!state.me||!state.current)return;
   for(const item of state.outbox.list(state.me.userId,state.current.conversationId)){
-    renderMessage({messageId:item.messageId,senderId:item.userId,body:item.body,clientCreatedAtMs:item.clientCreatedAtMs,sequence:0,deliveryState:item.state});
+    renderMessage({messageId:item.messageId,senderId:item.userId,body:item.body,clientCreatedAtMs:item.clientCreatedAtMs,sequence:0,deliveryState:item.state,transport:item.transport||'INTERNET'});
   }
 }
-function queueMessage(conversation,message){
+function queueMessage(conversation,message,transport='INTERNET'){
   try{
-    const item=state.outbox.enqueue({userId:state.me.userId,conversationId:conversation.conversationId,messageId:message.messageId,body:message.body,clientCreatedAtMs:message.clientCreatedAtMs,queuedAtMs:Date.now(),state:'QUEUED'});
+    const item=state.outbox.enqueue({userId:state.me.userId,conversationId:conversation.conversationId,messageId:message.messageId,body:message.body,clientCreatedAtMs:message.clientCreatedAtMs,queuedAtMs:Date.now(),state:'QUEUED',transport});
     if(state.current?.conversationId===conversation.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:item.state});
     $('messageInput').value='';$('messageInput').focus();$('sendError').textContent='';
-    setConnection(navigator.onLine?'Reintentando':'Sin conexión',false);toast('Mensaje guardado para enviar');
+    if(transport==='SATELLITE_ONLY'){setConnection('Satélite no verificado',false);toast('Pendiente: no hay ruta satelital verificada')}else{setConnection(navigator.onLine?'Reintentando':'Sin conexión',false);toast('Mensaje guardado para enviar')}
     return true;
   }catch(error){
     $('sendError').textContent=error.message==='OUTBOX_FULL'?'Hay demasiados mensajes pendientes. Conectate para liberar espacio.':'No se pudo guardar el mensaje en este dispositivo.';
@@ -135,10 +137,10 @@ function queueMessage(conversation,message){
   }
 }
 async function drainOutbox(){
-  if(state.drainingOutbox||!state.me||!navigator.onLine)return;
+  if(state.drainingOutbox||!state.me||!navigator.onLine||state.transportMode==='SATELLITE_ONLY')return;
   state.drainingOutbox=true;
   try{
-    for(const item of state.outbox.pending(state.me.userId)){
+    for(const item of state.outbox.pending(state.me.userId,'INTERNET')){
       if(!navigator.onLine)break;
       state.outbox.mark(item.messageId,state.me.userId,'SENDING');
       if(state.current?.conversationId===item.conversationId)renderMessage({...item,senderId:item.userId,sequence:0,deliveryState:'SENDING'});
@@ -193,13 +195,14 @@ $('sendForm').addEventListener('submit',async event=>{
   if(state.busy)return;state.busy=true;$('sendButton').disabled=true;$('sendError').textContent='';
   const message={messageId:'msg_'+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)),body,clientCreatedAtMs:Date.now()};
   try{
-    if(!navigator.onLine){queueMessage(current,message);return}
+    if(state.transportMode==='SATELLITE_ONLY'){queueMessage(current,message,'SATELLITE_ONLY');return}
+    if(!navigator.onLine){queueMessage(current,message,'INTERNET');return}
     try{
       const data=await api('/api/v1/conversations/'+current.conversationId+'/messages',{method:'POST',body:JSON.stringify(message)});
       if(state.current?.conversationId===current.conversationId)renderMessage(data.message);
       $('messageInput').value='';$('messageInput').focus();await loadConversations();
     }catch(error){
-      if(window.ZungunOutbox.isRetryableError(error)){queueMessage(current,message)}
+      if(window.ZungunOutbox.isRetryableError(error)){queueMessage(current,message,'INTERNET')}
       else{showError('sendError',error)}
     }
   }finally{state.busy=false;$('sendButton').disabled=false}
@@ -209,5 +212,5 @@ window.addEventListener('offline',()=>setConnection('Sin conexión',false));
 state.pollTimer=setInterval(()=>{if(state.current)poll(false);else loadConversations();drainOutbox()},4000);
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 if(location.protocol==='file:')setConnection('Abrí desde el enlace',false);
-boot();
+renderTransportMode();boot();
 })();
